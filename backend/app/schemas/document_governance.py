@@ -23,3 +23,47 @@ class DocumentAnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     documents: list[dict[str, Any]] = Field(min_length=1, max_length=10)
     idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class DocumentPlanGenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    force: bool = False
+
+
+class DocumentPlanDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["CONFIRM", "SKIP"] = "CONFIRM"
+    expected_plan_id: str = Field(min_length=1, max_length=64)
+    expected_revision: int = Field(ge=1)
+    primary_type: str = Field(min_length=1, max_length=64)
+    secondary_types: list[str] = Field(default_factory=list, max_length=8)
+    skill_codes: list[str] = Field(default_factory=list, max_length=12)
+    target_scopes: list[str] = Field(default_factory=list, max_length=8)
+    reviewer: str = Field(min_length=1, max_length=128)
+    reason: str = Field(default="", max_length=2000)
+
+
+class KnowledgePointFeedback(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    point_type: Literal["EVENT", "RELATION"]
+    key: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class DocumentResultReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version_index: int = Field(ge=0)
+    expected_version_key: str = Field(min_length=1, max_length=512)
+    expected_plan_id: str = Field(min_length=1, max_length=64)
+    decision: Literal["CONFIRM", "SKIP"] = "CONFIRM"
+    reviewer: str = Field(min_length=1, max_length=128)
+    reason: str = Field(default="", max_length=2000)
+    nonconforming: list[KnowledgePointFeedback] = Field(default_factory=list, max_length=128)
+    explicit_confirmations: list[str] = Field(default_factory=list, max_length=128)
+
+
+class DocumentSkillDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gap_index: int = Field(ge=0, le=32)
+    expected_plan_id: str = Field(min_length=1, max_length=64)
+    reviewer: str = Field(min_length=1, max_length=128)

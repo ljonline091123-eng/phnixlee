@@ -93,8 +93,9 @@ class OpenAICompatAdapter(ModelAdapter):
         metadata = metadata_json or {}
         # Evidence extraction needs bounded JSON, rather than a long reasoning
         # stream consuming the entire budget before any answer is returned.
-        # Scope this provider option to the controlled extraction Skill call.
-        if (metadata.get("purpose") in {"NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS"}
+        # Scope this provider option to the controlled JSON document workflow.
+        if (metadata.get("purpose") in {"NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS",
+                                       "DOCUMENT_GOVERNANCE_PLANNING", "DOCUMENT_SPECIALIST_DRAFT"}
                 and metadata.get("require_real_model")
                 and instance.model_code.lower().startswith("deepseek")):
             payload["thinking"] = {"type": "disabled"}

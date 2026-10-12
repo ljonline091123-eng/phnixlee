@@ -1,5 +1,6 @@
 """Semantic governance contracts use isolated databases and fake model outputs."""
 import json
+from hashlib import sha256
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -12,11 +13,12 @@ from app.api.document_governance import router
 from app.db.session import get_db
 from app.models.ai_hub import ModelSkill
 from app.models.foundation import FoundationEntity, FoundationEvidence, FoundationFact, FoundationListing, FoundationSecurity
-from app.models.market_data import StockNews, StockSymbol
+from app.models.market_data import StockNews, StockNotice, StockSymbol
 from app.services import document_event_governance as governor, document_semantics as semantics, skill_files
 from app.schemas.document_governance import DocumentReviewRequest
 from app.services.document_semantic_review import apply_review, compare_versions, review_status, versions_for
 from app.services.model_hub import seed_default_skills
+from app.services.document_semantic_planning import decide_plan
 from tests.test_stock_batch_governance import _database
 
 
@@ -99,6 +101,24 @@ def test_chinese_basis_point_expression_is_preserved_and_normalized():
     assert value["raw_value"] == "万分之五"
 
 
+@pytest.mark.parametrize("body,raw,accepted", [
+    ("营业收入同比下降2.48%，以报告为准", "2.48", True),
+    ("营业收入同比下降2.48%，以报告为准", "-2.48", False),
+    ("经营活动现金流量净额为-2.65亿元", "-2.65", True),
+    ("经营活动现金流量净额为-2.65亿元", "2.65", False),
+    ("经营活动现金流量净额为+2.65亿元", "2.65", False),
+])
+def test_metric_keeps_original_sign_without_inventing_direction(body, raw, accepted):
+    metric = {"name": "观测值", "raw_value": raw, "unit": "%" if "同比" in body else "亿元",
+              "period": "本期", "evidence_quote": body}
+    if accepted:
+        result = semantics.normalize_metric(metric, body)
+        assert result["raw_value"] == raw
+    else:
+        with pytest.raises(ValueError, match="数值或单位"):
+            semantics.normalize_metric(metric, body)
+
+
 def setup_document(db):
     stock = db.scalar(select(StockSymbol).where(StockSymbol.symbol == "000001"))
     company = FoundationEntity(name="测试公司", entity_type="COMPANY", jurisdiction="CN")
@@ -116,6 +136,55 @@ def fake_model(*args, **kwargs):
     reading, extraction = payload()
     phase = kwargs["metadata_json"]["phase"]
     return SimpleNamespace(id=100 if phase == "SEMANTIC_READING" else 101, provider_code="REAL", instance_code="real", model_code="test-model", status="SUCCESS", response_text=json.dumps(reading if phase == "SEMANTIC_READING" else extraction, ensure_ascii=False))
+
+
+@pytest.mark.parametrize("repair_succeeds", [True, False])
+def test_subject_evidence_repair_is_bounded_and_keeps_original_quote_gate(database, monkeypatch, repair_succeeds):
+    calls = []
+    def response(*args, **kwargs):
+        reading, extraction = payload()
+        phase = kwargs["metadata_json"]["phase"]
+        calls.append(phase)
+        for event in extraction["events"]:
+            event.update(subject_scope="COMPANY", subject_name="测试公司")
+            if phase == "STRUCTURED_EXTRACTION_REPAIR" and repair_succeeds:
+                event["evidence_quotes"].append("测试公司基于税务争议计提预计负债1.07亿元")
+        if phase == "STRUCTURED_EXTRACTION_REPAIR":
+            received = json.loads(kwargs["messages"][-1]["content"])
+            assert len(received["validation_feedback"]) == 3
+            assert received["body"] == BODY
+            assert len(received["previous_invalid_analysis"]["events"]) == 3
+        return SimpleNamespace(id=len(calls), status="SUCCESS", provider_code="REAL", instance_code="isolated",
+            model_code="test", response_text=json.dumps(reading if phase == "SEMANTIC_READING" else extraction, ensure_ascii=False))
+    monkeypatch.setattr(semantics.ModelHubService, "chat", response)
+    document = {"key": "isolated-subject-check", "title": "隔离证据测试", "body": BODY, "market": "CN_A",
+                "symbol": "000001", "stock_name": "测试公司", "state": {"evidence_id": "isolated"},
+                "governance_plan": {"plan_id": "isolated", "target_scopes": ["COMPANY"]}}
+    with database() as db:
+        if repair_succeeds:
+            result = semantics.semantic_analysis(db, document, context={}, model_instance=None, instructions="")
+            assert all("测试公司" in "\n".join(event["evidence_quotes"]) for event in result["events"])
+            assert len(result["model_calls"]) == 3
+        else:
+            with pytest.raises(ValueError, match="主体证据修正仍未通过") as failed:
+                semantics.semantic_analysis(db, document, context={}, model_instance=None, instructions="")
+            assert len(failed.value.semantic_calls) == 3
+    assert calls == ["SEMANTIC_READING", "STRUCTURED_EXTRACTION", "STRUCTURED_EXTRACTION_REPAIR"]
+
+
+def confirm_test_plan(db, row):
+    """Confirm an isolated fixture; production confirmations are never automated."""
+    plan = {"plan_id": f"fixture:{row.__tablename__}:{row.id}", "revision": 1, "plan_version": 1,
+        "status": "PROPOSED", "content_hash": sha256(governor.document_body(row).encode()).hexdigest(),
+        "overview": "隔离测试方案", "primary_type": "GENERAL_EVIDENCE", "secondary_types": [],
+        "target_scopes": ["COMPANY"], "recommended_skill_codes": ["GENERIC_EVIDENCE_FACT_GOVERNOR"],
+        "expected_knowledge": [], "uncertainties": [], "capability_gaps": []}
+    row.content_json = {**(row.content_json or {}), "semantic_governance_plan": plan}
+    db.commit()
+    return decide_plan(db, row, primary_type=plan["primary_type"], secondary_types=[],
+        skill_codes=plan["recommended_skill_codes"], target_scopes=plan["target_scopes"],
+        reviewer="隔离测试审核员", reason="测试流程门禁", decision="CONFIRM",
+        expected_plan_id=plan["plan_id"], expected_revision=1)
 
 
 def test_semantic_skill_stores_events_relations_and_supersedes_old(database, monkeypatch):
@@ -152,11 +221,121 @@ def test_document_semantic_api_lists_detail_and_enqueues(database, monkeypatch):
         assert listing.status_code == 200 and listing.json()["items"][0]["record_id"] == identity
         detail = client.get(f"/document-governance/documents/stock_news/{identity}")
         assert detail.status_code == 200 and BODY in detail.json()["body"]
+        unconfirmed = client.post("/document-governance/analyze", json={"documents": [{"source_table": "stock_news", "record_id": identity}], "idempotency_key": "unconfirmed"})
+        assert unconfirmed.status_code == 409
+        with database() as db:
+            confirm_test_plan(db, db.get(StockNews, identity))
         created = client.post("/document-governance/analyze", json={"documents": [{"source_table": "stock_news", "record_id": identity}], "idempotency_key": "test"})
         assert created.status_code == 202 and created.json()["job_id"] == 7
         bypass = client.post("/document-governance/analyze", json={"documents": [{"source_table": "stock_news", "record_id": identity}],
             "idempotency_key": "bypass", "semantic_feedback": "绕过审核轨迹的反馈"})
         assert bypass.status_code == 422
+
+
+def test_scope_preview_filters_news_and_notice_and_caps_each_stock(database):
+    with database() as db:
+        stock, first_news = setup_document(db)
+        db.add_all([
+            StockNews(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                      news_time="2026-10-08", title="第二篇语义新闻", content=BODY,
+                      source_name="测试来源", content_json={}),
+            StockNotice(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                        notice_date="2026-10-07", title="一份公司公告", url="https://example.test/a.pdf",
+                        content_json={"content": BODY}),
+            StockNews(market="HK", symbol="00700", source_id=stock.source_id,
+                      news_time="2026-10-06", title="港股语义新闻", content=BODY,
+                      source_name="测试来源", content_json={}),
+        ])
+        db.commit()
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    with TestClient(app) as client:
+        all_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}, {"market": "HK", "symbol": "00700"}],
+            "kind": "ALL", "disclosure_days": 730, "per_stock_limit": 1,
+        })
+        assert all_scope.status_code == 200
+        body = all_scope.json()
+        assert body["stock_count"] == 2 and body["planned_count"] == 2
+        cn = next(item for item in body["stocks"] if item["symbol"] == "000001")
+        assert cn["total"] == 3 and cn["planned"] == 1
+
+        news_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "kind": "NEWS", "disclosure_days": 730, "per_stock_limit": 20,
+        })
+        assert news_scope.status_code == 200 and news_scope.json()["stocks"][0]["total"] == 2
+
+        notice_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "kind": "NOTICE", "disclosure_days": 730, "per_stock_limit": 20,
+        })
+        assert notice_scope.status_code == 200 and notice_scope.json()["stocks"][0]["total"] == 1
+
+
+def test_scope_analyze_queues_multiple_stocks_with_types_and_bounded_options(database, monkeypatch):
+    with database() as db:
+        stock, _ = setup_document(db)
+        db.add(StockNews(market="HK", symbol="00700", source_id=stock.source_id,
+                         news_time="2026-10-06", title="港股批量新闻", content=BODY,
+                         source_name="测试来源", content_json={}))
+        db.commit()
+        for row in db.scalars(select(StockNews)):
+            confirm_test_plan(db, row)
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    captured = []
+    def submit(request, db):
+        captured.append(request)
+        return {"job_id": 77, "pipeline_run_id": 88, "status": "PENDING", "job_status": "PENDING",
+                "stock_count": len(request.stocks), "worker_required": True,
+                "worker_task_type": "stock_batch_governance", "worker_command": "worker", "progress": 0,
+                "effective_options": {}, "governance_mode": request.governance_mode}
+    monkeypatch.setattr("app.api.stock_batch.submit_stock_batch_governance", submit)
+    with TestClient(app) as client:
+        response = client.post("/document-governance/analyze-scope", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}, {"market": "HK", "symbol": "00700"}],
+            "kind": "NEWS", "disclosure_days": 365, "per_stock_limit": 3,
+            "idempotency_key": "multi-stock-news-1",
+        })
+        assert response.status_code == 202 and response.json()["stock_count"] == 2
+    request = captured[0]
+    assert request.structure_documents is True and request.semantic_analysis is True
+    assert all(item.source_table == "stock_news" for item in request.document_targets)
+    assert request.structured_document_limit == 2
+    assert request.interactive_plan_required and len(request.document_targets) == 2
+    assert request.collect_business_data is False and request.run_graph is False
+    assert {(item.market, item.symbol) for item in request.stocks} == {("CN_A", "000001"), ("HK", "00700")}
+
+
+def test_explicit_document_scope_accepts_more_than_ten_documents(database, monkeypatch):
+    with database() as db:
+        stock, _ = setup_document(db)
+        rows = [StockNews(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                          news_time=f"2026-09-{index + 1:02d}", title=f"批量新闻{index}", content=BODY,
+                          source_name="测试来源", content_json={}) for index in range(11)]
+        db.add_all(rows); db.commit(); ids = [row.id for row in rows]
+        for row in rows:
+            confirm_test_plan(db, row)
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    monkeypatch.setattr("app.api.stock_batch.submit_stock_batch_governance", lambda request, db: {
+        "job_id": 91, "pipeline_run_id": 92, "status": "PENDING", "job_status": "PENDING", "stock_count": 1,
+        "worker_required": True, "worker_task_type": "stock_batch_governance", "worker_command": "worker",
+        "progress": 0, "effective_options": {}, "governance_mode": request.governance_mode,
+    })
+    with TestClient(app) as client:
+        response = client.post("/document-governance/analyze", json={
+            "documents": [{"source_table": "stock_news", "record_id": identity} for identity in ids],
+            "idempotency_key": "eleven-documents",
+        })
+        assert response.status_code == 202
 
 
 def test_human_review_correction_creates_versioned_candidate_and_keeps_gate(database, monkeypatch):
@@ -222,7 +401,7 @@ def test_version_compare_reports_semantic_field_changes(database, monkeypatch):
         assert "并非已经确认" in summary["to"] and "计提1.07亿元" in summary["from"]
 
 
-def test_review_api_enforces_history_reanalysis_limit_and_fact_gate(database, monkeypatch):
+def test_review_api_enforces_history_and_fact_gate_without_two_round_limit(database, monkeypatch):
     monkeypatch.setattr(semantics.ModelHubService, "chat", fake_model)
     with database() as db:
         stock, news = setup_document(db)
@@ -272,10 +451,10 @@ def test_review_api_enforces_history_reanalysis_limit_and_fact_gate(database, mo
             response = client.post(base + "/reviews", json={"version_index": current, "action": "REANALYZE", "target_type": "DOCUMENT",
                 "reason": f"第{index + 1}轮定向补充现金流条件", "reviewer": "接口审核员"})
             assert response.status_code == 200 and response.json()["job"]["job_id"] == index + 1
-        limited = client.post(base + "/reviews", json={"version_index": current, "action": "REANALYZE", "target_type": "DOCUMENT",
-            "reason": "第三轮应被门禁拦截", "reviewer": "接口审核员"})
-        assert limited.status_code == 422 and "最多执行两轮" in limited.text
-        assert [item.semantic_feedback for item in queued] == ["第1轮定向补充现金流条件", "第2轮定向补充现金流条件"]
+        third = client.post(base + "/reviews", json={"version_index": current, "action": "REANALYZE", "target_type": "DOCUMENT",
+            "reason": "第三轮仍需补充原文支持", "reviewer": "接口审核员"})
+        assert third.status_code == 200 and third.json()["job"]["job_id"] == 3
+        assert [item.semantic_feedback for item in queued] == ["第1轮定向补充现金流条件", "第2轮定向补充现金流条件", "第三轮仍需补充原文支持"]
 
 
 def test_semantic_reanalysis_receives_bounded_human_feedback(database, monkeypatch):
@@ -292,4 +471,7 @@ def test_semantic_reanalysis_receives_bounded_human_feedback(database, monkeypat
         assert result["completed"] == 1
         user_payload = json.loads(calls[0]["messages"][1]["content"])
         assert user_payload["human_review_feedback"].startswith("补充说明现金流")
-        assert "review_instruction" in user_payload
+        assert "reading_instruction" in user_payload
+        assert "review_instruction" not in user_payload and "previous_analysis" not in user_payload
+        extraction_payload = json.loads(calls[1]["messages"][1]["content"])
+        assert "review_instruction" in extraction_payload

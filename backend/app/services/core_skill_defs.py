@@ -14,7 +14,7 @@ CORE_SKILLS = (
         "description": "有界读取原文、补取官方公告正文、调用真实模型抽取事件并精确核验证据，写入既有事实与证据体系。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
-        "managed_contract_version": "SEMANTIC_HUMAN_REVIEW_V2",
+        "managed_contract_version": "SEMANTIC_UNBOUNDED_BATCH_V3",
         "side_effect_level": "CONTROLLED_WRITE",
         "idempotency_policy": "REQUIRED",
         "permission_policy_json": {
@@ -29,7 +29,9 @@ CORE_SKILLS = (
                 "properties": {"market": {"type": "string"}, "symbol": {"type": "string"}, "governance_batch_id": {"type": "string"},
                     "semantic_feedback": {"type": ["string", "null"], "maxLength": 4000},
                     "semantic_review_id": {"type": ["string", "null"], "minLength": 36, "maxLength": 36},
-                    "document_targets": {"type": "array", "maxItems": 10, "items": {"type": "object", "required": ["source_table", "record_id"],
+                    "structured_document_types": {"type": "array", "minItems": 1, "maxItems": 2,
+                        "items": {"enum": ["NEWS", "NOTICE"]}},
+                    "document_targets": {"type": "array", "items": {"type": "object", "required": ["source_table", "record_id"],
                         "properties": {"source_table": {"enum": ["stock_news", "stock_notice"]}, "record_id": {"type": "integer", "minimum": 1}}, "additionalProperties": False}},
                     "review_version_index": {"type": ["integer", "null"], "minimum": 0}},
                 "additionalProperties": True},
@@ -184,6 +186,7 @@ CORE_SKILLS = (
         "description": "按主数据和上市板块契约核验市场、证券代码、证券类型及板块，不按名称猜测或跨市场合并。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "function_spec": {
             "name": "validate_stock_governance_targets",
             "description": "Validate a bounded stock list against governed security master and board taxonomy.",
@@ -192,7 +195,7 @@ CORE_SKILLS = (
                 "type": "object", "required": ["governance_batch_id", "stocks"],
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
-                    "stocks": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "stocks": {"type": "array", "minItems": 1},
                 }, "additionalProperties": False,
             },
         },
@@ -231,6 +234,7 @@ CORE_SKILLS = (
         "description": "以确定性规则区分通过、部分、缺失、来源失败和公开来源不可得，不允许用空响应冒充完成。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "function_spec": {
             "name": "evaluate_stock_governance_quality",
             "description": "Evaluate collection and persistence evidence with deterministic quality states.",
@@ -239,7 +243,7 @@ CORE_SKILLS = (
                 "type": "object", "required": ["governance_batch_id", "stock_results"],
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
-                    "stock_results": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "stock_results": {"type": "array", "minItems": 1},
                 }, "additionalProperties": False,
             },
         },
@@ -250,6 +254,7 @@ CORE_SKILLS = (
         "description": "复用现有湖仓、切片、知识库和图谱服务发布版本并保留完整血缘；不直接执行 SQL。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "side_effect_level": "CONTROLLED_WRITE",
         "idempotency_policy": "REQUIRED",
         "permission_policy_json": {
@@ -267,7 +272,7 @@ CORE_SKILLS = (
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
                     "market": {"type": "string"},
-                    "symbols": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "symbols": {"type": "array", "minItems": 1},
                 }, "additionalProperties": True,
             },
         },
@@ -292,6 +297,56 @@ CORE_SKILLS = (
         },
     },
 )
+
+
+SPECIALIST_SKILL_CONFIGS = (
+    ("DOCUMENT_SEMANTIC_ROUTER", "文档类型与Skill路由", "阅读全文，形成多标签类型、对象层级和治理Skill方案，不发布事实。"),
+    ("FINANCIAL_DISCLOSURE_GOVERNOR", "财务披露专项治理", "治理业绩、计提、减值和财务指标，区分披露事实与预测。"),
+    ("CAPITAL_OPERATION_GOVERNOR", "资本运作专项治理", "治理定增、融资、回购、分红和证券发行事项。"),
+    ("SHAREHOLDER_PERSONNEL_GOVERNOR", "股东与人事专项治理", "治理股东、控制权、持股和重要人事事项。"),
+    ("JUDICIAL_RISK_GOVERNOR", "司法与风险专项治理", "治理诉讼、处罚、担保、质押及重大风险，保持裁判边界。"),
+    ("CORPORATE_OPERATION_GOVERNOR", "公司经营事项专项治理", "治理合同、中标、投资、项目和生产经营事项。"),
+    ("SUPPLY_CHAIN_RELATION_GOVERNOR", "供应链关系专项治理", "治理客户、供应商、产品、原材料和经营往来关系。"),
+    ("POLICY_INDUSTRY_EVENT_GOVERNOR", "政策产业事件专项治理", "治理政策、行业与原材料背景，不将行业事实直接归因个股。"),
+    ("MARKET_OBSERVATION_GOVERNOR", "证券与板块市场观测治理", "治理个股、板块、榜单、量价和资金流，严格区分归属层级。"),
+    ("RESEARCH_OPINION_GOVERNOR", "研究观点专项治理", "治理研报、评级、预测和媒体观点，观点不得冒充披露事实。"),
+    ("GENERIC_EVIDENCE_FACT_GOVERNOR", "通用证据事实治理", "在专用Skill缺失或无直接事实时保留证据边界，不强制造出事件。"),
+)
+
+
+SPECIALIST_SKILLS = tuple({
+    "skill_code": code,
+    "skill_name": name,
+    "description": description,
+    "task_type": "stock_data_governance",
+    "skill_type": "PROMPT_SOP",
+    "managed_contract_version": "INTERACTIVE_SEMANTIC_V1",
+    "side_effect_level": "READ_ONLY",
+    "idempotency_policy": "REQUIRED",
+    "function_spec": {
+        "name": "apply_document_governance_specialty",
+        "internal_service_only": True,
+        "parameters": {"type": "object", "required": ["governance_batch_id", "skill_code", "documents"],
+            "properties": {
+                "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                "skill_code": {"const": code},
+                "documents": {"type": "array", "minItems": 1, "items": {"type": "object",
+                    "required": ["source_table", "record_id", "plan_id"],
+                    "properties": {"source_table": {"enum": ["stock_news", "stock_notice"]},
+                        "record_id": {"type": "integer", "minimum": 1}, "plan_id": {"type": "string"}},
+                    "additionalProperties": True}},
+            }, "additionalProperties": False},
+    },
+    "output_contract_json": {"type": "object", "required": ["status", "applied_documents"],
+        "properties": {"status": {"type": "string"}, "applied_documents": {"type": "integer"}},
+        "additionalProperties": True},
+    "permission_policy_json": {"arbitrary_sql": False, "database_write": False,
+        "unrestricted_database_write": False,
+        "allowed_operations": ["APPLY_CONFIRMED_DOCUMENT_PLAN"],
+        "allowed_services": ["semantic_analysis"]},
+    "retry_policy_json": {"max_attempts": 1, "retry_on": []},
+    "error_policy_json": {"on_error": "FAIL_CLOSED", "retain_audit": True},
+} for code, name, description in SPECIALIST_SKILL_CONFIGS)
 
 
 def core_skill_rows() -> tuple[dict, ...]:
@@ -320,4 +375,4 @@ def core_skill_rows() -> tuple[dict, ...]:
         "error_policy_json": item.get("error_policy_json") or {"on_error": "FAIL_CLOSED", "retain_audit": True},
         "config_json": {"task_type": item["task_type"], "function_spec": item["function_spec"],
                         **({"managed_contract_version": item["managed_contract_version"]} if item.get("managed_contract_version") else {})},
-    } for item in CORE_SKILLS)
+    } for item in (*CORE_SKILLS, *SPECIALIST_SKILLS))

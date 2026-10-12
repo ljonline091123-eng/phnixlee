@@ -21,9 +21,13 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     initialize_database(seed_defaults=settings.seed_defaults_on_startup)
+    from app.jobs.governance_runner import start_governance_runner
+    runner = start_governance_runner() if settings.governance_worker_enabled else None
     try:
         yield
     finally:
+        if runner:
+            runner.stop()
         engine.dispose()
 
 

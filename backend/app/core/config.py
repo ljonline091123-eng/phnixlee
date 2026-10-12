@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     database_url: str = DEFAULT_DATABASE_URL
     sql_echo: bool = False
     seed_defaults_on_startup: bool = True
+    governance_worker_enabled: bool = True
     data_foundation_enabled: bool = True
     company_research_context_enabled: bool = True
     model_credential_key: str = ""

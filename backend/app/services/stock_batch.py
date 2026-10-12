@@ -261,7 +261,8 @@ def _save_progress(
     if row is None:
         return
     row.current_stage = stage
-    row.output_json = dict(output)
+    from copy import deepcopy
+    row.output_json = deepcopy(output)
     db.commit()
 
 
@@ -556,7 +557,13 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "structure_documents": request.structure_documents,
         "semantic_analysis": request.semantic_analysis,
         "document_targets": [item.model_dump() for item in request.document_targets],
-        "semantic_feedback": request.semantic_feedback,
+        "structured_document_types": request.structured_document_types,
+        "document_skill_codes": request.document_skill_codes,
+        "interactive_plan_required": request.interactive_plan_required,
+        "semantic_plan_only": request.semantic_plan_only,
+        "semantic_plan_force": request.semantic_plan_force,
+                           "semantic_feedback": request.semantic_feedback,
+                           "interactive_plan_required": request.interactive_plan_required,
         "semantic_review_id": request.semantic_review_id,
         "continuation_action": request.continuation_action,
         "agent_governance_scope": (
@@ -840,30 +847,108 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             }
 
         if request.structure_documents:
-            from app.services.document_event_governance import govern_stock_documents
-            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=55)
+            from app.services.document_event_governance import govern_stock_documents, planned_stock_documents
+            event_only = not any((request.collect_business_data, request.export_lakehouse,
+                                  request.archive_chunks, request.run_graph, request.run_agent_governance))
+            event_start, event_end = (5, 95) if event_only else (55, 57)
+            event_version = agent_session.skills[SKILL_EVENTS].version if agent_session else "1.0.0"
+            document_targets = [item.model_dump() for item in request.document_targets]
+            scope_total, skipped_total = 0, 0
+            for stock in targets:
+                scoped, planned = planned_stock_documents(db, stock, version=event_version,
+                    semantic=request.semantic_analysis, days=request.disclosure_days,
+                    document_types=request.structured_document_types, document_targets=document_targets,
+                    feedback=request.semantic_feedback, limit=request.structured_document_limit)
+                if request.semantic_plan_only:
+                    planned = scoped if request.document_targets or request.structured_document_limit is None else scoped[:request.structured_document_limit]
+                scope_total += len(planned)
+                skipped_total += len(scoped) - len(planned)
+            output["document_progress"] = {"total": scope_total, "processed": 0, "succeeded": 0,
+                "failed": 0, "partial": 0, "skipped": skipped_total, "phase": "PREPARING",
+                "stock_total": len(targets), "stocks_processed": 0}
+            finished_documents = set()
+            def on_document_progress(row, phase, status, error):
+                progress = output["document_progress"]
+                progress.update(phase=phase, current_document={"source_table": row.__tablename__,
+                    "record_id": row.id, "title": row.title, "market": row.market, "symbol": row.symbol},
+                    last_error=error, updated_at=datetime.now(timezone.utc).isoformat())
+                key = (row.__tablename__, row.id)
+                if phase == "FINISHED" and key not in finished_documents:
+                    finished_documents.add(key)
+                    progress["processed"] += 1
+                    counter = "succeeded" if status in {"ANALYZED", "NO_EVENT", "PLANNED"} else "partial" if status == "PARTIAL_BODY" else "failed"
+                    progress[counter] += 1
+                percentage = event_start + int((event_end - event_start) * progress["processed"] / max(1, progress["total"]))
+                _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=percentage)
+            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=event_start)
             event_runs = []
             for stock in targets:
                 context = {"governance_batch_id": governance_batch_id, "pipeline_run_id": outer_run_id,
                            "agent_execution_run_id": agent_session.execution.id if agent_session else None,
                            "skill_version": agent_session.skills[SKILL_EVENTS].version if agent_session else "1.0.0",
-                           "semantic_review_id": request.semantic_review_id}
+                           "semantic_review_id": request.semantic_review_id,
+                           "interactive_plan_required": request.interactive_plan_required}
                 def extract_events(execution=None, selected=stock, base=context):
+                    def execute_specialists(doc, operation):
+                        codes = (doc.get("governance_plan") or {}).get("recommended_skill_codes") or []
+                        if not agent_session or not codes:
+                            return operation()
+                        def run_next(index):
+                            if index == len(codes):
+                                return operation()
+                            code = codes[index]
+                            def apply_specialty(skill_execution):
+                                analysis = run_next(index + 1)
+                                return {"status": "SUCCESS", "applied_documents": 1, "analysis": analysis,
+                                    "model_calls": analysis.get("model_calls") or [],
+                                    "skill_execution_run_id": skill_execution.id,
+                                    "evidence_ids": [doc["state"]["evidence_id"]]}
+                            return agent_session.run_skill(code,
+                                input_json={"governance_batch_id": governance_batch_id, "skill_code": code,
+                                    "documents": [{"source_table": doc["row"].__tablename__, "record_id": doc["row"].id,
+                                                   "plan_id": doc["governance_plan"]["plan_id"]}]},
+                                idempotency_scope=f"document:{doc['key']}:{request.semantic_review_id or 'BASE'}",
+                                operation=apply_specialty)["analysis"]
+                        return run_next(0)
+                    if request.semantic_plan_only:
+                        from app.services.document_semantic_planning import plan_stock_documents
+                        def execute_planner(row, operation):
+                            if not agent_session:
+                                raise ValueError("制定方案必须通过已启用Agent与路由Skill执行")
+                            def route(skill_execution):
+                                plan = operation({"skill_execution_run_id": skill_execution.id,
+                                    "agent_execution_run_id": agent_session.execution.id})
+                                return {"status": "SUCCESS", "applied_documents": 1, "plan": plan,
+                                    "model_calls": plan.get("model_calls") or []}
+                            return agent_session.run_skill("DOCUMENT_SEMANTIC_ROUTER",
+                                input_json={"governance_batch_id": governance_batch_id, "skill_code": "DOCUMENT_SEMANTIC_ROUTER",
+                                    "documents": [{"source_table": row.__tablename__, "record_id": row.id, "plan_id": "PROPOSING"}]},
+                                idempotency_scope=f"plan:{row.__tablename__}:{row.id}", operation=route)["plan"]
+                        return plan_stock_documents(db, selected, context={**base, "force": request.semantic_plan_force},
+                            limit=request.structured_document_limit, days=request.disclosure_days,
+                            document_targets=[item.model_dump() for item in request.document_targets],
+                            document_types=request.structured_document_types,
+                            progress_callback=on_document_progress, plan_executor=execute_planner)
                     return govern_stock_documents(db, selected,
                         context={**base, "skill_execution_run_id": execution.id if execution else None},
                         limit=request.structured_document_limit, days=request.disclosure_days,
+                        progress_callback=on_document_progress,
                         semantic=request.semantic_analysis,
                         document_targets=[item.model_dump() for item in request.document_targets],
+                        document_types=request.structured_document_types,
                         semantic_feedback=request.semantic_feedback,
+                        semantic_executor=execute_specialists,
                         model_instance=agent_session.agent.model_instance_code if agent_session else None,
                         instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
                 event_run = agent_session.run_skill(SKILL_EVENTS,
                     input_json={**context, "market": stock.market, "symbol": stock.symbol,
                                 "semantic_feedback": request.semantic_feedback,
-                                "document_targets": [item.model_dump() for item in request.document_targets]},
+                                "document_targets": [item.model_dump() for item in request.document_targets],
+                                "structured_document_types": request.structured_document_types},
                     idempotency_scope=f"events:{stock.market}:{stock.symbol}", operation=extract_events,
                 ) if agent_session else extract_events()
                 event_runs.append(event_run)
+                output["document_progress"]["stocks_processed"] += 1
                 output["errors"].extend({"stage": "STRUCTURED_EVENTS", "market": stock.market, "symbol": stock.symbol, **error}
                                         for error in event_run.get("errors") or [])
             event_status = "SUCCESS" if event_runs and all(row["status"] == "SUCCESS" for row in event_runs) else "PARTIAL"
@@ -872,16 +957,31 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 for document in result.get("documents") or []:
                     item = {"code": f"{result['market']}:{result['symbol']}:{document['source_table']}:{document['source_record_id']}",
                             "label": document["title"], "status": "SUCCESS" if document.get("current_version_complete") else "PARTIAL",
-                            "reason": document.get("error") or ("正文已分析，候选事件待审核" if document.get("current_version_complete") and document["status"] == "ANALYZED" else "正文未发现可抽取事件" if document.get("current_version_complete") and document["status"] == "NO_EVENT" else "尚未完成当前正文及Skill版本的结构化"),
+                            "reason": document.get("error") or ("治理方案已生成，等待用户确认类型与Skill" if document["status"] == "PLANNED" else "正文已分析，候选事件待审核" if document.get("current_version_complete") and document["status"] == "ANALYZED" else "正文未发现可抽取事件" if document.get("current_version_complete") and document["status"] == "NO_EVENT" else "尚未完成当前正文及Skill版本的结构化"),
                             "record_count": len(document.get("fact_ids") or []), "details": document}
                     (completed_items if item["status"] == "SUCCESS" else incomplete_items).append(item)
                 if not result.get("documents"):
                     incomplete_items.append({"code": f"{result['market']}:{result['symbol']}:EVENT_SCOPE", "label": "新闻公告结构化范围",
                         "status": "MISSING", "reason": (result.get("errors") or [{}])[0].get("message") or "范围内没有可分析新闻公告", "details": result})
+            selection_mode = "EXPLICIT_DOCUMENTS" if request.document_targets else "STOCK_SCOPE"
+            scope_description = (
+                f"本次人工指定 {len(request.document_targets)} 篇文档，并非所选股票的全部新闻公告"
+                if request.document_targets else
+                f"本次按 {len(targets)} 只股票规划，处理范围内全部当前版本未完成文档" if request.structured_document_limit is None else
+                f"本次按 {len(targets)} 只股票规划，每股最多处理 {request.structured_document_limit} 篇当前版本未完成文档"
+            )
             output["stage_results"]["STRUCTURED_EVENTS"] = {"status": event_status, "stock_runs": event_runs,
                 "completed_items": completed_items, "incomplete_items": incomplete_items,
-                "message": "新闻公告正文结构化；候选事实与证据入库，全文缺口保持PARTIAL"}
-            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=57)
+                "selection_mode": selection_mode,
+                "requested_document_count": len(request.document_targets),
+                "per_stock_limit": request.structured_document_limit,
+                "document_types": request.structured_document_types,
+                "scope_days": request.disclosure_days,
+                "scope_description": scope_description,
+                "semantic_plan_only": request.semantic_plan_only,
+                "message": "治理方案已生成，等待用户逐篇确认；未执行结构化和发布" if request.semantic_plan_only else "新闻公告正文结构化；候选事实与证据入库，全文缺口保持PARTIAL"}
+            output["document_progress"]["phase"] = "FINISHED"
+            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=event_end)
         else:
             output["stage_results"]["STRUCTURED_EVENTS"] = {"status": "SKIPPED", "message": "历史请求未要求新闻公告事件结构化"}
 

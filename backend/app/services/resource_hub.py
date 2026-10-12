@@ -254,9 +254,43 @@ DEFAULT_AGENTS = (
             "LAKEHOUSE_KNOWLEDGE_PUBLISHER",
             "STOCK_GOVERNANCE_ACCEPTANCE",
             "NEWS_NOTICE_EVENT_GOVERNOR",
+            "DOCUMENT_SEMANTIC_ROUTER",
+            "FINANCIAL_DISCLOSURE_GOVERNOR",
+            "CAPITAL_OPERATION_GOVERNOR",
+            "SHAREHOLDER_PERSONNEL_GOVERNOR",
+            "JUDICIAL_RISK_GOVERNOR",
+            "CORPORATE_OPERATION_GOVERNOR",
+            "SUPPLY_CHAIN_RELATION_GOVERNOR",
+            "POLICY_INDUSTRY_EVENT_GOVERNOR",
+            "MARKET_OBSERVATION_GOVERNOR",
+            "RESEARCH_OPINION_GOVERNOR",
+            "GENERIC_EVIDENCE_FACT_GOVERNOR",
         ],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "DOCUMENT_SEMANTIC_GOVERNANCE_AGENT",
+        "display_name": "新闻公告交互式语义治理智能体",
+        "system_prompt": (
+            "你负责阅读全文、识别多种文档类型和知识归属层级、编排最小充分专项Skill，并在用户确认方案后执行。"
+            "候选知识必须保留原文证据；板块、市场与公司事实不得混淆。用户标记不符合时只重分析问题项，"
+            "所有知识点确认前不得发布为正式事实；不得执行任意SQL或绕过受控Skill。"
+        ),
+        "model_instance_code": "DEEPSEEK_CHAT",
+        "max_iterations": 12,
+        "context_window_limit": 6,
+        "description": "人机协同完成新闻公告分类、Skill方案、知识点复核、定向重分析和最终发布。",
+        "skill_codes": [
+            "DOCUMENT_SEMANTIC_ROUTER", "NEWS_NOTICE_EVENT_GOVERNOR",
+            "FINANCIAL_DISCLOSURE_GOVERNOR", "CAPITAL_OPERATION_GOVERNOR",
+            "SHAREHOLDER_PERSONNEL_GOVERNOR", "JUDICIAL_RISK_GOVERNOR",
+            "CORPORATE_OPERATION_GOVERNOR", "SUPPLY_CHAIN_RELATION_GOVERNOR",
+            "POLICY_INDUSTRY_EVENT_GOVERNOR", "MARKET_OBSERVATION_GOVERNOR",
+            "RESEARCH_OPINION_GOVERNOR", "GENERIC_EVIDENCE_FACT_GOVERNOR",
+        ],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_CONTEXT_EVENT"],
     },
     {
         "agent_code": "KNOWLEDGE_GRAPH_AGENT",
@@ -370,11 +404,14 @@ def seed_default_agents(db: Session) -> None:
         skill_ids = [skill_by_code[code] for code in agent_config["skill_codes"] if code in skill_by_code]
         if agent_config["agent_code"] not in created_codes:
             if agent.agent_code == "STOCK_DATA_GOVERNANCE_AGENT":
-                event_id = skill_by_code.get("NEWS_NOTICE_EVENT_GOVERNOR")
-                if event_id and not db.scalar(select(AgentSkillLink.id).where(
-                    AgentSkillLink.agent_id == agent.id, AgentSkillLink.skill_id == event_id,
-                )):
-                    db.add(AgentSkillLink(agent_id=agent.id, skill_id=event_id))
+                # Append newly introduced semantic routing/specialist skills
+                # without removing user-maintained links from this Agent.
+                for code in agent_config["skill_codes"]:
+                    skill_id = skill_by_code.get(code)
+                    if skill_id and not db.scalar(select(AgentSkillLink.id).where(
+                        AgentSkillLink.agent_id == agent.id, AgentSkillLink.skill_id == skill_id,
+                    )):
+                        db.add(AgentSkillLink(agent_id=agent.id, skill_id=skill_id))
             # Preserve all user-maintained bindings on existing Agents.  The
             # governed prediction writer is a security boundary, so append
             # only that built-in binding when the Agent is configured to use it.

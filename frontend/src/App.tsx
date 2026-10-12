@@ -49,6 +49,7 @@ import { SecuritySourceCoverage } from "./SecuritySourceCoverage";
 import { OperationsCenter } from "./OperationsCenter";
 import { GovernanceCenter } from "./GovernanceCenter";
 import { GovernanceRecords } from "./GovernanceRecords";
+import { GovernanceWorkbench } from "./GovernanceWorkbench";
 import { DocumentSemanticWorkbench } from "./DocumentSemanticWorkbench";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
 import {
@@ -209,7 +210,7 @@ export default function App() {
         {route.module === "data" && <DataConsolePage tab={route.section as DataView} setTab={(section) => navigate("data", section)} />}
         {route.module === "ai" && <ModelLabPage tab={route.section as ModelHubTab} setTab={(section) => navigate("ai", section)} />}
         {route.module === "research" && <InvestmentWorkbench tab={route.section as ResearchView} setTab={(section) => navigate("research", section)} />}
-        {route.module === "operations" && <OperationsGovernancePage tab={route.section as "tasks" | "records" | "documents" | "quality" | "audit"} setTab={(section) => navigate("operations", section)} onNavigate={navigateTarget} />}
+        {route.module === "operations" && <OperationsGovernancePage tab={route.section as "tasks" | "workbench" | "records" | "documents" | "quality" | "audit"} setTab={(section) => navigate("operations", section)} onNavigate={navigateTarget} />}
       </section>
     </main>
   );
@@ -220,20 +221,22 @@ function OperationsGovernancePage({
   setTab,
   onNavigate,
 }: {
-  tab: "tasks" | "records" | "documents" | "quality" | "audit";
-  setTab: (tab: "tasks" | "records" | "documents" | "quality" | "audit") => void;
+  tab: "tasks" | "workbench" | "records" | "documents" | "quality" | "audit";
+  setTab: (tab: "tasks" | "workbench" | "records" | "documents" | "quality" | "audit") => void;
   onNavigate: (target: PlatformNavigationTarget) => void;
 }) {
   return <>
     <div className="resource-tabs">
-      <button type="button" className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>治理记录</button>
+      <button type="button" className={tab === "workbench" ? "active" : ""} onClick={() => setTab("workbench")}>治理工作台</button>
+      <button type="button" className={tab === "records" ? "active" : ""} onClick={() => setTab("records")}>治理报告</button>
       <button type="button" className={tab === "documents" ? "active" : ""} onClick={() => setTab("documents")}>新闻公告语义治理</button>
       <button type="button" className={tab === "tasks" ? "active" : ""} onClick={() => setTab("tasks")}>任务中心</button>
       <button type="button" className={tab === "quality" ? "active" : ""} onClick={() => setTab("quality")}>数据质量</button>
       <button type="button" className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>执行审计</button>
     </div>
     {tab === "tasks" && <OperationsCenter onNavigate={onNavigate} />}
-    {tab === "records" && <GovernanceRecords onStartTask={() => onNavigate("master-data")} onOptimizeSkill={() => onNavigate("skills")} />}
+    {tab === "workbench" && <GovernanceWorkbench onStartTask={() => onNavigate("master-data")} />}
+    {tab === "records" && <GovernanceRecords />}
     {tab === "documents" && <DocumentSemanticWorkbench />}
     {tab === "quality" && <GovernanceCenter view="quality" />}
     {tab === "audit" && <GovernanceCenter view="executions" />}
@@ -387,10 +390,6 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   }, [allVisibleSelected, visibleSelectedCount]);
   function toggleStockSelection(stock: StockSymbol) {
     const key = stockSelectionKey(stock);
-    if (!selectedStocks[key] && selectedStockList.length >= 30) {
-      message("单次最多选择30只股票，请先取消部分选择。");
-      return;
-    }
     setSelectedStocks((current) => {
       const next = { ...current };
       if (next[key]) delete next[key];
@@ -404,12 +403,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
       setSelectedStocks((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleKeys.has(key))));
       return;
     }
-    const available = Math.max(0, 30 - selectedStockList.length);
-    const additions = symbols.filter((stock) => !selectedStocks[stockSelectionKey(stock)]).slice(0, available);
-    if (!additions.length) {
-      message("单次最多选择30只股票，请先取消部分选择。");
-      return;
-    }
+    const additions = symbols.filter((stock) => !selectedStocks[stockSelectionKey(stock)]);
     setSelectedStocks((current) => {
       const next = { ...current };
       additions.forEach((stock) => { next[stockSelectionKey(stock)] = stock; });
@@ -624,7 +618,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
           <div className="master-batch-toolbar" role="status">
             <div>
               <strong>批量数据与知识治理</strong>
-              <span>当前已选 {selectedStockList.length} / 30 只；切换市场或查询条件不会清空已选股票。</span>
+              <span>当前已选 {selectedStockList.length} 只；切换市场或查询条件不会清空已选股票。</span>
             </div>
             <div>
               {selectedStockList.length > 0 && <button type="button" className="quiet-button" onClick={() => setSelectedStocks({})}>清空选择</button>}

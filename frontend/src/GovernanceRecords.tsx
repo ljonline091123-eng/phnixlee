@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Play, RefreshCw, Search, X } from "lucide-react";
+import { FileText, RefreshCw, Search, X } from "lucide-react";
+import { GovernanceProgress } from "./GovernanceProgress";
+import { useGovernanceDialog } from "./useGovernanceDialog";
 import {
   batchGovernanceApi,
   type GovernanceMode,
   type GovernanceRecord,
   type GovernanceReport,
-  type GovernanceActions,
   type GovernanceStagePreview,
-  type GovernanceContinuationPlan,
 } from "./batchGovernanceApi";
 
 const statusNames: Record<string, string> = {
@@ -141,7 +141,15 @@ function stageFacts(code: string, report: GovernanceReport) {
   const runs = Array.isArray(stage.market_runs) ? stage.market_runs as Array<Record<string, unknown>> : [];
   if (code === "STRUCTURED_EVENTS") {
     const stockRuns = Array.isArray(stage.stock_runs) ? stage.stock_runs as Array<Record<string, unknown>> : [];
-    return stockRuns.map((run) => `范围 ${run.total ?? 0} 份；完整分析 ${run.completed ?? 0} 份；本轮处理 ${run.processed_this_run ?? 0} 份；候选事实 ${Array.isArray(run.fact_ids) ? run.fact_ids.length : 0} 条；待处理或失败 ${run.remaining ?? 0} 份${Array.isArray(run.retired_excerpt_fact_ids) && run.retired_excerpt_fact_ids.length ? `；已纠正 ${run.retired_excerpt_fact_ids.length} 条旧摘要候选` : ""}`).join("；") || "请展开成果明细核验正文与候选事实";
+    const scope = String(stage.scope_description || "");
+    const facts = stockRuns.map((run) => {
+      const scopeCounts = (run.scope_counts || {}) as Record<string, unknown>;
+      const selectedCounts = (run.selected_counts || {}) as Record<string, unknown>;
+      const typeText = scopeCounts.NEWS != null || scopeCounts.NOTICE != null
+        ? `；范围新闻 ${scopeCounts.NEWS ?? 0}、公告 ${scopeCounts.NOTICE ?? 0}，本轮新闻 ${selectedCounts.NEWS ?? 0}、公告 ${selectedCounts.NOTICE ?? 0}` : "";
+      return `${run.market || ""}:${run.symbol || ""} 范围 ${run.total ?? 0} 份；完整分析 ${run.completed ?? 0} 份；本轮处理 ${run.processed_this_run ?? 0} 份${typeText}；候选事实 ${Array.isArray(run.fact_ids) ? run.fact_ids.length : 0} 条；仍待处理或失败 ${run.remaining ?? 0} 份${Array.isArray(run.retired_excerpt_fact_ids) && run.retired_excerpt_fact_ids.length ? `；已纠正 ${run.retired_excerpt_fact_ids.length} 条旧摘要候选` : ""}`;
+    }).join("；");
+    return [scope, facts].filter(Boolean).join("；") || "请展开成果明细核验正文与候选事实";
   }
   if (code === "DOCUMENT_CHUNKS") return runs.map((run) => `文档覆盖 ${run.documents_with_chunks ?? 0}/${run.documents_total ?? 0} 份；新增 ${run.created_chunk_count ?? 0} 条切片；失败 ${run.failed_documents ?? 0} 份`).join("；");
   if (code === "KNOWLEDGE_GRAPH") return runs.map((run) => {
@@ -248,7 +256,7 @@ function ReadableData({ value }: { value: unknown }) {
   return text.length > 240 ? <details><summary>{text.slice(0, 160)}… 展开完整内容</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{text}</p></details> : <span style={{ overflowWrap: "anywhere" }}>{valueNames[text] || marketNames[text] || text}</span>;
 }
 
-export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; onOptimizeSkill?: () => void } = {}) {
+export function GovernanceRecords() {
   const [records, setRecords] = useState<GovernanceRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -258,20 +266,18 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<(GovernanceRecord & { governance_report?: GovernanceReport }) | null>(null);
-  const [startingId, setStartingId] = useState<number | null>(null);
-  const [actionNotice, setActionNotice] = useState("");
-  const [actionJobId, setActionJobId] = useState<number | null>(null);
-  const [actionQueuedAt, setActionQueuedAt] = useState(0);
   const [preview, setPreview] = useState<GovernanceStagePreview | null>(null);
   const [previewTarget, setPreviewTarget] = useState<{ stage: string; code: string } | null>(null);
-  const [plan, setPlan] = useState<GovernanceContinuationPlan | null>(null);
-  const [continueKey, setContinueKey] = useState("");
-  const [optimization, setOptimization] = useState<GovernanceActions | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const [detailError, setDetailError] = useState("");
-  const [stageOffsets, setStageOffsets] = useState<Record<string, number>>({});
-  const previewRef = useRef<HTMLElement>(null);
+  const [reportSection, setReportSection] = useState<string | null>(null);
+  const [sectionOffset, setSectionOffset] = useState(0);
+  const openSequence = useRef(0);
   const pageSize = 20;
+  const sectionNames: Record<string, string> = { STOCKS: "股票治理成果", HISTORY: "治理历程与报告版本", QUALITY: "失败原因与优化建议", SKILLS: "Agent与Skill执行明细", AUDIT: "原始审计数据" };
+  useGovernanceDialog(preview ? ".gr-preview-modal" : reportSection ? ".gr-detail-modal" : selected ? ".gr-modal" : null, () => {
+    if (preview) setPreview(null); else if (reportSection) setReportSection(null); else setSelected(null);
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -287,10 +293,13 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    if (!preview) return;
-    previewRef.current?.scrollIntoView({ block: "start" });
-    previewRef.current?.focus({ preventScroll: true });
-  }, [preview]);
+    const readLink = () => {
+      const jobId = Number(new URLSearchParams(window.location.hash.split("?")[1] || "").get("job"));
+      if (jobId > 0) void openRecord({ job_id: jobId } as GovernanceRecord);
+    };
+    readLink(); window.addEventListener("hashchange", readLink);
+    return () => window.removeEventListener("hashchange", readLink);
+  }, []);
   useEffect(() => {
     if (!records.some((record) => ["PENDING", "RUNNING", "RETRY"].includes(String(record.status).toUpperCase()))) return;
     const timer = window.setInterval(() => { void load(); }, 5000);
@@ -306,40 +315,18 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
     }, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [selected]);
-  useEffect(() => {
-    const record = records.find((item) => item.job_id === actionJobId);
-    if (!record) return;
-    const lifecycle = String(record.job_status || record.status).toUpperCase();
-    if (["PENDING", "RETRY"].includes(lifecycle) && Date.now() - actionQueuedAt >= 15000) setActionNotice(`任务 #${record.job_id} 仍在等待后台执行，尚未开始采集。请检查治理执行服务是否已启动；页面会继续更新状态。`);
-    if (lifecycle === "RUNNING") setActionNotice(`任务 #${record.job_id} 正在执行，进度 ${record.progress ?? 0}%。`);
-    if (lifecycle === "COMPLETED") setActionNotice(`任务 #${record.job_id} 流程已结束，结果为“${statusText(record.result_status || record.status)}”，请查看报告与成果。`);
-    if (lifecycle === "FAILED") setActionNotice(`任务 #${record.job_id} 执行失败，请查看报告中的失败原因。`);
-  }, [records, actionJobId, actionQueuedAt]);
-
   async function openRecord(record: GovernanceRecord) {
-    setPreview(null); setPlan(null); setOptimization(null); setDetailError("");
-    setStageOffsets({});
+    const sequence = ++openSequence.current;
+    setPreview(null); setDetailError("");
+    setReportSection(null); setSectionOffset(0);
     setError("");
-    try { setSelected(await batchGovernanceApi.report(record.job_id)); }
+    try {
+      const value = await batchGovernanceApi.report(record.job_id);
+      if (sequence === openSequence.current) setSelected(value);
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : "治理报告加载失败"); }
   }
-
-  async function startRecord(record: GovernanceRecord) {
-    setStartingId(record.job_id);
-    setError("");
-    setActionNotice("");
-    try {
-      await batchGovernanceApi.start(record.job_id);
-      setActionJobId(record.job_id);
-      setActionQueuedAt(Date.now());
-      setActionNotice(`任务 #${record.job_id} 已提交后台队列，等待执行。页面每 5 秒自动更新状态。`);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "任务启动失败");
-    } finally {
-      setStartingId(null);
-    }
-  }
+  function openSection(code: string) { setReportSection(code); setSectionOffset(0); setPreview(null); setDetailError(""); }
 
   const selectedReport = selected?.governance_report;
   async function runAction(action: () => Promise<void>) {
@@ -351,13 +338,6 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
     if (!selected) return;
     await runAction(async () => { setPreviewTarget({ stage, code }); setPreview(await batchGovernanceApi.stagePreview(selected.job_id, stage, code, offset)); });
   }
-  async function refreshReport() {
-    if (!selected) return;
-    const next = await batchGovernanceApi.report(selected.job_id);
-    setSelected(next);
-    if (optimization) setOptimization(next.governance_report?.actions || null);
-    await load();
-  }
   const summary = useMemo(() => reportSummary(selectedReport), [selectedReport]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.floor(offset / pageSize) + 1;
@@ -367,7 +347,7 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
       .governance-records-root{display:grid;gap:16px;color:#20372d}
       .gr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px;border:1px solid #d8e1d7;border-radius:14px;background:linear-gradient(135deg,#fffdf6,#f1f7f0)}
       .gr-head h1{margin:0;font-size:26px}.gr-head p{margin:7px 0 0;color:#68796f;font-size:13px;line-height:1.6}.gr-actions{display:flex;gap:8px;flex-wrap:wrap}
-      .gr-button{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:7px 12px;border:1px solid #c8d7c9;border-radius:8px;background:#fff;color:#315844;font:inherit;font-size:12px;cursor:pointer}.gr-button.primary{color:#fff;background:#2f6246;border-color:#2f6246}.gr-button:disabled{opacity:.55;cursor:wait}
+      .gr-button{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:7px 12px;border:1px solid #c8d7c9;border-radius:8px;background:#fff;color:#315844;font:inherit;font-size:12px;cursor:pointer;text-decoration:none}.gr-button.primary{color:#fff;background:#2f6246;border-color:#2f6246}.gr-button:disabled{opacity:.55;cursor:wait}
       .gr-panel{border:1px solid #d9e0d7;border-radius:12px;background:#fff;overflow:hidden}.gr-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 150px 210px auto;gap:9px;padding:13px;border-bottom:1px solid #e4e9e2;background:#f7faf6}.gr-input,.gr-select{height:36px;padding:7px 10px;border:1px solid #cbd8cd;border-radius:7px;background:#fff;color:#294238;font:inherit;font-size:12px}.gr-search{position:relative}.gr-search svg{position:absolute;left:10px;top:11px;color:#829388}.gr-search .gr-input{width:100%;padding-left:31px}
       .gr-table-wrap{overflow:auto}.gr-table{width:100%;min-width:930px;border-collapse:collapse}.gr-table th{padding:10px 12px;background:#f5f8f3;color:#68796f;font-size:11px;text-align:left;white-space:nowrap}.gr-table td{padding:12px;border-top:1px solid #edf0eb;font-size:12px;vertical-align:top}.gr-table strong{display:block;color:#244535}.gr-table small{display:block;margin-top:4px;color:#819087}.gr-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#516a5b;font-size:11px}.gr-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700}.gr-status.success{color:#28734b;background:#e2f2e6}.gr-status.failed{color:#a43c35;background:#fbe5e1}.gr-status.partial{color:#8b671d;background:#fff2cc}.gr-status.running{color:#2f6388;background:#e4eff7}.gr-status.pending{color:#68796f;background:#edf1ed}.gr-link{border:0;background:none;color:#2f6a4b;text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}.gr-empty{padding:38px;text-align:center;color:#77877d}.gr-error{padding:11px 13px;border:1px solid #e2b3ac;border-radius:8px;color:#9b3f35;background:#fff3f1;font-size:12px}.gr-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;color:#718077;font-size:12px}.gr-page{display:flex;gap:7px;align-items:center}.gr-modal-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(10,30,22,.5)}.gr-modal{width:min(1120px,100%);max-height:calc(100vh - 48px);overflow:auto;border:1px solid #d2ddd2;border-radius:15px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.22)}.gr-modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:18px 22px;border-bottom:1px solid #e3e9e1}.gr-modal-head h2{margin:0;font-size:20px}.gr-modal-head p{margin:6px 0 0;color:#708077;font-size:12px}.gr-close{border:0;background:none;color:#66776d;cursor:pointer}.gr-modal-body{display:grid;gap:16px;padding:20px 22px}.gr-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.gr-summary div{padding:12px;border:1px solid #dbe6da;border-radius:9px;background:#f7fbf6}.gr-summary small{display:block;color:#76867c;font-size:11px}.gr-summary strong{display:block;margin-top:5px;font-size:20px}.gr-section{display:grid;gap:8px}.gr-section h3{margin:0;font-size:14px}.gr-detail-table{width:100%;border-collapse:collapse}.gr-detail-table th,.gr-detail-table td{padding:8px;border:1px solid #e1e8df;text-align:left;font-size:11px;vertical-align:top}.gr-detail-table th{background:#f4f8f2}.gr-pre{max-height:300px;overflow:auto;margin:0;padding:12px;border-radius:8px;background:#f5f7f4;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
       @media(max-width:800px){.gr-toolbar{grid-template-columns:1fr}.gr-summary{grid-template-columns:repeat(2,1fr)}.gr-head{display:block}.gr-actions{margin-top:12px}}
@@ -375,27 +355,23 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
       .gr-stage-table{table-layout:fixed}.gr-stage-table th:first-child{width:15%}.gr-stage-table th:nth-child(2){width:9%}.gr-stage-table th:nth-child(3),.gr-stage-table th:nth-child(4){width:8%}.gr-stage-table th:nth-child(5){width:9%}.gr-stage-table td:nth-child(5){white-space:nowrap}.gr-stage-table td{font-size:12px;line-height:1.6}.gr-section details{font-size:12px;line-height:1.7}.gr-section summary{cursor:pointer;padding:4px 0}
       .gr-modal .gr-data-fields{display:block;margin:8px 0;border:1px solid #e1e8df;border-radius:8px;overflow:hidden;min-width:0}.gr-modal .gr-data-fields>div{display:grid;grid-template-columns:150px minmax(0,1fr);padding:0;border:0;border-bottom:1px solid #e9eee7;min-width:0}.gr-modal .gr-data-fields>div:last-child{border-bottom:0}.gr-modal .gr-data-fields dt{margin:0;padding:8px 10px;background:#f6f9f4;color:#63746a;overflow-wrap:anywhere;white-space:normal}.gr-modal .gr-data-fields dd{margin:0;padding:8px 10px;min-width:0;overflow-wrap:anywhere;white-space:normal;overflow:visible;text-overflow:clip;font-size:12px;line-height:1.7}.gr-modal .gr-data-fields dd>details{min-width:0}.gr-modal .gr-data-fields .gr-data-fields{margin:4px 0}.gr-modal .gr-data-fields a{color:#2f6a4b}.gr-section[aria-label="阶段成果数据预览"]{padding:14px;border:1px solid #cadccc;border-radius:10px;background:#fbfdfa;min-width:0}.gr-section pre{white-space:pre-wrap;overflow-wrap:anywhere}
       @media(max-width:600px){.gr-modal .gr-data-fields>div{grid-template-columns:1fr}.gr-modal .gr-data-fields dt{font-weight:600}}
+      .gr-detail-backdrop,.gr-preview-backdrop{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:24px;background:rgba(10,30,22,.58)}.gr-preview-backdrop{z-index:100}.gr-detail-modal,.gr-preview-modal{width:min(960px,100%)}.gr-report-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.gr-report-links .gr-button{justify-content:center;min-height:48px}.gr-stage-table th:last-child{width:25%}.gr-modal-body{min-width:0}.gr-modal-head{position:sticky;top:0;background:#fff;z-index:1}@media(max-width:800px){.gr-modal-backdrop,.gr-detail-backdrop,.gr-preview-backdrop{padding:8px}.gr-modal{max-height:calc(100vh - 16px)}.gr-report-links{grid-template-columns:1fr 1fr}.gr-modal-body{padding:14px}}
     `}</style>
-    <header className="gr-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h1>治理记录</h1><p>查询股票数据采集、湖仓发布、知识库切片、知识图谱和 AI + Agent + Skill 执行历史；打开记录可查看治理报告与成果。</p></div><div className="gr-actions"><button className="gr-button primary" type="button" onClick={() => onStartTask?.()}><Play size={14} />发起治理任务</button><button className="gr-button" type="button" disabled={loading} onClick={() => void load()}><RefreshCw size={14} />刷新</button></div></header>
+    <header className="gr-head"><div><p className="eyebrow">GOVERNANCE REPORTS</p><h1>治理报告</h1><p>这里只查询历史结果、质量、证据与报告版本；任务执行、继续治理和交互处理请进入治理工作台。</p></div><div className="gr-actions"><a className="gr-button primary" href="#/operations/workbench">进入治理工作台</a><a className="gr-button" href="#/operations/documents"><FileText size={14} />新闻公告专项治理</a><button className="gr-button" type="button" disabled={loading} onClick={() => void load()}><RefreshCw size={14} />刷新</button></div></header>
     {error && <div className="gr-error">{error}</div>}
-    {actionNotice && <div className="gr-notice" role="status">{actionNotice}</div>}
     <section className="gr-panel"><div className="gr-toolbar"><label className="gr-search"><Search size={14} /><input className="gr-input" value={keyword} onChange={(event) => { setKeyword(event.target.value); setOffset(0); }} placeholder="搜索股票、批次号或市场" /></label><select className="gr-select" value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}><option value="">全部状态</option><option value="PENDING">等待执行</option><option value="RUNNING">执行中</option><option value="COMPLETED">已完成</option><option value="PARTIAL">部分完成</option><option value="FAILED">执行失败</option></select><select className="gr-select" value={mode} onChange={(event) => { setMode(event.target.value as GovernanceMode | ""); setOffset(0); }}><option value="">全部治理方式</option><option value="AI_AGENT_SKILL_GOVERNANCE">AI + Agent + Skill 治理</option><option value="SYSTEM_GOVERNANCE">系统治理</option></select><button className="gr-button primary" type="button" onClick={() => { setOffset(0); void load(); }}>查询</button></div>
       <div className="gr-table-wrap"><table className="gr-table">
         <thead><tr><th>治理批次</th><th>股票范围</th><th>治理方式</th><th>状态</th><th>进度</th><th>创建时间</th><th>操作</th></tr></thead>
         <tbody>{records.length ? records.map((record) => {
           const displayStatus = record.result_status || record.status;
-          const lifecycle = String(record.job_status || record.status).toUpperCase();
-          const canStart = ["PENDING", "RETRY", "FAILED"].includes(lifecycle);
           return <tr key={record.job_id}>
             <td><strong>任务 #{record.job_id}</strong><span className="gr-code">{record.governance_batch_id || "--"}</span><small>Pipeline #{record.pipeline_run_id || "--"}</small></td>
             <td><strong>{record.stock_count} 只股票</strong><small>{record.effective_options?.stocks ? record.effective_options.stocks.slice(0, 3).map((item) => `${marketNames[item.market] || item.market}:${item.symbol}`).join("、") : "范围记录见详情"}</small></td>
             <td>{modeNames[record.governance_mode || ""] || record.governance_mode || "--"}<small>Agent 执行：{record.agent_execution_run_id ? "已记录" : "未记录"}</small></td>
             <td><span className={`gr-status ${statusClass(displayStatus)}`}>{statusText(displayStatus)}</span><small>{stageText(record.current_stage)}</small></td>
-            <td>{record.progress ?? 0}%</td><td>{dateText(record.created_at)}</td>
+            <td><GovernanceProgress job={record} /></td><td>{dateText(record.created_at)}</td>
             <td><div className="gr-actions">
-              {canStart && <button className="gr-link" type="button" disabled={startingId === record.job_id} onClick={() => void startRecord(record)}><Play size={13} /> {startingId === record.job_id ? "启动中" : "立即执行"}</button>}
-              {["PARTIAL", "FAILED"].includes(String(displayStatus).toUpperCase()) && <button className="gr-link" type="button" onClick={() => void batchGovernanceApi.retry(record.job_id).then(load).catch((cause) => setError(cause instanceof Error ? cause.message : "重试失败"))}>重试</button>}
-              <button className="gr-link" type="button" onClick={() => void openRecord(record)}><FileText size={13} /> 查看报告与成果</button>
+              <button className="gr-link" type="button" onClick={() => void openRecord(record)}><FileText size={13} /> 查看治理报告</button>
             </div></td>
           </tr>;
         }) : <tr><td className="gr-empty" colSpan={7}>{loading ? "正在加载治理记录…" : "暂无治理记录"}</td></tr>}</tbody>
@@ -403,12 +379,13 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
       <footer className="gr-footer"><span>共 {total} 条记录{loading ? " · 加载中…" : ""}</span><span className="gr-page"><button className="gr-button" type="button" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - pageSize))}>上一页</button><span>第 {currentPage} / {totalPages} 页</span><button className="gr-button" type="button" disabled={offset + pageSize >= total || loading} onClick={() => setOffset(offset + pageSize)}>下一页</button></span></footer>
     </section>
     {selected && selectedReport && <div className="gr-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
-      <section className="gr-modal" role="dialog" aria-modal="true" aria-labelledby="governance-report-title">
+      <section className="gr-modal" role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="governance-report-title">
         <header className="gr-modal-head">
           <div>
             <h2 id="governance-report-title">治理报告 · 任务 #{selected.job_id}</h2>
             <p>{modeNames[selected.governance_mode || ""] || selected.governance_mode} · {selected.governance_batch_id || "无批次号"} · {dateText(selected.created_at)}</p>
-            <small>流程进度 {selectedReport.job.progress ?? 0}% · {stageText(selectedReport.job.current_stage)}</small>
+            <small>只读历史报告 · 流程进度 {selectedReport.job.progress ?? 0}% · {stageText(selectedReport.job.current_stage)}</small>
+            {selected && <GovernanceProgress job={selected} />}
           </div>
           <button className="gr-close" type="button" aria-label="关闭治理报告" onClick={() => setSelected(null)}><X size={18} /></button>
         </header>
@@ -421,35 +398,40 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
           </div>
           <div className="gr-interpretation"><strong>报告解读：</strong>{interpretationText(selectedReport)}</div>
           {detailError && <p role="alert" className="gr-error">{detailError}</p>}
-          <section className="gr-section"><h3>治理历程与报告版本</h3>
-            <p>每轮续作保留独立任务、批次和原报告。点击任务可查看当轮结果。</p>
-            <div className="gr-actions">{(selectedReport.actions?.history || []).map((item) => <button className="gr-button" key={item.job_id} disabled={item.job_id === selected.job_id || busyAction} onClick={() => void openRecord({ ...selected, job_id: item.job_id })}>
-              任务 #{item.job_id} · {statusText(item.result_status || item.status)}{item.parent_job_id ? ` · 续作自#${item.parent_job_id}` : " · 首轮"}</button>)}</div>
-          </section>
           <section className="gr-section">
             <h3>阶段进度</h3>
             <p>统计单位为各阶段的验收检查项，分母因阶段而异；未请求的阶段不计算完成率。切片通过不代表所有类型的股票信息齐全。</p>
             <div className="gr-table-wrap"><table className="gr-detail-table gr-stage-table">
-              <thead><tr><th>阶段</th><th>状态</th><th>通过检查项</th><th>未通过检查项</th><th>完成率</th><th>成果与范围</th></tr></thead>
-              <tbody>{Object.entries(selectedReport.summary?.stage_stats || {}).map(([code, item]) => <tr key={code}>
+              <thead><tr><th>阶段</th><th>状态</th><th>通过检查项</th><th>未通过检查项</th><th>完成率</th><th>成果</th></tr></thead>
+              <tbody>{Object.entries(selectedReport.summary?.stage_stats || selectedReport.stage_results).map(([code, item]) => <tr key={code}>
                 <td>{item.label || stageText(code)}</td>
                 <td>{statusText(item.status || "UNKNOWN")}</td>
                 <td>{item.completed ?? 0}</td><td>{item.incomplete ?? 0}</td>
                 <td>{item.completion_rate == null ? "不适用" : `${item.completion_rate}%`}</td>
-                <td>{stageFacts(code, selectedReport)}</td>
+                <td><button className="gr-link" onClick={() => openSection(`STAGE:${code}`)}>查看阶段明细</button></td>
               </tr>)}</tbody>
             </table></div>
           </section>
-          <section className="gr-section">
+          <section className="gr-section"><h3>按需查看报告明细</h3><div className="gr-report-links">{Object.entries(sectionNames).map(([code, label]) => <button className="gr-button" key={code} onClick={() => openSection(code)}>{label}</button>)}</div></section>
+          <div className="gr-actions"><a className="gr-button primary" href={`#/operations/workbench?job=${selected.job_id}`}>进入治理工作台处理未完成项</a><small>报告只查询成果；处理未完成项请在治理窗口执行。</small></div>
+        </div>
+      </section>
+    </div>}
+    {selected && selectedReport && reportSection && <div className="gr-detail-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setReportSection(null); }}>
+      <section className="gr-modal gr-detail-modal" role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="gr-section-title">
+        <header className="gr-modal-head"><div><h2 id="gr-section-title">{sectionNames[reportSection] || `${stageText(reportSection.replace("STAGE:", ""))} · 阶段成果明细`}</h2><p>任务 #{selected.job_id} · 只读查询</p></div><button className="gr-close" aria-label="关闭报告明细" onClick={() => setReportSection(null)}><X size={18} /></button></header>
+        <div className="gr-modal-body">
+          {detailError && <p role="alert" className="gr-error">{detailError}</p>}
+          {reportSection === "HISTORY" && <section className="gr-section"><p>每轮续作保留独立任务、批次和原报告。点击任务可查看当轮结果。</p><div className="gr-actions">{(selectedReport.actions?.history || []).slice(sectionOffset, sectionOffset + pageSize).map(item => <button className="gr-button" key={item.job_id} disabled={item.job_id === selected.job_id || busyAction} onClick={() => void openRecord({ ...selected, job_id: item.job_id })}>任务 #{item.job_id} · {statusText(item.result_status || item.status)}{item.parent_job_id ? ` · 续作自#${item.parent_job_id}` : " · 首轮"}</button>)}</div>{!selectedReport.actions?.history?.length && <p>当前没有其他报告版本。</p>}</section>}
+          {reportSection.startsWith("STAGE:") && <section className="gr-section">
             <h3>阶段成果明细</h3>
-            {["BUSINESS_DATA", "STRUCTURED_EVENTS", "LAKEHOUSE_EXPORT", "DOCUMENT_CHUNKS", "KNOWLEDGE_GRAPH"].map((code) => {
+            {[reportSection.replace("STAGE:", "")].map((code) => {
               const stage = selectedReport.stage_results[code];
-              if (!stage || stage.status === "SKIPPED") return null;
+              if (!stage || stage.status === "SKIPPED") return <p key={code}>{stage?.message || "该阶段本次未执行。"}</p>;
               const items = [...(Array.isArray(stage.completed_items) ? stage.completed_items : []), ...(Array.isArray(stage.incomplete_items) ? stage.incomplete_items : [])] as Array<Record<string, unknown>>;
-              if (!items.length) return null;
-              const itemOffset = stageOffsets[code] || 0;
-              return <details key={code}>
-                <summary>{stageText(code)} · {items.length} 个检查项</summary>
+              const itemOffset = sectionOffset;
+              return <div key={code}>
+                <p>{stageFacts(code, selectedReport)}</p><p>{items.length} 个检查项 · {statusText(stage.status)}</p>
                 <div className="gr-table-wrap"><table className="gr-detail-table">
                   <thead><tr><th>检查内容</th><th>状态</th><th>记录量</th><th>说明</th><th>成果</th></tr></thead>
                   <tbody>{items.slice(itemOffset, itemOffset + pageSize).map((item, index) => <tr key={`${String(item.code)}-${index}`}>
@@ -460,87 +442,65 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
                   </tr>)}</tbody>
                 </table></div>
                 {items.length > pageSize && <div className="gr-actions"><span>共 {items.length} 项 · 第 {Math.floor(itemOffset / pageSize) + 1} 页</span>
-                  <button className="gr-button" disabled={itemOffset === 0} onClick={() => setStageOffsets((previous) => ({ ...previous, [code]: Math.max(0, itemOffset - pageSize) }))}>上一页检查项</button>
-                  <button className="gr-button" disabled={itemOffset + pageSize >= items.length} onClick={() => setStageOffsets((previous) => ({ ...previous, [code]: itemOffset + pageSize }))}>下一页检查项</button></div>}
-              </details>;
+                  <button className="gr-button" disabled={itemOffset === 0} onClick={() => setSectionOffset(Math.max(0, itemOffset - pageSize))}>上一页检查项</button>
+                  <button className="gr-button" disabled={itemOffset + pageSize >= items.length} onClick={() => setSectionOffset(itemOffset + pageSize)}>下一页检查项</button></div>}
+                {!items.length && <p>尚未记录检查项，请查看阶段摘要与原始验收数据。</p>}
+                <details><summary>阶段原始验收数据（高级）</summary><pre className="gr-pre">{jsonText(stage)}</pre></details>
+              </div>;
             })}
-          </section>
-          {preview && <section className="gr-section" aria-label="阶段成果数据预览" ref={previewRef} tabIndex={-1}>
-            <div className="gr-actions"><h3>成果详情 · {dataNames[preview.title] || preview.title}</h3><button className="gr-button" onClick={() => setPreview(null)}>关闭成果详情</button></div>
-            <p>{preview.reason}</p><p>{preview.note}</p>
-            <details><summary>查看本轮验收记录与质量</summary><ReadableData value={preview.report_snapshot} /></details>
-            {preview.items.length ? preview.items.map((item, index) => <details key={index} open={index === 0}><summary>{String(item.title || item.entity_name || `数据记录 ${preview.offset + index + 1}`)}</summary><ReadableData value={item} /></details>) : <p>该检查项尚无可预览数据，请查看上述缺口和原始验收记录。</p>}
-            <div className="gr-actions"><span>共 {preview.total} 条 · 第 {Math.floor(preview.offset / 20) + 1} 页</span>
-              <button className="gr-button" disabled={busyAction || preview.offset === 0} onClick={() => previewTarget && void showPreview(previewTarget.stage, previewTarget.code, Math.max(0, preview.offset - 20))}>上一页</button>
-              <button className="gr-button" disabled={busyAction || preview.offset + 20 >= preview.total} onClick={() => previewTarget && void showPreview(previewTarget.stage, previewTarget.code, preview.offset + 20)}>下一页</button></div>
           </section>}
-          <section className="gr-section">
+          {reportSection === "STOCKS" && <section className="gr-section">
             <h3>股票基本信息与治理成果</h3>
             <div className="gr-table-wrap"><table className="gr-detail-table">
               <thead><tr><th>市场</th><th>代码</th><th>股票名称</th><th>交易所/板块</th><th>治理状态</th><th>业务数据</th><th>质量摘要</th><th>证据数</th></tr></thead>
-              <tbody>{selectedReport.stock_results.map((row, index) => <tr key={`${String(row.market)}-${String(row.symbol)}-${index}`}>
+              <tbody>{selectedReport.stock_results.slice(sectionOffset, sectionOffset + pageSize).map((row, index) => <tr key={`${String(row.market)}-${String(row.symbol)}-${index}`}>
                 <td>{marketNames[String(row.market)] || String(row.market || "--")}</td><td>{String(row.symbol || "--")}</td><td>{String(row.stock_name || "--")}</td>
                 <td>{exchangeNames[String(row.exchange)] || String(row.exchange || "--")} / {String(row.listing_board || "--")}</td>
                 <td><span className={`gr-status ${statusClass(String(row.status || ""))}`}>{statusText(String(row.status || ""))}</span></td>
                 <td>{operationsText(row, selectedReport)}</td><td>{qualityText(row.quality_summary)}</td><td>{Array.isArray(row.evidence_ids) ? row.evidence_ids.length : 0}</td>
               </tr>)}</tbody>
             </table></div>
-          </section>
-          <section className="gr-section">
+          </section>}
+          {reportSection === "QUALITY" && <section className="gr-section">
             <h3>失败原因与优化建议</h3>
             <p>缺口记录可能来自同一原因在多个阶段的反馈，数量不等于独立故障数。来源无记录也不能据此判断市场不存在该数据。</p>
-            {selectedReport.analysis?.failure_reasons?.length ? <ul>{selectedReport.analysis.failure_reasons.map((item, index) => <li key={`${item.code}-${index}`}>
+            {selectedReport.analysis?.failure_reasons?.length ? <ul>{selectedReport.analysis.failure_reasons.slice(sectionOffset, sectionOffset + pageSize).map((item, index) => <li key={`${item.code}-${index}`}>
               {issueText(item.code)}：{reasonText(item.reason)}
             </li>)}</ul> : <p>当前没有记录失败原因。</p>}
-            {selectedReport.analysis?.recommendations?.length ? <ul>{selectedReport.analysis.recommendations.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}
-            <div className="gr-actions">
-              <button className="gr-button" type="button" disabled={busyAction || ["PENDING", "RUNNING", "RETRY"].includes(String(selected.job_status || selected.status))} onClick={() => void runAction(async () => { setPlan(await batchGovernanceApi.continuationPlan(selected.job_id)); setContinueKey(crypto.randomUUID()); })}>继续治理</button>
-              <button className="gr-button" type="button" disabled={busyAction || ["PENDING", "RUNNING", "RETRY"].includes(String(selected.job_status || selected.status))} onClick={() => void runAction(async () => { setOptimization(await batchGovernanceApi.optimize(selected.job_id)); await refreshReport(); })}>生成并审核 Skill 优化</button>
-            </div>
-            {plan && <div className="gr-section" aria-label="定向继续治理计划"><h3>本次定向续作计划</h3>
-              <ul>{plan.notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
-              <p>补采类型：{plan.request.business_types?.map((code) => businessNames[code]).join("、") || "无"}；正文结构化：{plan.request.structure_documents ? "执行" : "不执行"}；知识链：{plan.request.run_graph ? "按依赖更新范围版本" : "不更新"}</p>
-              <details><summary>查看本轮待修复项（{plan.reasons.length}项）</summary><ul>{plan.reasons.map((item, index) => <li key={index}>{stageText(item.stage)}：{reasonText(String(item.reason || item.code))}</li>)}</ul></details>
-              <button className="gr-button primary" disabled={busyAction || !plan.can_continue} onClick={() => void runAction(async () => {
-                const next = await batchGovernanceApi.continueJob(selected.job_id, continueKey); setPlan(null);
-                setActionJobId(next.job_id); setActionQueuedAt(Date.now()); setActionNotice(`定向续作任务 #${next.job_id} 已入队，保留旧报告；后台将实际执行。`);
-                await load(); await openRecord(next);
-              })}>{busyAction ? "处理中…" : "执行定向续作并保留旧报告"}</button>
-              <button className="gr-button" disabled={busyAction} onClick={() => setPlan(null)}>收起计划</button>
-            </div>}
-            {optimization && <div className="gr-section" aria-label="Skill优化审核"><h3>Skill 优化草稿与审核</h3>
-              <p>按本轮失败原因生成实际草稿，保留基础版本。通过离线契约与证据门禁检查后可批准；批准产生新Skill版本，需继续治理验证效果。</p>
-              {!optimization.drafts.length && <p>没有可生成的 Skill 缺口草稿。</p>}
-              {optimization.drafts.map((draft) => <details key={draft.id} open><summary>{draft.skill_name} · 草稿 #{draft.id} · {valueNames[draft.status] || statusText(draft.status)} · 基于 v{draft.base_skill_version}</summary>
-                <ReadableData value={(() => { try { return JSON.parse(draft.rationale); } catch { return draft.rationale; } })()} />
-                <details><summary>对照基础版本SOP与建议SOP</summary><h4>基础版本SOP · v{draft.base_skill_version}</h4><pre className="gr-pre">{draft.current_instructions}</pre><h4>建议SOP</h4><pre className="gr-pre">{draft.proposed_instructions}</pre></details>
-                {draft.status === "PENDING_REVIEW" && draft.base_skill_version !== draft.current_version && <p role="status">Skill 已更新至 v{draft.current_version}，此草稿基于旧版本，不能直接启用。请重新点击“生成并审核 Skill 优化”生成当前版本草稿；旧草稿保留供核对。</p>}
-                {draft.validation && <div><p>离线检查：{statusText(draft.validation.status)} · {draft.validation.scope}</p><ul>{draft.validation.checks.map((check, index) => <li key={index}>{check.passed ? "✓" : "×"} {check.name}{check.reason ? `：${check.reason}` : ""}</li>)}</ul></div>}
-                {draft.status === "PENDING_REVIEW" && <div className="gr-actions">
-                  <button className="gr-button" disabled={busyAction} onClick={() => void runAction(async () => { await batchGovernanceApi.testDraft(selected.job_id, draft.id); await refreshReport(); })}>执行离线检查</button>
-                  <button className="gr-button primary" disabled={busyAction || draft.validation?.status !== "PASSED" || draft.base_skill_version !== draft.current_version} onClick={() => void runAction(async () => { setOptimization(await batchGovernanceApi.reviewDraft(selected.job_id, draft.id, "APPROVE")); await refreshReport(); })}>批准并启用新版本</button>
-                  <button className="gr-button" disabled={busyAction} onClick={() => void runAction(async () => { setOptimization(await batchGovernanceApi.reviewDraft(selected.job_id, draft.id, "REJECT")); await refreshReport(); })}>驳回草稿</button></div>}
-              </details>)}
-            </div>}
-          </section>
-          <section className="gr-section">
+            {selectedReport.analysis?.recommendations?.length ? <details><summary>优化建议 · {selectedReport.analysis.recommendations.length}项</summary><ul>{selectedReport.analysis.recommendations.map((item, index) => <li key={index}>{item}</li>)}</ul></details> : null}
+            <p><a className="gr-button primary" href={`#/operations/workbench?job=${selected.job_id}`}>进入治理工作台处理未完成项</a></p>
+          </section>}
+          {reportSection === "SKILLS" && <section className="gr-section">
             <h3>Agent / Skill 执行链路</h3>
             <p>{selectedReport.agent ? `${selectedReport.agent.agent_code === "STOCK_DATA_GOVERNANCE_AGENT" ? "股票数据治理智能体" : String(selectedReport.agent.agent_code || "Agent")} · v${String(selectedReport.agent.agent_version || "--")} · ${statusText(String(selectedReport.agent.status || ""))}` : "未关联 Agent 执行记录"}</p>
             {selectedReport.skills?.length ? <div className="gr-table-wrap"><table className="gr-detail-table">
               <thead><tr><th>Skill</th><th>版本</th><th>状态</th><th>副作用级别</th><th>证据数</th></tr></thead>
-              <tbody>{selectedReport.skills.map((skill, index) => <tr key={`${String(skill.skill_code)}-${index}`}>
+              <tbody>{selectedReport.skills.slice(sectionOffset, sectionOffset + pageSize).map((skill, index) => <tr key={`${String(skill.skill_code)}-${index}`}>
                 <td title={String(skill.skill_code || "")}>{skillNames[String(skill.skill_code)] || String(skill.skill_code || "--")}</td><td>{String(skill.skill_version || "--")}</td><td>{statusText(String(skill.status || ""))}</td><td>{({ READ_ONLY: "只读", CONTROLLED_WRITE: "受控写入", DATABASE_WRITE: "受控数据库写入", DB_WRITE: "受控数据库写入", OBJECT_WRITE: "对象写入", EXTERNAL_WRITE: "外部写入" } as Record<string, string>)[String(skill.side_effect_level)] || String(skill.side_effect_level || "--")}</td><td>{Array.isArray(skill.evidence_ids) ? skill.evidence_ids.length : 0}</td>
               </tr>)}</tbody>
             </table></div> : <p>未记录 Skill 执行明细。</p>}
-          </section>
-          <section className="gr-section">
+          </section>}
+          {reportSection === "AUDIT" && <section className="gr-section">
             <h3>原始审计数据</h3>
             <details><summary>展开阶段原始记录</summary><pre className="gr-pre">{jsonText(selectedReport.stage_results)}</pre></details>
             {selectedReport.errors?.length ? <details><summary>展开错误原文</summary><pre className="gr-pre">{jsonText(selectedReport.errors)}</pre></details> : null}
-          </section>
+          </section>}
+          {(() => {
+            const count = reportSection === "STOCKS" ? selectedReport.stock_results.length : reportSection === "SKILLS" ? selectedReport.skills.length : reportSection === "QUALITY" ? selectedReport.analysis?.failure_reasons?.length || 0 : reportSection === "HISTORY" ? selectedReport.actions?.history?.length || 0 : 0;
+            return count > pageSize && <div className="gr-actions"><span>共 {count} 条 · 第 {Math.floor(sectionOffset / pageSize) + 1} / {Math.ceil(count / pageSize)} 页</span><button className="gr-button" disabled={sectionOffset === 0} onClick={() => setSectionOffset(Math.max(0, sectionOffset - pageSize))}>上一页明细</button><button className="gr-button" disabled={sectionOffset + pageSize >= count} onClick={() => setSectionOffset(sectionOffset + pageSize)}>下一页明细</button></div>;
+          })()}
         </div>
       </section>
     </div>}
+    {preview && <div className="gr-preview-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setPreview(null); }}><section className="gr-modal gr-preview-modal" role="dialog" tabIndex={-1} aria-modal="true" aria-label="阶段成果数据预览">
+      <header className="gr-modal-head"><div><h2>成果详情 · {dataNames[preview.title] || preview.title}</h2><p>{preview.reason}</p></div><button className="gr-close" aria-label="关闭成果详情" onClick={() => setPreview(null)}><X size={18} /></button></header>
+      <div className="gr-modal-body"><section className="gr-section">
+        {detailError && <p role="alert" className="gr-error">{detailError}</p>}<p>{preview.note}</p>
+        <details><summary>查看本轮验收记录与质量</summary><ReadableData value={preview.report_snapshot} /></details>
+        {preview.items.length ? preview.items.map((item, index) => <details key={index} open={index === 0}><summary>{String(item.title || item.entity_name || `数据记录 ${preview.offset + index + 1}`)}</summary><ReadableData value={item} /></details>) : <p>该检查项尚无可预览数据，请查看缺口和原始验收记录。</p>}
+        <div className="gr-actions"><span>共 {preview.total} 条 · 第 {Math.floor(preview.offset / 20) + 1} 页</span><button className="gr-button" disabled={busyAction || preview.offset === 0} onClick={() => previewTarget && void showPreview(previewTarget.stage, previewTarget.code, Math.max(0, preview.offset - 20))}>上一页数据</button><button className="gr-button" disabled={busyAction || preview.offset + 20 >= preview.total} onClick={() => previewTarget && void showPreview(previewTarget.stage, previewTarget.code, preview.offset + 20)}>下一页数据</button></div>
+      </section></div>
+    </section></div>}
   </section>;
 }
 

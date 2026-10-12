@@ -90,6 +90,7 @@ class StockGovernanceAgentSession:
         self.db = db
         self.governance_batch_id = governance_batch_id
         self.pipeline_run_id = pipeline_run_id
+        self.request_json = request_json
         self.structure_documents = bool(request_json.get("structure_documents"))
         self.agent = self._agent()
         self.skills = self._skills()
@@ -112,6 +113,9 @@ class StockGovernanceAgentSession:
         }
         if self.structure_documents:
             required.add(SKILL_EVENTS)
+            if self.request_json.get("semantic_plan_only"):
+                required.add("DOCUMENT_SEMANTIC_ROUTER")
+            required.update(str(code).strip().upper() for code in self.request_json.get("document_skill_codes") or [])
         rows = list(self.db.scalars(
             select(ModelSkill)
             .join(AgentSkillLink, AgentSkillLink.skill_id == ModelSkill.id)
