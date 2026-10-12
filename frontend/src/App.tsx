@@ -387,10 +387,6 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   }, [allVisibleSelected, visibleSelectedCount]);
   function toggleStockSelection(stock: StockSymbol) {
     const key = stockSelectionKey(stock);
-    if (!selectedStocks[key] && selectedStockList.length >= 30) {
-      message("单次最多选择30只股票，请先取消部分选择。");
-      return;
-    }
     setSelectedStocks((current) => {
       const next = { ...current };
       if (next[key]) delete next[key];
@@ -404,12 +400,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
       setSelectedStocks((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleKeys.has(key))));
       return;
     }
-    const available = Math.max(0, 30 - selectedStockList.length);
-    const additions = symbols.filter((stock) => !selectedStocks[stockSelectionKey(stock)]).slice(0, available);
-    if (!additions.length) {
-      message("单次最多选择30只股票，请先取消部分选择。");
-      return;
-    }
+    const additions = symbols.filter((stock) => !selectedStocks[stockSelectionKey(stock)]);
     setSelectedStocks((current) => {
       const next = { ...current };
       additions.forEach((stock) => { next[stockSelectionKey(stock)] = stock; });
@@ -624,7 +615,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
           <div className="master-batch-toolbar" role="status">
             <div>
               <strong>批量数据与知识治理</strong>
-              <span>当前已选 {selectedStockList.length} / 30 只；切换市场或查询条件不会清空已选股票。</span>
+              <span>当前已选 {selectedStockList.length} 只；切换市场或查询条件不会清空已选股票。</span>
             </div>
             <div>
               {selectedStockList.length > 0 && <button type="button" className="quiet-button" onClick={() => setSelectedStocks({})}>清空选择</button>}

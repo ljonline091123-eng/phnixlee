@@ -12,7 +12,7 @@ from app.api.document_governance import router
 from app.db.session import get_db
 from app.models.ai_hub import ModelSkill
 from app.models.foundation import FoundationEntity, FoundationEvidence, FoundationFact, FoundationListing, FoundationSecurity
-from app.models.market_data import StockNews, StockSymbol
+from app.models.market_data import StockNews, StockNotice, StockSymbol
 from app.services import document_event_governance as governor, document_semantics as semantics, skill_files
 from app.schemas.document_governance import DocumentReviewRequest
 from app.services.document_semantic_review import apply_review, compare_versions, review_status, versions_for
@@ -157,6 +157,107 @@ def test_document_semantic_api_lists_detail_and_enqueues(database, monkeypatch):
         bypass = client.post("/document-governance/analyze", json={"documents": [{"source_table": "stock_news", "record_id": identity}],
             "idempotency_key": "bypass", "semantic_feedback": "绕过审核轨迹的反馈"})
         assert bypass.status_code == 422
+
+
+def test_scope_preview_filters_news_and_notice_and_caps_each_stock(database):
+    with database() as db:
+        stock, first_news = setup_document(db)
+        db.add_all([
+            StockNews(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                      news_time="2026-10-08", title="第二篇语义新闻", content=BODY,
+                      source_name="测试来源", content_json={}),
+            StockNotice(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                        notice_date="2026-10-07", title="一份公司公告", url="https://example.test/a.pdf",
+                        content_json={"content": BODY}),
+            StockNews(market="HK", symbol="00700", source_id=stock.source_id,
+                      news_time="2026-10-06", title="港股语义新闻", content=BODY,
+                      source_name="测试来源", content_json={}),
+        ])
+        db.commit()
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    with TestClient(app) as client:
+        all_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}, {"market": "HK", "symbol": "00700"}],
+            "kind": "ALL", "disclosure_days": 730, "per_stock_limit": 1,
+        })
+        assert all_scope.status_code == 200
+        body = all_scope.json()
+        assert body["stock_count"] == 2 and body["planned_count"] == 2
+        cn = next(item for item in body["stocks"] if item["symbol"] == "000001")
+        assert cn["total"] == 3 and cn["planned"] == 1
+
+        news_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "kind": "NEWS", "disclosure_days": 730, "per_stock_limit": 20,
+        })
+        assert news_scope.status_code == 200 and news_scope.json()["stocks"][0]["total"] == 2
+
+        notice_scope = client.post("/document-governance/scope-preview", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "kind": "NOTICE", "disclosure_days": 730, "per_stock_limit": 20,
+        })
+        assert notice_scope.status_code == 200 and notice_scope.json()["stocks"][0]["total"] == 1
+
+
+def test_scope_analyze_queues_multiple_stocks_with_types_and_bounded_options(database, monkeypatch):
+    with database() as db:
+        stock, _ = setup_document(db)
+        db.add(StockNews(market="HK", symbol="00700", source_id=stock.source_id,
+                         news_time="2026-10-06", title="港股批量新闻", content=BODY,
+                         source_name="测试来源", content_json={}))
+        db.commit()
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    captured = []
+    def submit(request, db):
+        captured.append(request)
+        return {"job_id": 77, "pipeline_run_id": 88, "status": "PENDING", "job_status": "PENDING",
+                "stock_count": len(request.stocks), "worker_required": True,
+                "worker_task_type": "stock_batch_governance", "worker_command": "worker", "progress": 0,
+                "effective_options": {}, "governance_mode": request.governance_mode}
+    monkeypatch.setattr("app.api.stock_batch.submit_stock_batch_governance", submit)
+    with TestClient(app) as client:
+        response = client.post("/document-governance/analyze-scope", json={
+            "stocks": [{"market": "CN_A", "symbol": "000001"}, {"market": "HK", "symbol": "00700"}],
+            "kind": "NEWS", "disclosure_days": 365, "per_stock_limit": 3,
+            "idempotency_key": "multi-stock-news-1",
+        })
+        assert response.status_code == 202 and response.json()["stock_count"] == 2
+    request = captured[0]
+    assert request.structure_documents is True and request.semantic_analysis is True
+    assert request.structured_document_types == ["NEWS"]
+    assert request.structured_document_limit == 3
+    assert request.collect_business_data is False and request.run_graph is False
+    assert {(item.market, item.symbol) for item in request.stocks} == {("CN_A", "000001"), ("HK", "00700")}
+
+
+def test_explicit_document_scope_accepts_more_than_ten_documents(database, monkeypatch):
+    with database() as db:
+        stock, _ = setup_document(db)
+        rows = [StockNews(market=stock.market, symbol=stock.symbol, source_id=stock.source_id,
+                          news_time=f"2026-09-{index + 1:02d}", title=f"批量新闻{index}", content=BODY,
+                          source_name="测试来源", content_json={}) for index in range(11)]
+        db.add_all(rows); db.commit(); ids = [row.id for row in rows]
+    app = FastAPI(); app.include_router(router)
+    def session():
+        with database() as db: yield db
+    app.dependency_overrides[get_db] = session
+    monkeypatch.setattr("app.api.stock_batch.submit_stock_batch_governance", lambda request, db: {
+        "job_id": 91, "pipeline_run_id": 92, "status": "PENDING", "job_status": "PENDING", "stock_count": 1,
+        "worker_required": True, "worker_task_type": "stock_batch_governance", "worker_command": "worker",
+        "progress": 0, "effective_options": {}, "governance_mode": request.governance_mode,
+    })
+    with TestClient(app) as client:
+        response = client.post("/document-governance/analyze", json={
+            "documents": [{"source_table": "stock_news", "record_id": identity} for identity in ids],
+            "idempotency_key": "eleven-documents",
+        })
+        assert response.status_code == 202
 
 
 def test_human_review_correction_creates_versioned_candidate_and_keeps_gate(database, monkeypatch):

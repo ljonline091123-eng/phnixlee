@@ -255,6 +255,8 @@ def resolve_participants(db, analysis: dict, company_id: str, stock_name: str) -
 def semantic_analysis(db, document, *, context, model_instance, instructions) -> dict:
     logs = []
     def call(prompt, user, phase, tokens):
+        if document.get("_progress_callback"):
+            document["_progress_callback"](phase)
         log = ModelHubService(db).chat(task_type="data_governance", instance_code=model_instance,
             temperature=0, max_tokens=tokens,
             messages=[{"role": "system", "content": instructions + "\n" + prompt}, {"role": "user", "content": json.dumps(user, ensure_ascii=False)}],

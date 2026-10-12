@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Play, RefreshCw, Search, X } from "lucide-react";
+import { GovernanceProgress } from "./GovernanceProgress";
 import {
   batchGovernanceApi,
   type GovernanceMode,
@@ -141,7 +142,15 @@ function stageFacts(code: string, report: GovernanceReport) {
   const runs = Array.isArray(stage.market_runs) ? stage.market_runs as Array<Record<string, unknown>> : [];
   if (code === "STRUCTURED_EVENTS") {
     const stockRuns = Array.isArray(stage.stock_runs) ? stage.stock_runs as Array<Record<string, unknown>> : [];
-    return stockRuns.map((run) => `范围 ${run.total ?? 0} 份；完整分析 ${run.completed ?? 0} 份；本轮处理 ${run.processed_this_run ?? 0} 份；候选事实 ${Array.isArray(run.fact_ids) ? run.fact_ids.length : 0} 条；待处理或失败 ${run.remaining ?? 0} 份${Array.isArray(run.retired_excerpt_fact_ids) && run.retired_excerpt_fact_ids.length ? `；已纠正 ${run.retired_excerpt_fact_ids.length} 条旧摘要候选` : ""}`).join("；") || "请展开成果明细核验正文与候选事实";
+    const scope = String(stage.scope_description || "");
+    const facts = stockRuns.map((run) => {
+      const scopeCounts = (run.scope_counts || {}) as Record<string, unknown>;
+      const selectedCounts = (run.selected_counts || {}) as Record<string, unknown>;
+      const typeText = scopeCounts.NEWS != null || scopeCounts.NOTICE != null
+        ? `；范围新闻 ${scopeCounts.NEWS ?? 0}、公告 ${scopeCounts.NOTICE ?? 0}，本轮新闻 ${selectedCounts.NEWS ?? 0}、公告 ${selectedCounts.NOTICE ?? 0}` : "";
+      return `${run.market || ""}:${run.symbol || ""} 范围 ${run.total ?? 0} 份；完整分析 ${run.completed ?? 0} 份；本轮处理 ${run.processed_this_run ?? 0} 份${typeText}；候选事实 ${Array.isArray(run.fact_ids) ? run.fact_ids.length : 0} 条；仍待处理或失败 ${run.remaining ?? 0} 份${Array.isArray(run.retired_excerpt_fact_ids) && run.retired_excerpt_fact_ids.length ? `；已纠正 ${run.retired_excerpt_fact_ids.length} 条旧摘要候选` : ""}`;
+    }).join("；");
+    return [scope, facts].filter(Boolean).join("；") || "请展开成果明细核验正文与候选事实";
   }
   if (code === "DOCUMENT_CHUNKS") return runs.map((run) => `文档覆盖 ${run.documents_with_chunks ?? 0}/${run.documents_total ?? 0} 份；新增 ${run.created_chunk_count ?? 0} 条切片；失败 ${run.failed_documents ?? 0} 份`).join("；");
   if (code === "KNOWLEDGE_GRAPH") return runs.map((run) => {
@@ -329,10 +338,11 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
     setError("");
     setActionNotice("");
     try {
-      await batchGovernanceApi.start(record.job_id);
+      const started = await batchGovernanceApi.start(record.job_id);
+      setRecords(current => current.map(item => item.job_id === started.job_id ? { ...item, ...started } : item));
       setActionJobId(record.job_id);
       setActionQueuedAt(Date.now());
-      setActionNotice(`任务 #${record.job_id} 已提交后台队列，等待执行。页面每 5 秒自动更新状态。`);
+      setActionNotice(`任务 #${record.job_id} 已启动，${started.executor?.message || "后台将按队列顺序执行"}。页面每 5 秒自动更新状态。`);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "任务启动失败");
@@ -367,7 +377,7 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
       .governance-records-root{display:grid;gap:16px;color:#20372d}
       .gr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 24px;border:1px solid #d8e1d7;border-radius:14px;background:linear-gradient(135deg,#fffdf6,#f1f7f0)}
       .gr-head h1{margin:0;font-size:26px}.gr-head p{margin:7px 0 0;color:#68796f;font-size:13px;line-height:1.6}.gr-actions{display:flex;gap:8px;flex-wrap:wrap}
-      .gr-button{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:7px 12px;border:1px solid #c8d7c9;border-radius:8px;background:#fff;color:#315844;font:inherit;font-size:12px;cursor:pointer}.gr-button.primary{color:#fff;background:#2f6246;border-color:#2f6246}.gr-button:disabled{opacity:.55;cursor:wait}
+      .gr-button{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:7px 12px;border:1px solid #c8d7c9;border-radius:8px;background:#fff;color:#315844;font:inherit;font-size:12px;cursor:pointer;text-decoration:none}.gr-button.primary{color:#fff;background:#2f6246;border-color:#2f6246}.gr-button:disabled{opacity:.55;cursor:wait}
       .gr-panel{border:1px solid #d9e0d7;border-radius:12px;background:#fff;overflow:hidden}.gr-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 150px 210px auto;gap:9px;padding:13px;border-bottom:1px solid #e4e9e2;background:#f7faf6}.gr-input,.gr-select{height:36px;padding:7px 10px;border:1px solid #cbd8cd;border-radius:7px;background:#fff;color:#294238;font:inherit;font-size:12px}.gr-search{position:relative}.gr-search svg{position:absolute;left:10px;top:11px;color:#829388}.gr-search .gr-input{width:100%;padding-left:31px}
       .gr-table-wrap{overflow:auto}.gr-table{width:100%;min-width:930px;border-collapse:collapse}.gr-table th{padding:10px 12px;background:#f5f8f3;color:#68796f;font-size:11px;text-align:left;white-space:nowrap}.gr-table td{padding:12px;border-top:1px solid #edf0eb;font-size:12px;vertical-align:top}.gr-table strong{display:block;color:#244535}.gr-table small{display:block;margin-top:4px;color:#819087}.gr-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#516a5b;font-size:11px}.gr-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700}.gr-status.success{color:#28734b;background:#e2f2e6}.gr-status.failed{color:#a43c35;background:#fbe5e1}.gr-status.partial{color:#8b671d;background:#fff2cc}.gr-status.running{color:#2f6388;background:#e4eff7}.gr-status.pending{color:#68796f;background:#edf1ed}.gr-link{border:0;background:none;color:#2f6a4b;text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}.gr-empty{padding:38px;text-align:center;color:#77877d}.gr-error{padding:11px 13px;border:1px solid #e2b3ac;border-radius:8px;color:#9b3f35;background:#fff3f1;font-size:12px}.gr-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;color:#718077;font-size:12px}.gr-page{display:flex;gap:7px;align-items:center}.gr-modal-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:rgba(10,30,22,.5)}.gr-modal{width:min(1120px,100%);max-height:calc(100vh - 48px);overflow:auto;border:1px solid #d2ddd2;border-radius:15px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.22)}.gr-modal-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:18px 22px;border-bottom:1px solid #e3e9e1}.gr-modal-head h2{margin:0;font-size:20px}.gr-modal-head p{margin:6px 0 0;color:#708077;font-size:12px}.gr-close{border:0;background:none;color:#66776d;cursor:pointer}.gr-modal-body{display:grid;gap:16px;padding:20px 22px}.gr-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.gr-summary div{padding:12px;border:1px solid #dbe6da;border-radius:9px;background:#f7fbf6}.gr-summary small{display:block;color:#76867c;font-size:11px}.gr-summary strong{display:block;margin-top:5px;font-size:20px}.gr-section{display:grid;gap:8px}.gr-section h3{margin:0;font-size:14px}.gr-detail-table{width:100%;border-collapse:collapse}.gr-detail-table th,.gr-detail-table td{padding:8px;border:1px solid #e1e8df;text-align:left;font-size:11px;vertical-align:top}.gr-detail-table th{background:#f4f8f2}.gr-pre{max-height:300px;overflow:auto;margin:0;padding:12px;border-radius:8px;background:#f5f7f4;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
       @media(max-width:800px){.gr-toolbar{grid-template-columns:1fr}.gr-summary{grid-template-columns:repeat(2,1fr)}.gr-head{display:block}.gr-actions{margin-top:12px}}
@@ -376,7 +386,7 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
       .gr-modal .gr-data-fields{display:block;margin:8px 0;border:1px solid #e1e8df;border-radius:8px;overflow:hidden;min-width:0}.gr-modal .gr-data-fields>div{display:grid;grid-template-columns:150px minmax(0,1fr);padding:0;border:0;border-bottom:1px solid #e9eee7;min-width:0}.gr-modal .gr-data-fields>div:last-child{border-bottom:0}.gr-modal .gr-data-fields dt{margin:0;padding:8px 10px;background:#f6f9f4;color:#63746a;overflow-wrap:anywhere;white-space:normal}.gr-modal .gr-data-fields dd{margin:0;padding:8px 10px;min-width:0;overflow-wrap:anywhere;white-space:normal;overflow:visible;text-overflow:clip;font-size:12px;line-height:1.7}.gr-modal .gr-data-fields dd>details{min-width:0}.gr-modal .gr-data-fields .gr-data-fields{margin:4px 0}.gr-modal .gr-data-fields a{color:#2f6a4b}.gr-section[aria-label="阶段成果数据预览"]{padding:14px;border:1px solid #cadccc;border-radius:10px;background:#fbfdfa;min-width:0}.gr-section pre{white-space:pre-wrap;overflow-wrap:anywhere}
       @media(max-width:600px){.gr-modal .gr-data-fields>div{grid-template-columns:1fr}.gr-modal .gr-data-fields dt{font-weight:600}}
     `}</style>
-    <header className="gr-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h1>治理记录</h1><p>查询股票数据采集、湖仓发布、知识库切片、知识图谱和 AI + Agent + Skill 执行历史；打开记录可查看治理报告与成果。</p></div><div className="gr-actions"><button className="gr-button primary" type="button" onClick={() => onStartTask?.()}><Play size={14} />发起治理任务</button><button className="gr-button" type="button" disabled={loading} onClick={() => void load()}><RefreshCw size={14} />刷新</button></div></header>
+    <header className="gr-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h1>治理记录</h1><p>查询股票数据采集、湖仓发布、知识库切片、知识图谱和 AI + Agent + Skill 执行历史；打开记录可查看治理报告与成果。</p></div><div className="gr-actions"><a className="gr-button" href="#/operations/documents"><FileText size={14} />新闻公告专项治理</a><button className="gr-button primary" type="button" onClick={() => onStartTask?.()}><Play size={14} />发起治理任务</button><button className="gr-button" type="button" disabled={loading} onClick={() => void load()}><RefreshCw size={14} />刷新</button></div></header>
     {error && <div className="gr-error">{error}</div>}
     {actionNotice && <div className="gr-notice" role="status">{actionNotice}</div>}
     <section className="gr-panel"><div className="gr-toolbar"><label className="gr-search"><Search size={14} /><input className="gr-input" value={keyword} onChange={(event) => { setKeyword(event.target.value); setOffset(0); }} placeholder="搜索股票、批次号或市场" /></label><select className="gr-select" value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}><option value="">全部状态</option><option value="PENDING">等待执行</option><option value="RUNNING">执行中</option><option value="COMPLETED">已完成</option><option value="PARTIAL">部分完成</option><option value="FAILED">执行失败</option></select><select className="gr-select" value={mode} onChange={(event) => { setMode(event.target.value as GovernanceMode | ""); setOffset(0); }}><option value="">全部治理方式</option><option value="AI_AGENT_SKILL_GOVERNANCE">AI + Agent + Skill 治理</option><option value="SYSTEM_GOVERNANCE">系统治理</option></select><button className="gr-button primary" type="button" onClick={() => { setOffset(0); void load(); }}>查询</button></div>
@@ -391,7 +401,7 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
             <td><strong>{record.stock_count} 只股票</strong><small>{record.effective_options?.stocks ? record.effective_options.stocks.slice(0, 3).map((item) => `${marketNames[item.market] || item.market}:${item.symbol}`).join("、") : "范围记录见详情"}</small></td>
             <td>{modeNames[record.governance_mode || ""] || record.governance_mode || "--"}<small>Agent 执行：{record.agent_execution_run_id ? "已记录" : "未记录"}</small></td>
             <td><span className={`gr-status ${statusClass(displayStatus)}`}>{statusText(displayStatus)}</span><small>{stageText(record.current_stage)}</small></td>
-            <td>{record.progress ?? 0}%</td><td>{dateText(record.created_at)}</td>
+            <td><GovernanceProgress job={record} /></td><td>{dateText(record.created_at)}</td>
             <td><div className="gr-actions">
               {canStart && <button className="gr-link" type="button" disabled={startingId === record.job_id} onClick={() => void startRecord(record)}><Play size={13} /> {startingId === record.job_id ? "启动中" : "立即执行"}</button>}
               {["PARTIAL", "FAILED"].includes(String(displayStatus).toUpperCase()) && <button className="gr-link" type="button" onClick={() => void batchGovernanceApi.retry(record.job_id).then(load).catch((cause) => setError(cause instanceof Error ? cause.message : "重试失败"))}>重试</button>}
@@ -409,6 +419,7 @@ export function GovernanceRecords({ onStartTask }: { onStartTask?: () => void; o
             <h2 id="governance-report-title">治理报告 · 任务 #{selected.job_id}</h2>
             <p>{modeNames[selected.governance_mode || ""] || selected.governance_mode} · {selected.governance_batch_id || "无批次号"} · {dateText(selected.created_at)}</p>
             <small>流程进度 {selectedReport.job.progress ?? 0}% · {stageText(selectedReport.job.current_stage)}</small>
+            {selected && <GovernanceProgress job={selected} />}
           </div>
           <button className="gr-close" type="button" aria-label="关闭治理报告" onClick={() => setSelected(null)}><X size={18} /></button>
         </header>

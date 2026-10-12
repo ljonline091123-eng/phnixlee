@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
@@ -43,25 +43,50 @@ def document_body(row) -> str:
     return ""
 
 
-def _search_excerpt(row) -> bool:
+def _news_search_record(row) -> bool:
     payload = row.content_json or {}
-    return isinstance(row, StockNews) and payload.get("source_method") == "EASTMONEY_NEWS_SEARCH" and not payload.get("governance_news_extraction")
+    return isinstance(row, StockNews) and (payload.get("source_method") == "EASTMONEY_NEWS_SEARCH"
+        or {"date", "code", "content", "mediaName", "url"}.issubset(payload))
+
+
+def _search_excerpt(row) -> bool:
+    # Legacy search records predate source_method; their short search excerpts
+    # must also be replaced with publisher text before semantic analysis.
+    return _news_search_record(row) and not (row.content_json or {}).get("governance_news_extraction")
 
 
 def official_news_body(row: StockNews) -> tuple[str, dict]:
     """Read the publisher's article body, never the search result excerpt."""
-    parsed = urlparse(str(row.url or ""))
-    if parsed.scheme not in {"http", "https"} or parsed.hostname != "finance.eastmoney.com" or not parsed.path.endswith(".html"):
-        raise ValueError("新闻检索摘要缺少可读取的已登记正文来源")
-    candidate = parsed._replace(scheme="https").geturl()
+    def registered_url(url):
+        parsed = urlparse(url)
+        if (parsed.scheme not in {"http", "https"}
+                or parsed.hostname not in {"finance.eastmoney.com", "stock.eastmoney.com"}
+                or parsed.username or parsed.password or parsed.port not in {None, 80, 443}
+                or not parsed.path.endswith(".html")):
+            raise ValueError("新闻检索摘要缺少可读取的已登记正文来源")
+        return parsed._replace(scheme="https", netloc=parsed.hostname).geturl()
+    candidate = registered_url(str(row.url or ""))
+    requested_url = candidate
+    redirect_chain = []
     binary = bytearray()
     with httpx.Client(timeout=12, follow_redirects=False) as client:
-        with client.stream("GET", candidate) as response:
-            response.raise_for_status()
-            for block in response.iter_bytes():
-                binary.extend(block)
-                if len(binary) > 2 * 1024 * 1024:
-                    raise ValueError("新闻页面超过单次2MB限额")
+        # Validate every hop before requesting it. Eastmoney moves older stock
+        # articles to finance; unrelated/private destinations remain forbidden.
+        for hop in range(4):
+            with client.stream("GET", candidate) as response:
+                if response.is_redirect:
+                    if hop == 3 or not response.headers.get("location"):
+                        raise ValueError("新闻来源跳转次数过多或缺少目标地址")
+                    target = registered_url(urljoin(candidate, response.headers["location"]))
+                    redirect_chain.append({"from": candidate, "to": target})
+                    candidate = target
+                    continue
+                response.raise_for_status()
+                for block in response.iter_bytes():
+                    binary.extend(block)
+                    if len(binary) > 2 * 1024 * 1024:
+                        raise ValueError("新闻页面超过单次2MB限额")
+                break
     soup = BeautifulSoup(bytes(binary), "html.parser")
     article = soup.select_one("#ContentBody")
     if article is None:
@@ -71,7 +96,8 @@ def official_news_body(row: StockNews) -> tuple[str, dict]:
     body = article.get_text("\n", strip=True)
     if len(body) < 40:
         raise ValueError("新闻来源正文缺失或过短")
-    return body, {"source_url": candidate, "binary_sha256": sha256(binary).hexdigest(), "binary_size": len(binary),
+    return body, {"source_url": candidate, "requested_source_url": requested_url, "redirect_chain": redirect_chain,
+                  "binary_sha256": sha256(binary).hexdigest(), "binary_size": len(binary),
                   "retrieved_at": datetime.now(timezone.utc).isoformat(), "extraction_status": "TEXT_AVAILABLE"}
 
 
@@ -118,14 +144,16 @@ def _company_id(db: Session, stock: StockSymbol) -> str | None:
     ).where(FoundationListing.stock_symbol_id == stock.id))
 
 
-def scope_rows(db: Session, stock: StockSymbol, days: int) -> list:
+def scope_rows(db: Session, stock: StockSymbol, days: int,
+               document_types: list[str] | None = None) -> list:
+    selected_types = set(document_types or ["NEWS", "NOTICE"])
     cutoff = (datetime.now(ZoneInfo("Asia/Shanghai")) - timedelta(days=days)).date().isoformat()
     news = list(db.scalars(select(StockNews).where(
         StockNews.market == stock.market, StockNews.symbol == stock.symbol, StockNews.news_time >= cutoff,
-    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all())
+    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all()) if "NEWS" in selected_types else []
     notices = list(db.scalars(select(StockNotice).where(
         StockNotice.market == stock.market, StockNotice.symbol == stock.symbol, StockNotice.notice_date >= cutoff,
-    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all())
+    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all()) if "NOTICE" in selected_types else []
     # Interleave types so a large news list cannot starve announcements.
     return [rows[i] for i in range(max(len(news), len(notices), 0)) for rows in (news, notices) if i < len(rows)]
 
@@ -143,7 +171,7 @@ def _retire_excerpt_candidates(db: Session, rows: list, context: dict) -> list[s
     retired = []
     for row in rows:
         payload = row.content_json or {}
-        if not isinstance(row, StockNews) or payload.get("source_method") != "EASTMONEY_NEWS_SEARCH":
+        if not _news_search_record(row):
             continue
         excerpt_hash = sha256(str(row.content or "").strip().encode()).hexdigest()
         states = [payload.get("event_governance") or {}, *(payload.get("event_governance_history") or [])]
@@ -176,8 +204,10 @@ def _retire_superseded_candidates(db: Session, row, keep_ids: set[str], context:
     return retired
 
 
-def _select_pending(pending: list, limit: int) -> list:
+def _select_pending(pending: list, limit: int | None) -> list:
     """Reserve capacity for failures and untouched rows so neither can starve."""
+    if limit is None:
+        return list(pending)
     retry, fresh = [], []
     for row in pending:
         state = (row.content_json or {}).get("event_governance") or {}
@@ -193,9 +223,28 @@ def _select_pending(pending: list, limit: int) -> list:
     chosen_retry = retry[:retry_count]
     chosen_fresh = fresh[:limit - retry_count]
     chosen_retry += retry[retry_count:retry_count + limit - len(chosen_retry) - len(chosen_fresh)]
-    # Preserve news/notice interleaving from the source scope inside each quota.
-    return [items[i] for i in range(max(len(chosen_retry), len(chosen_fresh), 0))
-            for items in (chosen_retry, chosen_fresh) if i < len(items)]
+    # Preserve retry/fresh interleaving from the source scope inside each quota.
+    selected = [items[i] for i in range(max(len(chosen_retry), len(chosen_fresh), 0))
+                for items in (chosen_retry, chosen_fresh) if i < len(items)]
+    # When both news and notices are requested, old failures from one source
+    # must not consume the complete batch. Keep at least one slot per type when
+    # the configured limit permits it.
+    document_types = list(dict.fromkeys(
+        getattr(row, "__tablename__", None) for row in pending
+        if getattr(row, "__tablename__", None) in {"stock_news", "stock_notice"}
+    ))
+    if len(document_types) > 1 and limit >= len(document_types):
+        for document_type in document_types:
+            if any(getattr(row, "__tablename__", None) == document_type for row in selected):
+                continue
+            candidate = next(row for row in pending if getattr(row, "__tablename__", None) == document_type)
+            counts = {value: sum(getattr(row, "__tablename__", None) == value for row in selected)
+                      for value in document_types}
+            replacement = next((index for index in range(len(selected) - 1, -1, -1)
+                                if counts.get(getattr(selected[index], "__tablename__", None), 0) > 1), None)
+            if replacement is not None:
+                selected[replacement] = candidate
+    return selected
 
 
 def _original_quote(quote: str, body: str) -> str:
@@ -249,16 +298,72 @@ def _parse_events(response: str, documents: list[dict]) -> dict[str, list[dict]]
     return results
 
 
-def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, limit: int = 20,
+def planned_stock_documents(db, stock, *, version, semantic, days, document_types=None,
+                            document_targets=None, feedback=None, limit=None):
+    if document_targets:
+        rows = []
+        for target in document_targets:
+            model = {"stock_news": StockNews, "stock_notice": StockNotice}.get(target["source_table"])
+            row = db.get(model, target["record_id"]) if model else None
+            if row and (row.market, row.symbol) == (stock.market, stock.symbol):
+                rows.append(row)
+        rows = list({(row.__tablename__, row.id): row for row in rows}.values())
+    else:
+        rows = scope_rows(db, stock, days, document_types)
+    pending = list(rows) if semantic and feedback else [row for row in rows if not _done(row, version, semantic)]
+    # Explicit selection is never silently truncated by a stock-scope limit.
+    return rows, _select_pending(pending, None if document_targets else limit)
+
+
+def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, limit: int | None = None,
                           days: int = 730, model_instance: str | None = None, instructions: str = "",
                           semantic: bool = False, document_targets: list[dict] | None = None,
-                          semantic_feedback: str | None = None) -> dict:
+                          semantic_feedback: str | None = None, document_types: list[str] | None = None,
+                          progress_callback=None) -> dict:
+    """Process the entire chosen scope with bounded working batches and checkpoints."""
+    version = str(context.get("skill_version") or "1.0.0")
+    rows, selected = planned_stock_documents(db, stock, version=version, semantic=semantic, days=days,
+        document_types=document_types, document_targets=document_targets, feedback=semantic_feedback, limit=limit)
+    results = []
+    for start in range(0, len(selected), 5):
+        results.append(_govern_document_batch(db, stock, context=context, limit=None, days=days,
+            model_instance=model_instance, instructions=instructions, semantic=semantic,
+            semantic_feedback=semantic_feedback, document_types=document_types,
+            batch_rows=selected[start:start + 5], progress_callback=progress_callback))
+    completed = sum(_done(row, version, semantic) for row in rows)
+    return {"status": "SUCCESS" if rows and completed == len(rows) else "PARTIAL" if rows else "MISSING",
+        "market": stock.market, "symbol": stock.symbol, "company_id": _company_id(db, stock),
+        "total": len(rows), "completed": completed, "remaining": len(rows) - completed,
+        "processed_this_run": len(selected), "scope_days": days, "limit": limit, "verification_status": "CANDIDATE",
+        "failed": sum(1 for result in results for doc in result.get("documents", [])
+                      if doc.get("status") in {"EXTRACTION_FAILED", "MISSING_BODY", "MISSING"}),
+        "scope_counts": {"NEWS": sum(isinstance(row, StockNews) for row in rows),
+                         "NOTICE": sum(isinstance(row, StockNotice) for row in rows)},
+        "selected_counts": {"NEWS": sum(isinstance(row, StockNews) for row in selected),
+                            "NOTICE": sum(isinstance(row, StockNotice) for row in selected)},
+        **{key: [item for result in results for item in result.get(key, [])]
+           for key in ("fact_ids", "errors", "documents", "retired_excerpt_fact_ids")}}
+
+
+def _govern_document_batch(db: Session, stock: StockSymbol, *, context: dict, limit: int | None = None,
+                          days: int = 730, model_instance: str | None = None, instructions: str = "",
+                          semantic: bool = False, document_targets: list[dict] | None = None,
+                          semantic_feedback: str | None = None,
+                          document_types: list[str] | None = None, batch_rows=None, progress_callback=None) -> dict:
     company_id = _company_id(db, stock)
     if not company_id:
-        return {"market": stock.market, "symbol": stock.symbol, "status": "MISSING", "total": 0,
-                "completed": 0, "fact_ids": [], "errors": [{"code": "COMPANY_MAPPING_MISSING", "message": "缺少已核验的证券—公司映射"}]}
+        missing_rows = list(batch_rows or [])
+        message = "缺少已核验的证券—公司映射"
+        if progress_callback:
+            for row in missing_rows:
+                progress_callback(row, "FINISHED", "MISSING", message)
+        return {"market": stock.market, "symbol": stock.symbol, "status": "MISSING", "total": len(missing_rows),
+                "completed": 0, "fact_ids": [], "errors": [{"code": "COMPANY_MAPPING_MISSING", "message": message}],
+                "documents": [{"source_table": row.__tablename__, "source_record_id": row.id,
+                    "title": row.title, "status": "MISSING", "error": message,
+                    "current_version_complete": False} for row in missing_rows]}
     version = str(context.get("skill_version") or "1.0.0")
-    rows = scope_rows(db, stock, days)
+    rows = list(batch_rows) if batch_rows is not None else scope_rows(db, stock, days, document_types)
     if document_targets:
         rows = []
         for target in document_targets:
@@ -270,8 +375,9 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
     pending = list(rows) if semantic and semantic_feedback else [row for row in rows if not _done(row, version, semantic)]
     selected = _select_pending(pending, limit)
     fact_ids, errors, documents = [], [], []
-    attempted_downloads, news_downloads = 0, 0
     for row in selected:
+        if progress_callback:
+            progress_callback(row, "BODY_FETCH", None, None)
         table = row.__tablename__
         previous_state = (row.content_json or {}).get("event_governance") or {}
         state = {**context, "skill_code": SKILL_CODE, "skill_version": version,
@@ -286,21 +392,9 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
         try:
             body = document_body(row)
             if _search_excerpt(row):
-                if news_downloads >= 8:
-                    state.update(status="BODY_DOWNLOAD_DEFERRED", error="本轮新闻正文下载额度已用完；检索摘要不算全文，请继续治理补取正文")
-                    _stamp(row, state)
-                    errors.append({"code": "BODY_DOWNLOAD_DEFERRED", "source_table": table, "source_record_id": row.id, "message": state["error"]})
-                    continue
-                news_downloads += 1
                 body, extraction = official_news_body(row)
                 row.content_json = {**(row.content_json or {}), "governance_full_text": body, "governance_news_extraction": extraction}
-            if not body and isinstance(row, StockNotice) and attempted_downloads >= 4:
-                state.update(status="BODY_DOWNLOAD_DEFERRED", error="本轮官方公告正文下载额度已用完；尚未尝试此公告，请继续治理补取正文")
-                _stamp(row, state)
-                errors.append({"code": "BODY_DOWNLOAD_DEFERRED", "source_table": table, "source_record_id": row.id, "message": state["error"]})
-                continue
-            if not body and isinstance(row, StockNotice) and attempted_downloads < 4:
-                attempted_downloads += 1
+            if not body and isinstance(row, StockNotice):
                 body, extraction = official_notice_body(row)
                 row.content_json = {**(row.content_json or {}), "governance_full_text": body, "governance_pdf_extraction": extraction}
             if not body or len(body.strip()) < 40:
@@ -325,13 +419,18 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
             state["error"] = str(exc)[:1000]
             _stamp(row, state)
             errors.append({"code": "DOCUMENT_BODY_MISSING", "source_table": table, "source_record_id": row.id, "message": str(exc)[:1000]})
+            db.commit()
+            if progress_callback:
+                progress_callback(row, "FINISHED", state["status"], state["error"])
     db.commit()
     if semantic:
         _govern_semantic_documents(db, stock, company_id, documents, context=context, version=version,
                                     model_instance=model_instance, instructions=instructions,
-                                    fact_ids=fact_ids, errors=errors)
+                                    fact_ids=fact_ids, errors=errors, progress_callback=progress_callback)
     for start in range(0, len(documents), 5) if not semantic else []:
         batch = documents[start:start + 5]
+        if progress_callback:
+            progress_callback(batch[0]["row"], "ANALYZING", None, None)
         log = None
         try:
             log = ModelHubService(db).chat(
@@ -381,24 +480,37 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
                 _stamp(doc["row"], state)
                 errors.append({"code": "EVENT_EXTRACTION_FAILED", "source_table": doc["row"].__tablename__, "source_record_id": doc["row"].id, "message": str(exc)[:1000]})
             db.commit()
+        if progress_callback:
+            for doc in batch:
+                state = (doc["row"].content_json or {}).get("event_governance") or {}
+                progress_callback(doc["row"], "FINISHED", state.get("status"), state.get("error"))
     completed = sum(_done(row, version, semantic) for row in rows)
+    scope_counts = {"NEWS": sum(isinstance(row, StockNews) for row in rows),
+                    "NOTICE": sum(isinstance(row, StockNotice) for row in rows)}
+    selected_counts = {"NEWS": sum(isinstance(row, StockNews) for row in selected),
+                       "NOTICE": sum(isinstance(row, StockNotice) for row in selected)}
     return {"status": "SUCCESS" if rows and completed == len(rows) else "PARTIAL" if rows else "MISSING",
             "market": stock.market, "symbol": stock.symbol, "company_id": company_id,
             "total": len(rows), "completed": completed, "remaining": len(rows) - completed,
             "processed_this_run": len(selected), "fact_ids": fact_ids, "errors": errors,
+            "scope_counts": scope_counts, "selected_counts": selected_counts,
             "retired_excerpt_fact_ids": retired_fact_ids,
             "scope_days": days, "limit": limit, "verification_status": "CANDIDATE",
             "documents": [{"source_table": row.__tablename__, "source_record_id": row.id, "title": row.title,
                 **((row.content_json or {}).get("event_governance") or {"status": "NOT_PROCESSED"}),
-                "current_version_complete": _done(row, version, semantic)} for row in rows]}
+                "current_version_complete": _done(row, version, semantic)} for row in selected]}
 
 
 def _govern_semantic_documents(db, stock, company_id, documents, *, context, version,
-                               model_instance, instructions, fact_ids, errors):
+                               model_instance, instructions, fact_ids, errors, progress_callback=None):
     from app.services.document_semantics import SCHEMA_VERSION, semantic_analysis, resolve_participants
     for doc in documents:
         row, state = doc["row"], doc["state"]
+        if progress_callback:
+            doc["_progress_callback"] = lambda phase, current=row: progress_callback(current, phase, None, None)
         state["semantic_schema_version"] = SCHEMA_VERSION
+        if progress_callback:
+            progress_callback(row, "ANALYZING", None, None)
         try:
             analysis = semantic_analysis(db, doc, context={**state, **context},
                 model_instance=model_instance, instructions=instructions)
@@ -454,3 +566,5 @@ def _govern_semantic_documents(db, stock, company_id, documents, *, context, ver
             db.commit()
             errors.append({"code": "SEMANTIC_EXTRACTION_FAILED", "source_table": row.__tablename__, "source_record_id": row.id,
                            "message": str(exc)[:1600]})
+        if progress_callback:
+            progress_callback(row, "FINISHED", state.get("status"), state.get("error"))

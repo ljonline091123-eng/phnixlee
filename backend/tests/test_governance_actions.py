@@ -272,6 +272,14 @@ def test_continuation_reserves_capacity_for_failures_and_untouched_documents():
     assert len(events._select_pending([*failed, deferred, *fresh], 20)) == 20
 
 
+def test_pending_selection_keeps_news_and_notice_coverage_when_failures_dominate():
+    notices = [SimpleNamespace(__tablename__="stock_notice", content="可用公告正文",
+        content_json={"event_governance": {"status": "EXTRACTION_FAILED", "attempts": 1}}) for _ in range(5)]
+    news = SimpleNamespace(__tablename__="stock_news", content="可用新闻正文", content_json={})
+    selected = events._select_pending([*notices, news], 2)
+    assert {row.__tablename__ for row in selected} == {"stock_news", "stock_notice"}
+
+
 def test_pdf_layout_quote_restores_exact_original_without_changing_numbers():
     body = "公司为该笔贷款提供\n连带责任保证担保，金额为 1.07 亿元。"
     quote = "公司为该笔贷款提供连带责任保证担保"

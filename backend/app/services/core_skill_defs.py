@@ -14,7 +14,7 @@ CORE_SKILLS = (
         "description": "有界读取原文、补取官方公告正文、调用真实模型抽取事件并精确核验证据，写入既有事实与证据体系。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
-        "managed_contract_version": "SEMANTIC_HUMAN_REVIEW_V2",
+        "managed_contract_version": "SEMANTIC_UNBOUNDED_BATCH_V3",
         "side_effect_level": "CONTROLLED_WRITE",
         "idempotency_policy": "REQUIRED",
         "permission_policy_json": {
@@ -29,7 +29,9 @@ CORE_SKILLS = (
                 "properties": {"market": {"type": "string"}, "symbol": {"type": "string"}, "governance_batch_id": {"type": "string"},
                     "semantic_feedback": {"type": ["string", "null"], "maxLength": 4000},
                     "semantic_review_id": {"type": ["string", "null"], "minLength": 36, "maxLength": 36},
-                    "document_targets": {"type": "array", "maxItems": 10, "items": {"type": "object", "required": ["source_table", "record_id"],
+                    "structured_document_types": {"type": "array", "minItems": 1, "maxItems": 2,
+                        "items": {"enum": ["NEWS", "NOTICE"]}},
+                    "document_targets": {"type": "array", "items": {"type": "object", "required": ["source_table", "record_id"],
                         "properties": {"source_table": {"enum": ["stock_news", "stock_notice"]}, "record_id": {"type": "integer", "minimum": 1}}, "additionalProperties": False}},
                     "review_version_index": {"type": ["integer", "null"], "minimum": 0}},
                 "additionalProperties": True},
@@ -184,6 +186,7 @@ CORE_SKILLS = (
         "description": "按主数据和上市板块契约核验市场、证券代码、证券类型及板块，不按名称猜测或跨市场合并。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "function_spec": {
             "name": "validate_stock_governance_targets",
             "description": "Validate a bounded stock list against governed security master and board taxonomy.",
@@ -192,7 +195,7 @@ CORE_SKILLS = (
                 "type": "object", "required": ["governance_batch_id", "stocks"],
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
-                    "stocks": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "stocks": {"type": "array", "minItems": 1},
                 }, "additionalProperties": False,
             },
         },
@@ -231,6 +234,7 @@ CORE_SKILLS = (
         "description": "以确定性规则区分通过、部分、缺失、来源失败和公开来源不可得，不允许用空响应冒充完成。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "function_spec": {
             "name": "evaluate_stock_governance_quality",
             "description": "Evaluate collection and persistence evidence with deterministic quality states.",
@@ -239,7 +243,7 @@ CORE_SKILLS = (
                 "type": "object", "required": ["governance_batch_id", "stock_results"],
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
-                    "stock_results": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "stock_results": {"type": "array", "minItems": 1},
                 }, "additionalProperties": False,
             },
         },
@@ -250,6 +254,7 @@ CORE_SKILLS = (
         "description": "复用现有湖仓、切片、知识库和图谱服务发布版本并保留完整血缘；不直接执行 SQL。",
         "task_type": "stock_data_governance",
         "skill_type": "EXECUTABLE_TOOL",
+        "managed_contract_version": "UNBOUNDED_STOCK_BATCH_V2",
         "side_effect_level": "CONTROLLED_WRITE",
         "idempotency_policy": "REQUIRED",
         "permission_policy_json": {
@@ -267,7 +272,7 @@ CORE_SKILLS = (
                 "properties": {
                     "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
                     "market": {"type": "string"},
-                    "symbols": {"type": "array", "minItems": 1, "maxItems": 30},
+                    "symbols": {"type": "array", "minItems": 1},
                 }, "additionalProperties": True,
             },
         },

@@ -25,9 +25,10 @@ export type BatchGovernanceRequest = {
   run_graph: boolean;
   run_agent_governance: boolean;
   structure_documents?: boolean;
-  structured_document_limit?: number;
+  structured_document_limit?: number | null;
   semantic_analysis?: boolean;
   document_targets?: Array<{ source_table: "stock_news" | "stock_notice"; record_id: number }>;
+  structured_document_types?: Array<"NEWS" | "NOTICE">;
   business_types: BatchGovernanceBusinessType[];
   knowledge_base_id?: number | null;
   graph_id?: number | null;
@@ -74,6 +75,10 @@ export type BatchGovernanceJob = {
   governance_batch_id?: string | null;
   agent_execution_run_id?: string | null;
   progress?: number;
+  document_progress?: { total: number; processed: number; succeeded: number; failed: number; partial: number; skipped: number;
+    phase?: string; current_document?: { title: string; source_table: string; record_id: number; market: string; symbol: string };
+    last_error?: string | null; updated_at?: string; stock_total?: number; stocks_processed?: number };
+  executor?: { available: boolean; mode: string; message: string };
   current_stage?: string | null;
   stages?: Record<string, boolean> | string[];
   effective_options?: Partial<BatchGovernanceRequest>;
