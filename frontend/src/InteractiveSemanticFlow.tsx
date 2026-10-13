@@ -39,6 +39,9 @@ type SemanticSkillStatus = {
   history: { run_id: number; skill_version: string; status: string; started_at?: string; completed_at?: string; document_count: number;
     processed_document_count: number; passed: boolean; failure_kind?: string; summary?: string; error?: string }[];
   latest_model_errors: { id: number; provider?: string; instance?: string; status: string; error?: string; created_at?: string }[];
+  attempted_models: { provider?: string; instance?: string; model?: string; status: string; error?: string; retryable?: boolean; call_log_id?: number; attempt?: number }[];
+  model_failure_summary?: string | null; retryable?: boolean;
+  last_successful_model?: { provider?: string; instance?: string; model?: string; call_log_id?: number } | null;
   can_enable: boolean; next_action: string;
 };
 type SemanticSkillRetryResponse = { job_id: number; status: string; draft?: Draft; result?: Draft; semantic_skill_status: SemanticSkillStatus };
@@ -312,6 +315,8 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
           </div>
           <div className="ds-specialist-counts"><span>关联 {summary.total} 篇</span><span>已处理 {summary.processed}/{summary.total}</span><span>通过 {summary.passed}</span><span>失败 {summary.failed}</span><span>模型不可用 {summary.model_unavailable}</span><span>待处理 {summary.pending}</span></div>
           {unavailable && <div className="ds-specialist-alert" role="alert"><strong>专项Skill已创建，但本轮真实模型验收未完成</strong><p>{status.latest_model_errors[0]?.error || status.current_test.error || "模型服务返回HTTP 402，账户余额或额度不可用。"}</p><small>这不是“未创建Skill”。恢复模型服务或额度后，点击“重新测试全部文档”；系统不会用Mock结果冒充真实验收。</small></div>}
+          {unavailable && status.model_failure_summary && <p className="ds-model-failure-summary">失败汇总：{status.model_failure_summary}</p>}
+          {status.attempted_models.length > 0 && <details className="ds-specialist-attempts"><summary>查看模型尝试链（{status.attempted_models.length} 次）</summary><ol>{status.attempted_models.map((attempt, index) => <li key={`${attempt.call_log_id || "model"}-${attempt.attempt || index}`}><span>{attempt.provider || "模型"}{attempt.instance ? ` / ${attempt.instance}` : ""}{attempt.model ? ` · ${attempt.model}` : ""}</span><b className={`attempt-${String(attempt.status).toLowerCase()}`}>{String(attempt.status).toUpperCase() === "SUCCESS" ? "成功" : "失败"}</b>{attempt.retryable && <em>可重试</em>}{attempt.error && <small>{attempt.error}</small>}</li>)}</ol></details>}
           {summary.current_message && <p className="ds-specialist-progress">{summary.current_message}</p>}
           <details className="ds-specialist-documents"><summary>查看 {summary.total} 篇文档状态</summary><div>{status.documents.map(document => <div className="ds-specialist-document" key={`${document.source_table}:${document.record_id}`}><span>{document.title || `${document.source_table}:${document.record_id}`}</span><b className={`status-${document.status.toLowerCase()}`}>{specialistStatusLabel(document.status)}</b>{document.error && <small>{document.error}</small>}</div>)}</div></details>
           <details className="ds-specialist-history"><summary>查看历史验收批次（{status.history.length}）</summary><ol>{status.history.map(run => <li key={run.run_id}><span>批次 #{run.run_id} · v{run.skill_version} · {run.document_count}篇</span><b>{run.passed ? "通过" : run.failure_kind === "MODEL_UNAVAILABLE" ? "模型不可用" : run.status}</b>{run.error && <small>{run.error}</small>}</li>)}</ol></details>

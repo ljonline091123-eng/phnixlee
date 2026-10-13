@@ -150,6 +150,63 @@ def _error_call_ids(text: object) -> list[int]:
     return [int(item) for item in re.findall(r"(?:模型调用|model call)[#：:\s]*(\d+)", str(text or ""), flags=re.IGNORECASE)]
 
 
+def _error_call_ids(text: object) -> list[int]:
+    # Historical reports contain both UTF-8 Chinese and the old mojibake
+    # spelling. Keep the parser permissive so audit logs remain traceable.
+    pattern = r"(?:model\s*call|\u6a21\u578b\u8c03\u7528|妯″瀷璋冪敤)\s*[#:#：锛?]*\s*(\d+)"
+    return [int(item) for item in re.findall(pattern, str(text or ""), flags=re.IGNORECASE)]
+
+
+def _model_attempts(calls: list[ModelCallLog]) -> list[dict]:
+    """Flatten durable model call traces into a UI-safe attempt chain."""
+    attempts: list[dict] = []
+    seen: set[tuple] = set()
+    for call in sorted(calls, key=lambda item: item.id):
+        request = call.request_json if isinstance(call.request_json, dict) else {}
+        trace = request.get("attempted_models") if isinstance(request.get("attempted_models"), list) else []
+        if trace:
+            for item in trace:
+                if not isinstance(item, dict):
+                    continue
+                row = {
+                    "provider": item.get("provider") or call.provider_code,
+                    "instance": item.get("instance") or call.instance_code,
+                    "model": item.get("model") or call.model_code,
+                    "status": item.get("status") or call.status,
+                    "error": item.get("error") or (call.error_message if call.status == "FAILED" else None),
+                    "retryable": bool(item.get("retryable")),
+                    "call_log_id": item.get("call_log_id") or call.id,
+                    "attempt": item.get("attempt"),
+                }
+                key = (row["call_log_id"], row["attempt"], row["provider"], row["status"])
+                if key not in seen:
+                    attempts.append(row)
+                    seen.add(key)
+            continue
+        row = {"provider": call.provider_code, "instance": call.instance_code,
+               "model": call.model_code, "status": call.status,
+               "error": call.error_message, "retryable": False,
+               "call_log_id": call.id, "attempt": 1}
+        key = (call.id, 1, call.provider_code, call.status)
+        if key not in seen:
+            attempts.append(row)
+            seen.add(key)
+    return attempts
+
+
+def _model_failure_summary(attempts: list[dict]) -> str:
+    failures = []
+    for item in attempts:
+        if str(item.get("status") or "").upper() == "SUCCESS":
+            continue
+        name = item.get("provider") or item.get("instance") or "模型"
+        error = str(item.get("error") or "未知错误").replace("\n", " ").strip()
+        if item.get("retryable"):
+            error = f"{error}（可重试）"
+        failures.append(f"{name}：{error[:300]}")
+    return "；".join(dict.fromkeys(failures))
+
+
 def _iso(value):
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else value
 
@@ -189,12 +246,15 @@ def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
     for result in result_rows:
         metrics = result.metrics_json or {}
         candidate_call_ids.update(_error_call_ids(metrics.get("extraction_error") or (metrics.get("evaluation") or {}).get("summary")))
+    latest_summary = (latest.summary_json or {}) if latest else {}
+    for attempt in latest_summary.get("attempted_models") or []:
+        if isinstance(attempt, dict) and attempt.get("call_log_id"):
+            candidate_call_ids.add(int(attempt["call_log_id"]))
     call_rows = list(db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(candidate_call_ids))).all()) if candidate_call_ids else []
     call_by_id = {call.id: call for call in call_rows}
     latest_marker_error = (latest.summary_json or {}).get("error") if latest else None
     latest_call_errors = [call.error_message for call_id in _error_call_ids(latest_marker_error)
                           if (call := call_by_id.get(call_id)) and call.error_message]
-    latest_failure_error = "\n".join([str(value) for value in [latest_marker_error, *latest_call_errors] if value])
     documents = []
     counts = {key: 0 for key in ("total", "processed", "passed", "failed", "model_unavailable", "pending")}
     for source in sources:
@@ -209,7 +269,7 @@ def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
         status = _skill_test_status(result.passed if result else None, error=error)
         if result is None and latest is not None and (latest.status in {"FAILED", "INTERRUPTED"}):
             # A provider failure can stop a batch before later documents run.
-            status = "MODEL_UNAVAILABLE" if _skill_test_status(None, error=latest_failure_error) == "MODEL_UNAVAILABLE" else "PENDING"
+            status = "PENDING"
         counts["total"] += 1
         counts["processed"] += status != "PENDING"
         counts["passed"] += status == "PASSED"
@@ -226,14 +286,21 @@ def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
             "run_id": latest.id if latest else None,
         })
 
-    summary = (latest.summary_json or {}) if latest else stored
+    summary = latest_summary if latest else stored
     call_ids = set(_error_call_ids(summary.get("error")))
+    for attempt in summary.get("attempted_models") or []:
+        if isinstance(attempt, dict) and attempt.get("call_log_id"):
+            call_ids.add(int(attempt["call_log_id"]))
     for document in documents:
         call_ids.update(_error_call_ids(document.get("error")))
     calls = list(db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(call_ids))).all()) if call_ids else []
     latest_errors = [{"id": call.id, "provider": call.provider_code, "instance": call.instance_code,
                       "status": call.status, "error": call.error_message, "created_at": _iso(call.started_at)}
                      for call in sorted(calls, key=lambda item: item.id, reverse=True)]
+    attempts = _model_attempts(calls)
+    failure_summary = _model_failure_summary(attempts)
+    last_successful = next((item for item in reversed(attempts)
+                            if str(item.get("status") or "").upper() == "SUCCESS"), None)
     progress = config.get("semantic_test_progress") or {}
     test_result = stored or {}
     can_enable = bool(test_result.get("passed")) and skill.lifecycle_status != "DEPRECATED" and not skill.enabled
@@ -271,6 +338,10 @@ def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
             "error": test_result.get("error"), "summary": test_result.get("summary"),
             "skill_version": test_result.get("skill_version"), "pending_version_test": test_result.get("pending_version_test", False)},
         "history": history, "latest_model_errors": latest_errors,
+        "attempted_models": attempts,
+        "model_failure_summary": failure_summary or None,
+        "retryable": any(bool(item.get("retryable")) for item in attempts),
+        "last_successful_model": last_successful,
         "can_enable": can_enable, "next_action": next_action,
         "validation_sources": sources,
     }
