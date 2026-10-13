@@ -913,10 +913,26 @@ class ModelHubService:
         if isinstance(exc, httpx.HTTPStatusError):
             # Authentication, billing, availability and rate-limit failures
             # are provider-specific.  A different configured provider may
-            # still be healthy, so fail over for those classes.  400 remains
-            # non-retryable because it normally indicates a shared contract
-            # or prompt/schema defect.
-            return exc.response.status_code in {401, 402, 403, 404, 408, 409, 429} or exc.response.status_code >= 500
+            # still be healthy, so fail over for those classes.  Most 400
+            # responses are prompt/contract errors and must remain terminal,
+            # but some providers return billing/permission exhaustion as 400
+            # (for example DashScope's overdue-payment response).  Detect
+            # that provider-specific case from the response body instead of
+            # stopping the whole governance workflow on the first provider.
+            status = exc.response.status_code
+            if status == 400:
+                try:
+                    body = exc.response.text.lower()
+                except Exception:
+                    body = str(exc).lower()
+                billing_markers = (
+                    "overdue-payment", "overdue payment", "insufficient balance",
+                    "insufficient quota", "quota exceeded", "billing",
+                    "account is in good standing", "access denied",
+                    "余额", "额度", "欠费", "计费",
+                )
+                return any(marker in body for marker in billing_markers)
+            return status in {401, 402, 403, 404, 408, 409, 429} or status >= 500
         return isinstance(exc, (httpx.RequestError, ValueError, TimeoutError, ValidationError, json.JSONDecodeError))
 
     @staticmethod
