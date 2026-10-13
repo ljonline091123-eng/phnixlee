@@ -498,7 +498,7 @@ def update_skill(skill_id: int, payload: ModelSkillUpdate, db: Session = Depends
             if ("config_json" in values and values["config_json"] != skill.config_json):
                 raise ValueError("生成Skill的测试记录由评估服务管理，不能手工更改配置")
             if values.get("enabled", skill.enabled) or values.get("lifecycle_status", skill.lifecycle_status) == "ENABLED":
-                require_test(skill, instructions=instructions, config=values.get("config_json"))
+                require_test(skill, instructions=instructions, config=values.get("config_json"), db=db)
         except ValueError as exc:
             db.rollback()
             raise HTTPException(409, str(exc)) from exc
@@ -583,7 +583,7 @@ def update_skill_lifecycle(skill_id: int, payload: SkillLifecycleUpdate,
     if payload.lifecycle_status == "ENABLED":
         from app.services.document_semantic_skills import require_test
         try:
-            require_test(skill)
+            require_test(skill, db=db)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         if not skill.input_contract_json or not skill.output_contract_json:

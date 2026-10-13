@@ -36,6 +36,24 @@ class SkillDraftAction(BaseModel):
     reviewer: str = Field(min_length=1, max_length=128)
 
 
+class FailureDiagnosisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewer: str = Field(min_length=1, max_length=128)
+    force: bool = False
+
+
+@router.post("/documents/{source_table}/{record_id}/failure-diagnosis")
+def diagnose_document_failure(source_table: Literal["stock_news", "stock_notice"], record_id: int,
+                              payload: FailureDiagnosisRequest, db: Session = Depends(get_db)):
+    from app.services.document_semantic_planning import diagnose_failure
+    row = required_document(db, source_table, record_id)
+    try:
+        return diagnose_failure(db, row, reviewer=payload.reviewer, force=payload.force)
+    except (ValueError, OSError) as exc:
+        db.rollback()
+        raise HTTPException(409 if isinstance(exc, WorkflowConflict) else 422, str(exc)) from exc
+
+
 @router.post("/documents/{source_table}/{record_id}/skill-draft")
 def propose_skill_draft(source_table: Literal["stock_news", "stock_notice"], record_id: int,
                        payload: DocumentSkillDraftRequest, db: Session = Depends(get_db)):
@@ -54,8 +72,31 @@ def document_skill_drafts(source_table: Literal["stock_news", "stock_notice"], r
     from app.services.document_semantic_skills import draft_read
     row = required_document(db, source_table, record_id)
     codes = ((row.content_json or {}).get("semantic_governance_plan") or {}).get("draft_skill_codes") or {}
-    return {index: draft_read(skill) for index, code in codes.items()
+    return {index: draft_read(skill, db=db) for index, code in codes.items()
         if (skill := db.scalar(select(ModelSkill).where(ModelSkill.skill_code == code))) is not None}
+
+
+@router.post("/skill-drafts/{skill_id}/test-jobs", status_code=202)
+def queue_skill_draft_test(skill_id: int, payload: SkillDraftAction, db: Session = Depends(get_db)):
+    from app.services.document_semantic_skills import submit_test_job
+    skill = db.get(ModelSkill, skill_id)
+    if not skill or not (skill.config_json or {}).get("semantic_generated_draft"):
+        raise HTTPException(404, "专项Skill草稿不存在")
+    try:
+        return submit_test_job(db, skill, reviewer=payload.reviewer)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(409 if isinstance(exc, WorkflowConflict) else 422, str(exc)) from exc
+
+
+@router.get("/skill-test-jobs/{job_id}")
+def skill_draft_test_job(job_id: int, db: Session = Depends(get_db)):
+    from app.models.pipeline import ScheduledJob
+    from app.services.document_semantic_skills import TEST_TASK_TYPE, test_job_read
+    job = db.get(ScheduledJob, job_id)
+    if not job or job.task_type != TEST_TASK_TYPE:
+        raise HTTPException(404, "专项Skill测试任务不存在")
+    return test_job_read(db, job)
 
 
 @router.post("/skill-drafts/{skill_id}/{action}")

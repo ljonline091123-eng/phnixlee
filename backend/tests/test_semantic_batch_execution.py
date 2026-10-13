@@ -264,7 +264,9 @@ def test_selection_matches_literal_keyword_on_metadata_pages(database):
 def test_legacy_news_search_excerpt_downloads_full_publisher_text(database, monkeypatch):
     monkeypatch.setattr(semantics.ModelHubService, "chat", fake_model)
     downloads = []
-    monkeypatch.setattr(governor, "official_news_body", lambda row: downloads.append(row.id) or (BODY, {"source_url": row.url}))
+    monkeypatch.setattr(governor, "official_news_body", lambda row: downloads.append(row.id) or (BODY, {
+        "source_url": row.url, "table_layout_version": 1,
+    }))
     with database() as db:
         stock, news = setup_document(db)
         news.content = "检索片段，不能作为全文分析依据。" * 4

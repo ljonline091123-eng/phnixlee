@@ -231,7 +231,9 @@ def test_search_excerpt_requires_full_article_and_refresh_preserves_full_body(da
         assert first["completed"] == 1 and not events._done(news, "1.0.0")
         assert db.scalar(select(func.count()).select_from(FoundationFact).where(FoundationFact.fact_type == "NEWS_EVENT")) == 0
         full_body = news.content + "这段是从新闻原文页补取的完整正文，不能只分析检索摘要。"
-        monkeypatch.setattr(events, "official_news_body", lambda _: (full_body, {"source_url": news.url}))
+        monkeypatch.setattr(events, "official_news_body", lambda _: (full_body, {
+            "source_url": news.url, "table_layout_version": 1,
+        }))
         assert events.govern_stock_documents(db, stock, context={"skill_version": "1.0.0"})["completed"] == 2
         assert events.document_body(news) == full_body and events._done(news, "1.0.0")
         StockOnDemandService(db)._upsert_news(stock.source_id, [NewsRecord(stock.market, stock.symbol, news.news_time,

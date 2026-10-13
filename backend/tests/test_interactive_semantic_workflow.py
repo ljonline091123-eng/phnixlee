@@ -43,8 +43,20 @@ def model_fixture(self, **kwargs):
     user = json.loads(kwargs["messages"][-1]["content"]) if phase else {}
     if phase == "TYPE_AND_SKILL_ROUTING":
         value = routing()
-    elif kwargs.get("metadata_json", {}).get("purpose") == "DOCUMENT_SPECIALIST_DRAFT":
+    elif kwargs.get("metadata_json", {}).get("purpose") in {"DOCUMENT_SPECIALIST_DRAFT", "DOCUMENT_SPECIALIST_REVISION"}:
         value = {"instructions": "逐字阅读原文，识别预计负债的原因、金额、时间和利润影响。区分真实已发生事实、作者观点与模型推断，所有字段附逐字原文证据；不能推断股票必然上涨下跌。"}
+    elif kwargs.get("metadata_json", {}).get("purpose") == "DOCUMENT_SPECIALIST_EVALUATION":
+        value = {"passed": True, "score": 92, "summary": "专项规则能够按证据契约处理原文。",
+                 "issues": [], "criteria_results": ["输出契约通过", "逐字证据通过", "数值单位通过", "事实观点区分通过"],
+                 "improved_instructions": ""}
+    elif kwargs.get("metadata_json", {}).get("purpose") == "DOCUMENT_FAILURE_DIAGNOSIS":
+        value = {"failure_class": "SKILL_GAP", "summary": "现有规则未覆盖表格单位与证据边界。",
+                 "root_causes": ["表格列单位需要单独核验"],
+                 "existing_skill_limitations": ["通用市场Skill未要求完整表头和数据行"],
+                 "requires_new_skill": True, "suggested_skill_name": "表格证据专项治理",
+                 "skill_goal": "核验表格表头、数据行、数字符号和逐字引文。",
+                 "acceptance_criteria": ["表头与数据行成对引用", "数值和单位逐字一致"],
+                 "recommended_actions": ["创建专项Skill", "通过LLM复核后再启用"]}
     elif phase == "SEMANTIC_READING":
         # A feedback round must still read the full original before patching.
         # Mixing patch instructions into this phase caused live models to
@@ -378,6 +390,106 @@ def test_specialist_draft_test_enable_no_fact_writes_and_refresh(database, monke
     with api_client(database) as client:
         drafts = client.get(f"/document-governance/documents/stock_news/{news_id}/skill-drafts").json()
         assert drafts["0"]["id"] == draft["id"]
+
+
+def test_failed_extraction_diagnosis_creates_skill_gap_and_new_plan(database, monkeypatch):
+    _, news_id = ready(database, monkeypatch)
+    with database() as db:
+        row = db.get(StockNews, news_id)
+        confirmed = confirm(db, row)
+        content = deepcopy(row.content_json)
+        content["event_governance"] = {
+            "status": "EXTRACTION_FAILED", "error": "指标数值或单位与原文不符：最新收盘价",
+            "attempts": 4, "skill_code": "MARKET_OBSERVATION_GOVERNOR", "skill_version": "1.0.0",
+            "governance_plan_id": confirmed["plan_id"], "governance_plan_revision": confirmed["revision"],
+        }
+        row.content_json = content; db.commit()
+    with api_client(database) as client:
+        base = f"/document-governance/documents/stock_news/{news_id}"
+        assert client.get(base).json()["workflow_status"] == "NEEDS_FAILURE_DIAGNOSIS"
+        response = client.post(base + "/failure-diagnosis", json={"reviewer": "隔离验收员", "force": True})
+        assert response.status_code == 200, response.text
+        diagnosed = response.json()
+        assert diagnosed["diagnosis"]["requires_new_skill"]
+        plan = diagnosed["plan"]
+        assert plan["status"] == "PROPOSED" and plan["plan_id"] != confirmed["plan_id"]
+        assert plan["capability_gaps"][0]["acceptance_criteria"]
+        detail = client.get(base).json()
+        assert detail["workflow_status"] == "NEEDS_PLAN_CONFIRMATION"
+        assert detail["governance_plan_history"][-1]["plan_id"] == confirmed["plan_id"]
+
+
+def test_failed_extraction_persists_executed_plan_for_recovery(database, monkeypatch):
+    stock_id, news_id = ready(database, monkeypatch)
+    with database() as db:
+        from app.models.market_data import StockSymbol
+        row = db.get(StockNews, news_id); confirmed = confirm(db, row)
+        monkeypatch.setattr(semantics.ModelHubService, "chat",
+            lambda *a, **k: (_ for _ in ()).throw(ValueError("指标数值或单位与原文不符：测试指标")))
+        result = governor.govern_stock_documents(db, db.get(StockSymbol, stock_id), semantic=True,
+            context={"skill_version": "9.0.0", "interactive_plan_required": True},
+            document_targets=[{"source_table": "stock_news", "record_id": news_id}])
+        assert result["failed"] == 1
+        db.refresh(row)
+        state = row.content_json["event_governance"]
+        assert state["governance_plan_id"] == confirmed["plan_id"]
+        assert state["governance_plan_revision"] == confirmed["revision"]
+        assert state["specialist_skill_codes"] == confirmed["recommended_skill_codes"]
+        assert planning.workflow_status(row) == "NEEDS_FAILURE_DIAGNOSIS"
+
+
+def test_skill_test_uses_independent_llm_evaluation_and_persists_loop(database, monkeypatch):
+    _, news_id = ready(database, monkeypatch)
+    with database() as db:
+        row = db.get(StockNews, news_id); plan = planning.generate_plan(db, row)
+        content = deepcopy(row.content_json)
+        content["semantic_governance_plan"]["capability_gaps"] = [{
+            "type_name": "表格证据", "suggested_skill_name": "表格证据治理",
+            "reason": "需要核对表头和数据行", "acceptance_criteria": ["单位与表头一致"],
+        }]
+        row.content_json = content; db.commit()
+        draft = specialist.create_draft(db, row, gap_index=0, expected_plan_id=plan["plan_id"], reviewer="隔离验收员")
+        skill = db.get(ModelSkill, draft["id"])
+        result = specialist.test_draft(db, skill, row, reviewer="隔离验收员")
+        assert result["test_result"]["passed"] and result["test_result"]["score"] == 92
+        assert result["test_result"]["iterations"] == 1
+        assert result["iteration_history"][0]["evaluation"]["model_call_id"] == 100
+        assert db.scalar(select(func.count()).select_from(FoundationFact)) == 0
+
+
+def test_skill_test_iterates_version_until_independent_evaluator_passes(database, monkeypatch):
+    _, news_id = ready(database, monkeypatch)
+    with database() as db:
+        row = db.get(StockNews, news_id); plan = planning.generate_plan(db, row)
+        content = deepcopy(row.content_json)
+        content["semantic_governance_plan"]["capability_gaps"] = [{
+            "type_name": "证据迭代", "suggested_skill_name": "证据迭代治理",
+            "reason": "首轮规则可能遗漏单位边界", "acceptance_criteria": ["数字和单位逐字一致"],
+        }]
+        row.content_json = content; db.commit()
+        draft = specialist.create_draft(db, row, gap_index=0, expected_plan_id=plan["plan_id"], reviewer="隔离验收员")
+        skill = db.get(ModelSkill, draft["id"])
+        reading, extraction = interactive_payload()
+        monkeypatch.setattr(specialist, "semantic_analysis", lambda *a, **k: {
+            **semantics.validate_analysis(semantics.Reading.model_validate(reading), semantics.Analysis.model_validate(extraction), BODY),
+            "model_calls": [{"id": 7, "model_version": "fixture", "model_instance_code": "fixture"}],
+        })
+        reviews = iter([
+            {"passed": False, "score": 55, "summary": "单位规则不充分", "issues": ["单位边界不明确"],
+             "criteria_results": ["未通过"], "improved_instructions": "逐字阅读原文并校验每一个数值的符号、单位、表头和完整数据行；所有主体必须在引文中出现；区分事实、作者观点与模型推断，任何证据不完整项都返回不确定，不得发布。"},
+            {"passed": True, "score": 94, "summary": "改进版本通过", "issues": [],
+             "criteria_results": ["全部通过"], "improved_instructions": ""},
+        ])
+        def evaluator(self, **kwargs):
+            value = next(reviews)
+            return SimpleNamespace(id=200 + value["score"], status="SUCCESS", provider_code="FIXTURE",
+                instance_code="fixture", model_code="fixture-model", response_text=json.dumps(value, ensure_ascii=False))
+        monkeypatch.setattr(specialist.ModelHubService, "chat", evaluator)
+        result = specialist.test_draft(db, skill, row, reviewer="隔离验收员")
+        assert result["test_result"]["passed"] and result["test_result"]["iterations"] == 2
+        assert result["test_result"]["original_skill_version"] == "1.0.0"
+        assert result["test_result"]["skill_version"] == "1.0.1"
+        assert [item["evaluation"]["score"] for item in result["iteration_history"][-2:]] == [55, 94]
 
 
 def test_patch_relation_endpoint_and_event_deletion_protect_confirmed_links():

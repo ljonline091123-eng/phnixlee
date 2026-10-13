@@ -93,11 +93,17 @@ def main():
             state["draft"] = {"id": 999991, "skill_code": "DOC_SPECIALIST_BROWSER", "skill_name": "融资争议专项治理", "instructions": "逐字核对认购方资金来源，区分事实和观点。", "lifecycle_status": "DRAFT"}
             value = state["draft"]
         elif "/skill-drafts/" in path:
-            if path.endswith("/test"):
-                state["draft"]["test_result"] = {"passed": True, "event_count": 2, "relation_count": 0, "note": "隔离契约测试通过"}
+            if path.endswith("/test-jobs"):
+                state["draft"].update(test_job_id=999992, test_progress={"status": "PENDING", "message": "测试已排队"})
+                route.fulfill(status=202, json={"job_id": 999992, "status": "PENDING", "draft": state["draft"]})
+                return
             elif path.endswith("/enable"):
                 state["draft"]["lifecycle_status"] = "ENABLED"
             value = state["draft"]
+        elif "/skill-test-jobs/" in path:
+            state["draft"]["test_result"] = {"passed": True, "event_count": 2, "relation_count": 0, "note": "隔离契约测试通过"}
+            state["draft"]["test_progress"] = {"status": "COMPLETED", "message": "全部文档验收通过"}
+            value = {"job_id": 999992, "status": "COMPLETED", "draft": state["draft"]}
         elif path.endswith("/plan-decision"):
             assert payload["expected_plan_id"] == plan["plan_id"]
             plan.update(status="SKIPPED" if payload["decision"] == "SKIP" else "CONFIRMED", revision=plan["revision"] + 1,
@@ -175,16 +181,18 @@ def main():
         page.route("**/api/v1/**", handle)
         page.goto(PAGE, wait_until="domcontentloaded")
         flow = page.get_by_role("region", name="交互式治理流程")
-        expect(flow.get_by_text("第二步：确认文档类型与治理Skill")).to_be_visible(timeout=30000)
+        expect(flow.get_by_text("第二步：确认治理方案")).to_be_visible(timeout=30000)
+        flow.get_by_text("查看或调整类型、归属对象和现有Skill", exact=True).click()
         flow.get_by_label("主要类型", exact=True).select_option("CAPITAL_OPERATION")
         flow.get_by_label("资本运作治理").check()
         flow.get_by_role("button", name="创建专项Skill草稿").click()
-        flow.get_by_role("button", name="测试草稿（不入事实库）").click()
-        expect(flow.get_by_text("证据与契约测试通过", exact=False)).to_be_visible()
-        flow.get_by_role("button", name="审核通过并启用").click()
+        flow.get_by_role("button", name="执行测试并自动优化（每轮最多3次）").click()
+        expect(flow.get_by_text("LLM复核通过", exact=True)).to_be_visible()
+        flow.get_by_role("button", name="人工审核通过并启用").click()
         expect(flow.get_by_text("融资争议专项治理 · 已启用")).to_be_visible()
         page.reload(wait_until="domcontentloaded")
         expect(flow.get_by_text("融资争议专项治理 · 已启用")).to_be_visible(timeout=30000)
+        flow.get_by_text("查看或调整类型、归属对象和现有Skill", exact=True).click()
         expect(flow.get_by_label("融资争议专项治理", exact=False)).to_be_checked()
         flow.get_by_label("主要类型", exact=True).select_option("CAPITAL_OPERATION")
         flow.get_by_label("资本运作治理").check()
@@ -226,7 +234,7 @@ def main():
         plan.update(status="PROPOSED", revision=plan["revision"] + 1)
         state.update(workflow="NEEDS_PLAN_CONFIRMATION", versions=[], reports=[], job=None)
         page.reload(wait_until="domcontentloaded")
-        expect(flow.get_by_text("第二步：确认文档类型与治理Skill")).to_be_visible(timeout=30000)
+        expect(flow.get_by_text("第二步：确认治理方案")).to_be_visible(timeout=30000)
         flow.get_by_role("button", name="本篇不治理", exact=True).click()
         expect(flow.get_by_text("本篇已选择不治理", exact=True)).to_be_visible()
         expect(flow.get_by_role("button", name="执行结构化治理")).to_have_count(0)
@@ -262,7 +270,7 @@ def main():
         expect(todo.get_by_role("button", name="下一页文档", exact=True)).to_be_disabled()
         todo.get_by_role("button", name="打开交互治理", exact=True).last.click()
         expect(document_dialog.get_by_role("heading", name="隔离批量文档 45", exact=True)).to_be_visible()
-        expect(flow.get_by_text("第二步：确认文档类型与治理Skill")).to_be_visible()
+        expect(flow.get_by_text("第二步：确认治理方案")).to_be_visible()
         assert document_dialog.evaluate("node => node.contains(document.activeElement)"), "焦点应停留在最上层交互窗口"
         page.keyboard.press("Escape")
         expect(document_dialog).to_have_count(0)

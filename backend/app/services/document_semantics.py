@@ -26,6 +26,10 @@ Assertion = Literal["REPORTED_FACT", "AUTHOR_OPINION", "MODEL_INFERENCE"]
 Direction = Literal["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED", "UNKNOWN"]
 
 
+class SemanticModelUnavailable(ValueError):
+    """A provider failure cannot be fixed by iterating extraction instructions."""
+
+
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
@@ -118,7 +122,7 @@ class AnalysisPatch(Analysis):
 
 
 READ_PROMPT = """你是证券新闻公告语义分析师。阅读全文后返回JSON，包含 overview、sections、uncertainties。
-sections每项含topic、summary、evidence_quotes（逐字连续原文，至少8字）。
+sections每项含topic、summary、evidence_quotes（每节1至8条，每条逐字连续原文，至少8字）。表格引用完整数据行，不逐个引用重复数字或单独名称。
 解释发生了什么、为何发生、前因后果、重要数字、主体及关联方、历次过程、资金来源和影响。
 必须覆盖正文每个实质主题及末尾结论，不能只读标题/第一段。保留关键因果与时间线，不输出思维过程。
 严格区分新闻转述披露事实、作者/专家观点、模型自己的推断；不能将套利、违法、不合理等评论认定为监管裁决。
@@ -196,6 +200,23 @@ def load_contract(text: str, contract):
             value = value[key]
             if isinstance(value, str):
                 value = json.loads(value)
+    # Reading is an orientation pass, not the fact payload.  Some providers
+    # nevertheless copy every table cell into a section's citations.  Bound
+    # those citations deterministically before the strict contract is applied;
+    # the original model response remains in the model-call audit log and the
+    # structured extraction stage still validates every fact citation against
+    # the full source document.
+    if contract is Reading and isinstance(value, dict):
+        uncertainties = list(value.get("uncertainties") or [])
+        bounded = False
+        for section in value.get("sections") or []:
+            quotes = list(section.get("evidence_quotes") or [])
+            if len(quotes) > 8:
+                section["evidence_quotes"] = quotes[:7] + [quotes[-1]]
+                bounded = True
+        if bounded:
+            uncertainties.append("阅读阶段的表格引文超过8条，系统保留首7条及末条；完整表格事实必须在结构化抽取阶段逐项核验。")
+            value["uncertainties"] = list(dict.fromkeys(uncertainties))[:20]
     return contract.model_validate(value)
 
 
@@ -398,6 +419,8 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
     if len(document["body"]) > MAX_BODY:
         return _analyze_long_document(db, document, context=context, model_instance=model_instance, instructions=instructions)
     logs = []
+    last_output = None
+    reading = None
     plan = document.get("governance_plan") or {}
     specialist_codes = list(dict.fromkeys(plan.get("recommended_skill_codes") or []))
     specialist_rows = list(db.scalars(select(ModelSkill).where(
@@ -413,6 +436,7 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
         for code in specialist_codes
     )
     def call(prompt, user, phase, tokens):
+        nonlocal last_output
         if document.get("_progress_callback"):
             document["_progress_callback"](phase)
         log = ModelHubService(db).chat(task_type="data_governance", instance_code=model_instance,
@@ -425,7 +449,9 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
                            "specialist_skill_versions": {code: specialist_by_code[code].version for code in specialist_codes}})
         logs.append({"phase": phase, "id": log.id, "model_version": log.model_code, "model_instance_code": log.instance_code})
         if log.status != "SUCCESS" or str(log.provider_code).upper() == "MOCK" or not (log.response_text or "").strip():
-            raise ValueError(f"{phase}未取得真实模型正文输出（模型调用#{log.id}）")
+            detail = getattr(log, "error_message", None) or "未取得真实模型正文输出"
+            raise SemanticModelUnavailable(f"{phase}：{detail}（模型调用#{log.id}）")
+        last_output = log.response_text
         return log.response_text
     user = {k: document[k] for k in ("key", "title", "body", "market", "symbol", "stock_name")}
     if plan:
@@ -480,11 +506,23 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
             user["previous_analysis"], user["protected_knowledge"] = _correction_model_context(
                 document.get("_model_previous_analysis", document.get("previous_analysis")), document["correction_feedback"])
         extraction_prompt = PATCH_PROMPT if patch_mode else EXTRACT_PROMPT
+        if "[[TABLE]]" in document["body"]:
+            extraction_prompt += (
+                "\n表格证据硬约束：表格按正文中出现顺序从0开始编号；table_row从1开始计数（0为表头），"
+                "table_column从0开始计数。raw_value必须逐字复制单元格，不得因‘流入/流出’自行添加正负号；"
+                "unit必须复制同一表头单元格的单位，name必须为该列表头去除括号单位后的原文名称。"
+                "evidence_quote逐字引用完整数据行，程序根据table_index/table_row/table_column绑定原文表头作为单位证据；"
+                "不要拼接不连续的表头和数据行。对于正文叙述中的非表格数字，只有原文明确出现的符号才可保留，"
+                "如‘净流出10.68亿元’的raw_value为10.68，负向含义放在名称、摘要和影响中。"
+                "以目标股票为中心保留其表格行、相关板块及市场统计；其他股票榜单作为阅读背景，不逐只生成无关事件。"
+            )
         output = call(extraction_prompt + "\n契约：" + json.dumps(contract.model_json_schema(), ensure_ascii=False),
             {**user, "reading": reading.model_dump()}, "STRUCTURED_EXTRACTION", 12000)
         extracted = load_contract(output, contract)
+        repaired = False
         subject_errors = _plan_subject_errors(extracted.model_dump(), plan)
         if subject_errors:
+            repaired = True
             # One bounded contract repair before any fact write. The complete
             # original is supplied again and the repaired output still faces
             # every evidence, numeric, patch and identity gate below.
@@ -507,6 +545,24 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
             subject_errors = _plan_subject_errors(extracted.model_dump(), plan)
             if subject_errors:
                 raise ValueError("主体证据修正仍未通过：" + "；".join(subject_errors))
+        if not patch_mode:
+            try:
+                result = validate_analysis(reading, extracted, document["body"])
+            except ValueError as validation_error:
+                if repaired:
+                    raise
+                # One controlled retry receives the rejected payload and exact
+                # evidence error; no fact is written until every gate passes.
+                output = call(extraction_prompt + "\n契约：" + json.dumps(contract.model_json_schema(), ensure_ascii=False),
+                    {**user, "reading": reading.model_dump(), "validation_feedback": [str(validation_error)],
+                     "previous_invalid_analysis": extracted.model_dump(),
+                     "repair_instruction": "只修复报错字段，保留已正确的知识、指标和key，返回完整JSON。严禁删除必要指标以绕过门禁；不能猜年份、添加原文没有的负号或编造引文。表格引用完整原始数据行并给出准确行列编号。"},
+                    "STRUCTURED_EXTRACTION_REPAIR", 12000)
+                extracted = load_contract(output, contract)
+                subject_errors = _plan_subject_errors(extracted.model_dump(), plan)
+                if subject_errors:
+                    raise ValueError("主体证据修正仍未通过：" + "；".join(subject_errors))
+                result = validate_analysis(reading, extracted, document["body"])
         if patch_mode:
             if document.get("_table_index_map") is not None:
                 # Check new evidence against the actual model window before
@@ -525,13 +581,13 @@ def semantic_analysis(db, document, *, context, model_instance, instructions) ->
                 for link in extracted.relations:
                     _quote(link.evidence_quote, document["body"])
             result = merge_correction(reading, extracted, {**document, "body": document.get("_validation_body", document["body"])})
-        else:
-            result = validate_analysis(reading, extracted, document["body"])
         result["model_calls"] = logs
         return result
     except Exception as exc:
         # Persist calls/read outputs even if a downstream quality gate rejects them.
         exc.semantic_calls = logs
+        exc.semantic_invalid_output = last_output
+        exc.semantic_reading = reading.model_dump() if reading else None
         raise
 
 

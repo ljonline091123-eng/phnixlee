@@ -475,3 +475,15 @@ def test_semantic_reanalysis_receives_bounded_human_feedback(database, monkeypat
         assert "review_instruction" not in user_payload and "previous_analysis" not in user_payload
         extraction_payload = json.loads(calls[1]["messages"][1]["content"])
         assert "review_instruction" in extraction_payload
+
+
+def test_reading_contract_bounds_table_citations_without_rewriting_source():
+    quotes = [f"原文表格第{index}行连续证据文字" for index in range(10)]
+    payload = json.dumps({
+        "overview": "完整阅读市场统计表格。",
+        "sections": [{"topic": "榜单", "summary": "逐行阅读榜单。", "evidence_quotes": quotes}],
+        "uncertainties": [],
+    }, ensure_ascii=False)
+    reading = semantics.load_contract(payload, semantics.Reading)
+    assert reading.sections[0].evidence_quotes == [*quotes[:7], quotes[-1]]
+    assert any("超过8条" in item for item in reading.uncertainties)

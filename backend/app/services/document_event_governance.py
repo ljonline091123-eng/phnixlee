@@ -52,8 +52,14 @@ def _news_search_record(row) -> bool:
 
 def _search_excerpt(row) -> bool:
     # Legacy search records predate source_method; their short search excerpts
-    # must also be replaced with publisher text before semantic analysis.
-    return _news_search_record(row) and not (row.content_json or {}).get("governance_news_extraction")
+    # must also be replaced with publisher text before semantic analysis.  An
+    # older full-text extraction can still be unsuitable when it flattened
+    # HTML tables and separated values from their header units.  Refresh those
+    # records once with the table-aware extractor (layout version 1).
+    extraction = (row.content_json or {}).get("governance_news_extraction") or {}
+    return _news_search_record(row) and (
+        not extraction or int(extraction.get("table_layout_version") or 0) < 1
+    )
 
 
 def official_news_body(row: StockNews) -> tuple[str, dict]:
@@ -408,7 +414,14 @@ def _govern_document_batch(db: Session, stock: StockSymbol, *, context: dict, li
             body = document_body(row)
             if _search_excerpt(row):
                 body, extraction = official_news_body(row)
-                row.content_json = {**(row.content_json or {}), "governance_full_text": body, "governance_news_extraction": extraction}
+                payload = dict(row.content_json or {})
+                previous = payload.get("governance_full_text")
+                if previous and previous != body:
+                    payload["governance_full_text_history"] = [
+                        *(payload.get("governance_full_text_history") or []), previous,
+                    ]
+                row.content_json = {**payload, "governance_full_text": body,
+                                    "governance_news_extraction": extraction}
             if not body and isinstance(row, StockNotice):
                 body, extraction = official_notice_body(row)
                 row.content_json = {**(row.content_json or {}), "governance_full_text": body, "governance_pdf_extraction": extraction}
@@ -646,7 +659,11 @@ def _govern_semantic_documents(db, stock, company_id, documents, *, context, ver
                         *doc["previous_analysis"].get("relations", [])] if p.get("fact_id")],
                     result_review_status="NEEDS_CORRECTION", publication_status="CANDIDATE",
                     governance_plan_id=plan.get("plan_id"), governance_plan_revision=plan.get("revision"))
-            state.update(status="EXTRACTION_FAILED", error=str(exc)[:1600], model_calls=getattr(exc, "semantic_calls", []))
+            state.update(status="EXTRACTION_FAILED", error=str(exc)[:1600], model_calls=getattr(exc, "semantic_calls", []),
+                         governance_plan_id=plan.get("plan_id"), governance_plan_revision=plan.get("revision"),
+                         specialist_skill_codes=plan.get("recommended_skill_codes") or [],
+                         document_primary_type=plan.get("primary_type"),
+                         publication_status=state.get("publication_status") or "CANDIDATE")
             # Never overwrite a newer result, review or plan after model work.
             latest = (row.content_json or {}).get("event_governance") or {}
             latest_plan = (row.content_json or {}).get("semantic_governance_plan") or {}
