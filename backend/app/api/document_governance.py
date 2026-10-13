@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Literal
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.ai_hub import ModelSkill
+from app.models.ai_hub import ModelCallLog, ModelSkill
+from app.models.decision_review import SkillEvaluationResult, SkillEvaluationRun
 from app.models.foundation import FoundationFact
 from app.models.market_data import StockNews, StockNotice, StockSymbol
 from app.schemas.document_governance import (
@@ -32,6 +34,13 @@ MODELS = {"stock_news": StockNews, "stock_notice": StockNotice}
 
 
 class SkillDraftAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reviewer: str = Field(min_length=1, max_length=128)
+
+
+class SemanticSkillRetryRequest(BaseModel):
+    """Request for retrying an immutable specialist Skill acceptance batch."""
+
     model_config = ConfigDict(extra="forbid")
     reviewer: str = Field(min_length=1, max_length=128)
 
@@ -120,6 +129,182 @@ def operate_skill_draft(skill_id: int, action: Literal["test", "enable"], payloa
 def current_version(db):
     skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == SKILL_CODE))
     return skill.version if skill else "未登记"
+
+
+def _skill_test_status(value: object, *, error: str | None = None) -> str:
+    """Normalize stored evaluation details into a small UI-safe status set."""
+    text = " ".join(str(item or "") for item in (value, error)).upper()
+    if any(token in text for token in (
+        "MODEL_UNAVAILABLE", "HTTP 401", "HTTP 402", "HTTP 403", "HTTP 408", "HTTP 429",
+        "INSUFFICIENT BALANCE", "INSUFFICIENT QUOTA", "余额不足", "额度不足", "模型服务不可用",
+    )):
+        return "MODEL_UNAVAILABLE"
+    if value is True or str(value).upper() in {"PASSED", "PASS", "SUCCESS"}:
+        return "PASSED"
+    if value is False or str(value).upper() in {"FAILED", "FAIL", "ERROR"}:
+        return "FAILED"
+    return "PENDING"
+
+
+def _error_call_ids(text: object) -> list[int]:
+    return [int(item) for item in re.findall(r"(?:模型调用|model call)[#：:\s]*(\d+)", str(text or ""), flags=re.IGNORECASE)]
+
+
+def _iso(value):
+    return value.isoformat() if value is not None and hasattr(value, "isoformat") else value
+
+
+def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
+    """Return an operational, non-verbose acceptance summary for one draft Skill.
+
+    The source list is frozen on the Skill configuration.  Evaluation runs and
+    results are append-only, so this endpoint deliberately reports both the
+    latest batch and its history rather than deriving a single mutable status.
+    """
+    config = skill.config_json or {}
+    sources = list(config.get("validation_sources") or [])
+    runs = list(db.scalars(select(SkillEvaluationRun).where(
+        SkillEvaluationRun.skill_id == skill.id,
+    ).order_by(SkillEvaluationRun.started_at.desc(), SkillEvaluationRun.id.desc())).all())
+    latest = runs[0] if runs else None
+    result_rows = list(db.scalars(select(SkillEvaluationResult).where(
+        SkillEvaluationResult.run_id == latest.id,
+    ).order_by(SkillEvaluationResult.id)).all()) if latest else []
+    by_source = {}
+    for result in result_rows:
+        metrics = result.metrics_json or {}
+        key = (metrics.get("source_table"), metrics.get("record_id"))
+        if key[0] and key[1] is not None:
+            by_source[key] = result
+
+    stored = (config.get("semantic_draft_test") or {})
+    stored_items = stored.get("document_results") or []
+    stored_by_source = {(item.get("source_table"), item.get("record_id")): item for item in stored_items}
+    # Resolve model-call details before classifying documents.  The semantic
+    # worker stores a compact "model call #id" marker in each result; the
+    # provider's HTTP status and quota explanation live in ModelCallLog.
+    candidate_call_ids = set(_error_call_ids((latest.summary_json or {}).get("error") if latest else None))
+    for item in stored_items:
+        candidate_call_ids.update(_error_call_ids(item.get("extraction_error") or item.get("error")))
+    for result in result_rows:
+        metrics = result.metrics_json or {}
+        candidate_call_ids.update(_error_call_ids(metrics.get("extraction_error") or (metrics.get("evaluation") or {}).get("summary")))
+    call_rows = list(db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(candidate_call_ids))).all()) if candidate_call_ids else []
+    call_by_id = {call.id: call for call in call_rows}
+    latest_marker_error = (latest.summary_json or {}).get("error") if latest else None
+    latest_call_errors = [call.error_message for call_id in _error_call_ids(latest_marker_error)
+                          if (call := call_by_id.get(call_id)) and call.error_message]
+    latest_failure_error = "\n".join([str(value) for value in [latest_marker_error, *latest_call_errors] if value])
+    documents = []
+    counts = {key: 0 for key in ("total", "processed", "passed", "failed", "model_unavailable", "pending")}
+    for source in sources:
+        table, record_id = source.get("source_table"), source.get("record_id")
+        result = by_source.get((table, record_id))
+        item = stored_by_source.get((table, record_id), {})
+        metrics = result.metrics_json if result else item
+        evaluation = metrics.get("evaluation") if isinstance(metrics, dict) else {}
+        marker_error = (metrics or {}).get("extraction_error") or (evaluation or {}).get("summary")
+        linked_call_errors = [call.error_message for call_id in _error_call_ids(marker_error) if (call := call_by_id.get(call_id)) and call.error_message]
+        error = "\n".join([str(value) for value in [marker_error, *linked_call_errors] if value])
+        status = _skill_test_status(result.passed if result else None, error=error)
+        if result is None and latest is not None and (latest.status in {"FAILED", "INTERRUPTED"}):
+            # A provider failure can stop a batch before later documents run.
+            status = "MODEL_UNAVAILABLE" if _skill_test_status(None, error=latest_failure_error) == "MODEL_UNAVAILABLE" else "PENDING"
+        counts["total"] += 1
+        counts["processed"] += status != "PENDING"
+        counts["passed"] += status == "PASSED"
+        counts["failed"] += status == "FAILED"
+        counts["model_unavailable"] += status == "MODEL_UNAVAILABLE"
+        counts["pending"] += status == "PENDING"
+        documents.append({
+            "source_table": table, "record_id": record_id,
+            "status": status, "passed": status == "PASSED",
+            "title": (metrics or {}).get("title"),
+            "error": error, "score": (evaluation or {}).get("score"),
+            "event_count": (metrics or {}).get("event_count", 0),
+            "relation_count": (metrics or {}).get("relation_count", 0),
+            "run_id": latest.id if latest else None,
+        })
+
+    summary = (latest.summary_json or {}) if latest else stored
+    call_ids = set(_error_call_ids(summary.get("error")))
+    for document in documents:
+        call_ids.update(_error_call_ids(document.get("error")))
+    calls = list(db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(call_ids))).all()) if call_ids else []
+    latest_errors = [{"id": call.id, "provider": call.provider_code, "instance": call.instance_code,
+                      "status": call.status, "error": call.error_message, "created_at": _iso(call.started_at)}
+                     for call in sorted(calls, key=lambda item: item.id, reverse=True)]
+    progress = config.get("semantic_test_progress") or {}
+    test_result = stored or {}
+    can_enable = bool(test_result.get("passed")) and skill.lifecycle_status != "DEPRECATED" and not skill.enabled
+    if test_result.get("pending_version_test"):
+        can_enable = False
+    if skill.enabled:
+        next_action = "已启用，可用于正式治理"
+    elif counts["model_unavailable"]:
+        next_action = "模型恢复后重新测试全部关联文档"
+    elif counts["failed"] or counts["pending"] or not test_result.get("passed"):
+        next_action = "继续测试并根据LLM复核结果迭代Skill"
+    else:
+        next_action = "人工确认后启用专项Skill"
+    history = []
+    for run in runs[:20]:
+        run_summary = run.summary_json or {}
+        history.append({
+            "run_id": run.id, "skill_version": run.skill_version,
+            "status": run.status, "started_at": _iso(run.started_at), "completed_at": _iso(run.completed_at),
+            "document_count": run_summary.get("document_count", 0),
+            "processed_document_count": run_summary.get("processed_document_count", run_summary.get("document_count", 0)),
+            "passed": bool(run_summary.get("passed")),
+            "failure_kind": run_summary.get("failure_kind"), "summary": run_summary.get("summary"),
+            "error": run_summary.get("error"),
+        })
+    return {
+        "skill": {"id": skill.id, "skill_code": skill.skill_code, "skill_name": skill.skill_name,
+                  "version": skill.version, "enabled": skill.enabled, "lifecycle_status": skill.lifecycle_status},
+        "summary": {**counts, "latest_run_id": latest.id if latest else None,
+                     "latest_run_status": latest.status if latest else None,
+                     "current_progress": progress.get("status", "NOT_STARTED"),
+                     "current_phase": progress.get("phase"), "current_message": progress.get("message")},
+        "documents": documents, "current_test": {"passed": bool(test_result.get("passed")),
+            "score": test_result.get("score"), "failure_kind": test_result.get("failure_kind"),
+            "error": test_result.get("error"), "summary": test_result.get("summary"),
+            "skill_version": test_result.get("skill_version"), "pending_version_test": test_result.get("pending_version_test", False)},
+        "history": history, "latest_model_errors": latest_errors,
+        "can_enable": can_enable, "next_action": next_action,
+        "validation_sources": sources,
+    }
+
+
+def _specialist_skill_or_404(db: Session, skill_id: int) -> ModelSkill:
+    skill = db.get(ModelSkill, skill_id)
+    if not skill or not (skill.config_json or {}).get("semantic_generated_draft"):
+        raise HTTPException(404, "专项 Skill 草稿不存在")
+    return skill
+
+
+@router.get("/semantic-skill-status/{skill_id}")
+def get_semantic_skill_status(skill_id: int, db: Session = Depends(get_db)):
+    """Return the append-only acceptance summary for every linked document."""
+    skill = _specialist_skill_or_404(db, skill_id)
+    return semantic_skill_status(db, skill)
+
+
+@router.post("/semantic-skill-status/{skill_id}/retry", status_code=202)
+def retry_semantic_skill_status(skill_id: int, payload: SemanticSkillRetryRequest,
+                                db: Session = Depends(get_db)):
+    """Queue a fresh acceptance batch without replacing historical runs."""
+    from app.services.document_semantic_skills import submit_test_job
+
+    skill = _specialist_skill_or_404(db, skill_id)
+    try:
+        result = submit_test_job(db, skill, reviewer=payload.reviewer)
+        # Include the immediately readable aggregate so the UI can update
+        # without making a second request when the queue accepts the job.
+        return {**result, "semantic_skill_status": semantic_skill_status(db, skill)}
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(409 if isinstance(exc, WorkflowConflict) else 422, str(exc)) from exc
 
 
 def required_document(db, table, identity):

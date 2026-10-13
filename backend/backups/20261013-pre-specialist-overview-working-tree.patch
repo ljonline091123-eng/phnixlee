@@ -1,0 +1,334 @@
+diff --git a/backend/app/api/document_governance.py b/backend/app/api/document_governance.py
+index 018f4a7..7a8b6a8 100644
+--- a/backend/app/api/document_governance.py
++++ b/backend/app/api/document_governance.py
+@@ -2,6 +2,7 @@
+ from __future__ import annotations
+ 
+ from typing import Literal
++import re
+ 
+ from fastapi import APIRouter, Depends, HTTPException, Query
+ from pydantic import BaseModel, ConfigDict, Field
+@@ -9,7 +10,8 @@ from sqlalchemy import select
+ from sqlalchemy.orm import Session
+ 
+ from app.db.session import get_db
+-from app.models.ai_hub import ModelSkill
++from app.models.ai_hub import ModelCallLog, ModelSkill
++from app.models.decision_review import SkillEvaluationResult, SkillEvaluationRun
+ from app.models.foundation import FoundationFact
+ from app.models.market_data import StockNews, StockNotice, StockSymbol
+ from app.schemas.document_governance import (
+@@ -36,6 +38,13 @@ class SkillDraftAction(BaseModel):
+     reviewer: str = Field(min_length=1, max_length=128)
+ 
+ 
++class SemanticSkillRetryRequest(BaseModel):
++    """Request for retrying an immutable specialist Skill acceptance batch."""
++
++    model_config = ConfigDict(extra="forbid")
++    reviewer: str = Field(min_length=1, max_length=128)
++
++
+ class FailureDiagnosisRequest(BaseModel):
+     model_config = ConfigDict(extra="forbid")
+     reviewer: str = Field(min_length=1, max_length=128)
+@@ -122,6 +131,165 @@ def current_version(db):
+     return skill.version if skill else "???"
+ 
+ 
++def _skill_test_status(value: object, *, error: str | None = None) -> str:
++    """Normalize stored evaluation details into a small UI-safe status set."""
++    text = " ".join(str(item or "") for item in (value, error)).upper()
++    if any(token in text for token in (
++        "MODEL_UNAVAILABLE", "HTTP 401", "HTTP 402", "HTTP 403", "HTTP 408", "HTTP 429",
++        "INSUFFICIENT BALANCE", "INSUFFICIENT QUOTA", "????", "????", "???????",
++    )):
++        return "MODEL_UNAVAILABLE"
++    if value is True or str(value).upper() in {"PASSED", "PASS", "SUCCESS"}:
++        return "PASSED"
++    if value is False or str(value).upper() in {"FAILED", "FAIL", "ERROR"}:
++        return "FAILED"
++    return "PENDING"
++
++
++def _error_call_ids(text: object) -> list[int]:
++    return [int(item) for item in re.findall(r"(?:????|model call)[#?:\s]*(\d+)", str(text or ""), flags=re.IGNORECASE)]
++
++
++def _iso(value):
++    return value.isoformat() if value is not None and hasattr(value, "isoformat") else value
++
++
++def semantic_skill_status(db: Session, skill: ModelSkill) -> dict:
++    """Return an operational, non-verbose acceptance summary for one draft Skill.
++
++    The source list is frozen on the Skill configuration.  Evaluation runs and
++    results are append-only, so this endpoint deliberately reports both the
++    latest batch and its history rather than deriving a single mutable status.
++    """
++    config = skill.config_json or {}
++    sources = list(config.get("validation_sources") or [])
++    runs = list(db.scalars(select(SkillEvaluationRun).where(
++        SkillEvaluationRun.skill_id == skill.id,
++    ).order_by(SkillEvaluationRun.started_at.desc(), SkillEvaluationRun.id.desc())).all())
++    latest = runs[0] if runs else None
++    result_rows = list(db.scalars(select(SkillEvaluationResult).where(
++        SkillEvaluationResult.run_id == latest.id,
++    ).order_by(SkillEvaluationResult.id)).all()) if latest else []
++    by_source = {}
++    for result in result_rows:
++        metrics = result.metrics_json or {}
++        key = (metrics.get("source_table"), metrics.get("record_id"))
++        if key[0] and key[1] is not None:
++            by_source[key] = result
++
++    stored = (config.get("semantic_draft_test") or {})
++    stored_items = stored.get("document_results") or []
++    stored_by_source = {(item.get("source_table"), item.get("record_id")): item for item in stored_items}
++    documents = []
++    counts = {key: 0 for key in ("total", "processed", "passed", "failed", "model_unavailable", "pending")}
++    for source in sources:
++        table, record_id = source.get("source_table"), source.get("record_id")
++        result = by_source.get((table, record_id))
++        item = stored_by_source.get((table, record_id), {})
++        metrics = result.metrics_json if result else item
++        evaluation = metrics.get("evaluation") if isinstance(metrics, dict) else {}
++        error = (metrics or {}).get("extraction_error") or (evaluation or {}).get("summary")
++        status = _skill_test_status(result.passed if result else None, error=error)
++        if result is None and latest is not None and (latest.status in {"FAILED", "INTERRUPTED"}):
++            # A provider failure can stop a batch before later documents run.
++            status = "MODEL_UNAVAILABLE" if _skill_test_status(None, error=(latest.summary_json or {}).get("error")) == "MODEL_UNAVAILABLE" else "PENDING"
++        counts["total"] += 1
++        counts["processed"] += status != "PENDING"
++        counts["passed"] += status == "PASSED"
++        counts["failed"] += status == "FAILED"
++        counts["model_unavailable"] += status == "MODEL_UNAVAILABLE"
++        counts["pending"] += status == "PENDING"
++        documents.append({
++            "source_table": table, "record_id": record_id,
++            "status": status, "passed": status == "PASSED",
++            "title": (metrics or {}).get("title"),
++            "error": error, "score": (evaluation or {}).get("score"),
++            "event_count": (metrics or {}).get("event_count", 0),
++            "relation_count": (metrics or {}).get("relation_count", 0),
++            "run_id": latest.id if latest else None,
++        })
++
++    summary = (latest.summary_json or {}) if latest else stored
++    call_ids = set(_error_call_ids(summary.get("error")))
++    for document in documents:
++        call_ids.update(_error_call_ids(document.get("error")))
++    calls = list(db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(call_ids))).all()) if call_ids else []
++    latest_errors = [{"id": call.id, "provider": call.provider_code, "instance": call.instance_code,
++                      "status": call.status, "error": call.error_message, "created_at": _iso(call.started_at)}
++                     for call in sorted(calls, key=lambda item: item.id, reverse=True)]
++    progress = config.get("semantic_test_progress") or {}
++    test_result = stored or {}
++    can_enable = bool(test_result.get("passed")) and skill.lifecycle_status != "DEPRECATED" and not skill.enabled
++    if test_result.get("pending_version_test"):
++        can_enable = False
++    if skill.enabled:
++        next_action = "???????????"
++    elif counts["model_unavailable"]:
++        next_action = "???????????????"
++    elif counts["failed"] or counts["pending"] or not test_result.get("passed"):
++        next_action = "???????LLM??????Skill"
++    else:
++        next_action = "?????????Skill"
++    history = []
++    for run in runs[:20]:
++        run_summary = run.summary_json or {}
++        history.append({
++            "run_id": run.id, "skill_version": run.skill_version,
++            "status": run.status, "started_at": _iso(run.started_at), "completed_at": _iso(run.completed_at),
++            "document_count": run_summary.get("document_count", 0),
++            "processed_document_count": run_summary.get("processed_document_count", run_summary.get("document_count", 0)),
++            "passed": bool(run_summary.get("passed")),
++            "failure_kind": run_summary.get("failure_kind"), "summary": run_summary.get("summary"),
++            "error": run_summary.get("error"),
++        })
++    return {
++        "skill": {"id": skill.id, "skill_code": skill.skill_code, "skill_name": skill.skill_name,
++                  "version": skill.version, "enabled": skill.enabled, "lifecycle_status": skill.lifecycle_status},
++        "summary": {**counts, "latest_run_id": latest.id if latest else None,
++                     "latest_run_status": latest.status if latest else None,
++                     "current_progress": progress.get("status", "NOT_STARTED"),
++                     "current_phase": progress.get("phase"), "current_message": progress.get("message")},
++        "documents": documents, "current_test": {"passed": bool(test_result.get("passed")),
++            "score": test_result.get("score"), "failure_kind": test_result.get("failure_kind"),
++            "error": test_result.get("error"), "summary": test_result.get("summary"),
++            "skill_version": test_result.get("skill_version"), "pending_version_test": test_result.get("pending_version_test", False)},
++        "history": history, "latest_model_errors": latest_errors,
++        "can_enable": can_enable, "next_action": next_action,
++        "validation_sources": sources,
++    }
++
++
++def _specialist_skill_or_404(db: Session, skill_id: int) -> ModelSkill:
++    skill = db.get(ModelSkill, skill_id)
++    if not skill or not (skill.config_json or {}).get("semantic_generated_draft"):
++        raise HTTPException(404, "?? Skill ?????")
++    return skill
++
++
++@router.get("/semantic-skill-status/{skill_id}")
++def get_semantic_skill_status(skill_id: int, db: Session = Depends(get_db)):
++    """Return the append-only acceptance summary for every linked document."""
++    skill = _specialist_skill_or_404(db, skill_id)
++    return semantic_skill_status(db, skill)
++
++
++@router.post("/semantic-skill-status/{skill_id}/retry", status_code=202)
++def retry_semantic_skill_status(skill_id: int, payload: SemanticSkillRetryRequest,
++                                db: Session = Depends(get_db)):
++    """Queue a fresh acceptance batch without replacing historical runs."""
++    from app.services.document_semantic_skills import submit_test_job
++
++    skill = _specialist_skill_or_404(db, skill_id)
++    try:
++        result = submit_test_job(db, skill, reviewer=payload.reviewer)
++        # Include the immediately readable aggregate so the UI can update
++        # without making a second request when the queue accepts the job.
++        return {**result, "semantic_skill_status": semantic_skill_status(db, skill)}
++    except ValueError as exc:
++        db.rollback()
++        raise HTTPException(409 if isinstance(exc, WorkflowConflict) else 422, str(exc)) from exc
++
++
+ def required_document(db, table, identity):
+     row = db.get(MODELS[table], identity)
+     if not row:
+diff --git a/backend/app/services/model_hub.py b/backend/app/services/model_hub.py
+index a17550c..d63de6d 100644
+--- a/backend/app/services/model_hub.py
++++ b/backend/app/services/model_hub.py
+@@ -300,7 +300,10 @@ DEFAULT_MODEL_ROUTES = (
+     {
+         "task_type": "data_governance",
+         "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
++        # Document governance must have more than one real provider.  The
++        # local mock remains in the catalog for offline development, but is
++        # filtered out whenever a caller requires a real model.
++        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+         "route_policy": "PREFERRED_THEN_FALLBACK",
+         "enabled": True,
+         "description": "??????????DW ?????????????",
+@@ -366,7 +369,9 @@ def _runtime_api_key(provider: ModelProvider) -> str | None:
+ # Upgrade only routes that still match the previous built-in profile. Operators'
+ # customized routes must remain untouched across application restarts.
+ LEGACY_DEFAULT_ROUTE_OPTIONS = {
+-    "data_governance": ("QWEN_PLUS", ("GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
++    # The first tuple is the previous built-in route.  Only this known
++    # profile is upgraded; an operator-customized route is left untouched.
++    "data_governance": ("DEEPSEEK_V4_FLASH", ("GEMINI_FLASH", "MOCK_GENERAL")),
+     "deep_research": ("GEMINI_FLASH", ("OPENAI_CHATGPT", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
+     "general_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+     "knowledge_graph": ("GEMINI_FLASH", ("QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+@@ -906,7 +911,12 @@ class ModelHubService:
+     @staticmethod
+     def _should_fallback(exc: Exception) -> bool:
+         if isinstance(exc, httpx.HTTPStatusError):
+-            return exc.response.status_code == 429 or exc.response.status_code >= 500
++            # Authentication, billing, availability and rate-limit failures
++            # are provider-specific.  A different configured provider may
++            # still be healthy, so fail over for those classes.  400 remains
++            # non-retryable because it normally indicates a shared contract
++            # or prompt/schema defect.
++            return exc.response.status_code in {401, 402, 403, 404, 408, 409, 429} or exc.response.status_code >= 500
+         return isinstance(exc, (httpx.RequestError, ValueError, TimeoutError, ValidationError, json.JSONDecodeError))
+ 
+     @staticmethod
+diff --git a/frontend/src/InteractiveSemanticFlow.tsx b/frontend/src/InteractiveSemanticFlow.tsx
+index fbecf7e..7416fa4 100644
+--- a/frontend/src/InteractiveSemanticFlow.tsx
++++ b/frontend/src/InteractiveSemanticFlow.tsx
+@@ -29,7 +29,23 @@ type Draft = { id: number; skill_code: string; skill_name: string; instructions:
+   iteration_history?: { iteration: number; skill_version: string; extraction_error?: string; title?: string;
+     evaluation?: { passed: boolean; score: number; summary: string; issues?: string[] } }[] };
+ type SkillTestJob = { job_id: number; status: string; error?: string; draft: Draft; result?: Draft };
++type SemanticSkillStatus = {
++  skill: { id: number; skill_code: string; skill_name: string; version: string; enabled: boolean; lifecycle_status: string };
++  summary: { total: number; processed: number; passed: number; failed: number; model_unavailable: number; pending: number;
++    latest_run_id?: number; latest_run_status?: string; current_progress?: string; current_phase?: string; current_message?: string };
++  documents: { source_table: string; record_id: number; title?: string; status: string; error?: string; score?: number;
++    event_count: number; relation_count: number }[];
++  current_test: { passed: boolean; score?: number; failure_kind?: string; error?: string; summary?: string; pending_version_test?: boolean };
++  history: { run_id: number; skill_version: string; status: string; started_at?: string; completed_at?: string; document_count: number;
++    processed_document_count: number; passed: boolean; failure_kind?: string; summary?: string; error?: string }[];
++  latest_model_errors: { id: number; provider?: string; instance?: string; status: string; error?: string; created_at?: string }[];
++  can_enable: boolean; next_action: string;
++};
++type SemanticSkillRetryResponse = { job_id: number; status: string; draft?: Draft; result?: Draft; semantic_skill_status: SemanticSkillStatus };
+ const testing = (draft: Draft) => ["PENDING", "RUNNING", "RETRY"].includes(draft.test_progress?.status || "");
++const skillStatusNames: Record<string, string> = {
++  PASSED: "???", FAILED: "????", MODEL_UNAVAILABLE: "?????", PENDING: "???",
++};
+ 
+ const typeNames: Record<string, string> = {
+   FINANCIAL_DISCLOSURE: "???????", CAPITAL_OPERATION: "????", SHAREHOLDER_PERSONNEL: "?????",
+@@ -52,6 +68,7 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
+   const [skills, setSkills] = useState<string[]>([]), [scopes, setScopes] = useState<string[]>(["COMPANY"]);
+   const [reason, setReason] = useState(""), [rejected, setRejected] = useState<Record<string, string>>({});
+   const [confirmed, setConfirmed] = useState<string[]>([]), [drafts, setDrafts] = useState<Record<number, Draft>>({});
++  const [skillStatuses, setSkillStatuses] = useState<Record<number, SemanticSkillStatus>>({});
+   const [recoveryStep, setRecoveryStep] = useState(""), [recoveryProgress, setRecoveryProgress] = useState(0);
+   const [connectionWarning, setConnectionWarning] = useState("");
+   const plan = detail.governance_plan;
+@@ -63,7 +80,7 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
+   useEffect(() => { void request<Catalog>("/document-governance/planning-catalog").then(setCatalog).catch(e => setError(e instanceof Error ? e.message : "????????")); }, []);
+   useEffect(() => {
+     setPrimary(plan?.primary_type || "GENERAL_EVIDENCE"); setSecondary(plan?.secondary_types || []);
+-    setSkills(plan?.recommended_skill_codes || []); setScopes(plan?.target_scopes || ["COMPANY"]); setReason(""); setRejected({}); setConfirmed([]); setDrafts({});
++    setSkills(plan?.recommended_skill_codes || []); setScopes(plan?.target_scopes || ["COMPANY"]); setReason(""); setRejected({}); setConfirmed([]); setDrafts({}); setSkillStatuses({});
+     setRecoveryStep(""); setRecoveryProgress(0);
+   }, [detail.source_table, detail.record_id, plan?.plan_id, plan?.revision, detail.selected_version]);
+   useEffect(() => {
+@@ -73,6 +90,22 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
+       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "??Skill??????"); });
+     return () => { cancelled = true; };
+   }, [detail.source_table, detail.record_id, plan?.plan_id, plan?.revision]);
++  const skillIds = useMemo(() => [...new Set(Object.values(drafts).map(item => item.id))], [drafts]);
++  useEffect(() => {
++    if (!skillIds.length) { setSkillStatuses({}); return; }
++    let cancelled = false;
++    const refresh = async () => {
++      const responses = await Promise.allSettled(skillIds.map(async id => ({ id,
++        status: await request<SemanticSkillStatus>(`/document-governance/semantic-skill-status/${id}`) })));
++      if (cancelled) return;
++      const next: Record<number, SemanticSkillStatus> = {};
++      responses.forEach(item => { if (item.status === "fulfilled") next[item.value.id] = item.value.status; });
++      setSkillStatuses(next);
++    };
++    void refresh();
++    const timer = window.setInterval(() => void refresh(), 3000);
++    return () => { cancelled = true; window.clearInterval(timer); };
++  }, [skillIds.join(",")]);
+   const testJobs = Object.entries(drafts).filter(([, draft]) => draft.test_job_id && testing(draft))
+     .map(([index, draft]) => `${index}:${draft.test_job_id}`).join(",");
+   useEffect(() => {
+@@ -223,6 +256,22 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
+         testing(result) ? "?????????????????????????" : result.test_result?.passed ? "??Skill?????LLM??????????" : "?????????????????");
+     } catch (e) { setError(e instanceof Error ? e.message : "??Skill????"); } finally { setBusy(false); }
+   }
++  async function retrySemanticSkill(skillId: number) {
++    if (!reviewer.trim()) { setError("???????"); return; }
++    setBusy(true); setError(""); setRecoveryProgress(12);
++    setRecoveryStep("?????????????????????????");
++    try {
++      const response = await request<SemanticSkillRetryResponse>(`/document-governance/semantic-skill-status/${skillId}/retry`, {
++        method: "POST", body: JSON.stringify({ reviewer: reviewer.trim() }),
++      });
++      if (response.semantic_skill_status) setSkillStatuses(values => ({ ...values, [skillId]: response.semantic_skill_status }));
++      const next = response.draft || response.result;
++      if (next) setDrafts(values => Object.fromEntries(Object.entries(values).map(([index, draft]) => [index, draft.id === skillId ? next : draft])));
++      setRecoveryProgress(100);
++      setRecoveryStep("?????????????????????????????????????????????????");
++    } catch (e) { setError(e instanceof Error ? e.message : "?? Skill ??????"); }
++    finally { setBusy(false); }
++  }
+   function knowledgeCard(point: Point, editable = false) {
+     const id = `${point.point_type}:${point.key}`, marked = Object.prototype.hasOwnProperty.call(rejected, id);
+     return <article key={id} className={`${marked ? "nonconforming" : ""} ${point.confirmation_level === "REQUIRED" ? "required-confirmation" : ""}`}>

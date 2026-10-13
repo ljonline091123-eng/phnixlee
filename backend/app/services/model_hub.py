@@ -300,7 +300,10 @@ DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "data_governance",
         "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
+        # Document governance must have more than one real provider.  The
+        # local mock remains in the catalog for offline development, but is
+        # filtered out whenever a caller requires a real model.
+        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "数据治理、分类入湖、DW 层质量检查与字段解释路由。",
@@ -366,7 +369,9 @@ def _runtime_api_key(provider: ModelProvider) -> str | None:
 # Upgrade only routes that still match the previous built-in profile. Operators'
 # customized routes must remain untouched across application restarts.
 LEGACY_DEFAULT_ROUTE_OPTIONS = {
-    "data_governance": ("QWEN_PLUS", ("GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    # The first tuple is the previous built-in route.  Only this known
+    # profile is upgraded; an operator-customized route is left untouched.
+    "data_governance": ("DEEPSEEK_V4_FLASH", ("GEMINI_FLASH", "MOCK_GENERAL")),
     "deep_research": ("GEMINI_FLASH", ("OPENAI_CHATGPT", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
     "general_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
     "knowledge_graph": ("GEMINI_FLASH", ("QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
@@ -906,7 +911,12 @@ class ModelHubService:
     @staticmethod
     def _should_fallback(exc: Exception) -> bool:
         if isinstance(exc, httpx.HTTPStatusError):
-            return exc.response.status_code == 429 or exc.response.status_code >= 500
+            # Authentication, billing, availability and rate-limit failures
+            # are provider-specific.  A different configured provider may
+            # still be healthy, so fail over for those classes.  400 remains
+            # non-retryable because it normally indicates a shared contract
+            # or prompt/schema defect.
+            return exc.response.status_code in {401, 402, 403, 404, 408, 409, 429} or exc.response.status_code >= 500
         return isinstance(exc, (httpx.RequestError, ValueError, TimeoutError, ValidationError, json.JSONDecodeError))
 
     @staticmethod

@@ -29,7 +29,23 @@ type Draft = { id: number; skill_code: string; skill_name: string; instructions:
   iteration_history?: { iteration: number; skill_version: string; extraction_error?: string; title?: string;
     evaluation?: { passed: boolean; score: number; summary: string; issues?: string[] } }[] };
 type SkillTestJob = { job_id: number; status: string; error?: string; draft: Draft; result?: Draft };
+type SemanticSkillStatus = {
+  skill: { id: number; skill_code: string; skill_name: string; version: string; enabled: boolean; lifecycle_status: string };
+  summary: { total: number; processed: number; passed: number; failed: number; model_unavailable: number; pending: number;
+    latest_run_id?: number; latest_run_status?: string; current_progress?: string; current_phase?: string; current_message?: string };
+  documents: { source_table: string; record_id: number; title?: string; status: string; error?: string; score?: number;
+    event_count: number; relation_count: number }[];
+  current_test: { passed: boolean; score?: number; failure_kind?: string; error?: string; summary?: string; pending_version_test?: boolean };
+  history: { run_id: number; skill_version: string; status: string; started_at?: string; completed_at?: string; document_count: number;
+    processed_document_count: number; passed: boolean; failure_kind?: string; summary?: string; error?: string }[];
+  latest_model_errors: { id: number; provider?: string; instance?: string; status: string; error?: string; created_at?: string }[];
+  can_enable: boolean; next_action: string;
+};
+type SemanticSkillRetryResponse = { job_id: number; status: string; draft?: Draft; result?: Draft; semantic_skill_status: SemanticSkillStatus };
 const testing = (draft: Draft) => ["PENDING", "RUNNING", "RETRY"].includes(draft.test_progress?.status || "");
+const skillStatusNames: Record<string, string> = {
+  PASSED: "已通过", FAILED: "验收失败", MODEL_UNAVAILABLE: "模型不可用", PENDING: "待执行",
+};
 
 const typeNames: Record<string, string> = {
   FINANCIAL_DISCLOSURE: "财务披露与业绩", CAPITAL_OPERATION: "资本运作", SHAREHOLDER_PERSONNEL: "股东与人事",
@@ -52,6 +68,7 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
   const [skills, setSkills] = useState<string[]>([]), [scopes, setScopes] = useState<string[]>(["COMPANY"]);
   const [reason, setReason] = useState(""), [rejected, setRejected] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState<string[]>([]), [drafts, setDrafts] = useState<Record<number, Draft>>({});
+  const [skillStatuses, setSkillStatuses] = useState<Record<number, SemanticSkillStatus>>({});
   const [recoveryStep, setRecoveryStep] = useState(""), [recoveryProgress, setRecoveryProgress] = useState(0);
   const [connectionWarning, setConnectionWarning] = useState("");
   const plan = detail.governance_plan;
@@ -63,16 +80,32 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
   useEffect(() => { void request<Catalog>("/document-governance/planning-catalog").then(setCatalog).catch(e => setError(e instanceof Error ? e.message : "治理目录读取失败")); }, []);
   useEffect(() => {
     setPrimary(plan?.primary_type || "GENERAL_EVIDENCE"); setSecondary(plan?.secondary_types || []);
-    setSkills(plan?.recommended_skill_codes || []); setScopes(plan?.target_scopes || ["COMPANY"]); setReason(""); setRejected({}); setConfirmed([]); setDrafts({});
+    setSkills(plan?.recommended_skill_codes || []); setScopes(plan?.target_scopes || ["COMPANY"]); setReason(""); setRejected({}); setConfirmed([]); setDrafts({}); setSkillStatuses({});
     setRecoveryStep(""); setRecoveryProgress(0);
   }, [detail.source_table, detail.record_id, plan?.plan_id, plan?.revision, detail.selected_version]);
   useEffect(() => {
     let cancelled = false;
-    if (plan?.status === "PROPOSED") void request<Record<number, Draft>>(`/document-governance/documents/${detail.source_table}/${detail.record_id}/skill-drafts`)
+    if (plan && plan.status !== "SKIPPED") void request<Record<number, Draft>>(`/document-governance/documents/${detail.source_table}/${detail.record_id}/skill-drafts`)
       .then(values => { if (!cancelled) { setDrafts(values); setSkills(current => [...new Set([...current, ...Object.values(values).filter(item => item.lifecycle_status === "ENABLED").map(item => item.skill_code)])]); } })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "专项Skill草稿读取失败"); });
     return () => { cancelled = true; };
   }, [detail.source_table, detail.record_id, plan?.plan_id, plan?.revision]);
+  const skillIds = useMemo(() => [...new Set(Object.values(drafts).map(item => item.id))], [drafts]);
+  useEffect(() => {
+    if (!skillIds.length) { setSkillStatuses({}); return; }
+    let cancelled = false;
+    const refresh = async () => {
+      const responses = await Promise.allSettled(skillIds.map(async id => ({ id,
+        status: await request<SemanticSkillStatus>(`/document-governance/semantic-skill-status/${id}`) })));
+      if (cancelled) return;
+      const next: Record<number, SemanticSkillStatus> = {};
+      responses.forEach(item => { if (item.status === "fulfilled") next[item.value.id] = item.value.status; });
+      setSkillStatuses(next);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [skillIds.join(",")]);
   const testJobs = Object.entries(drafts).filter(([, draft]) => draft.test_job_id && testing(draft))
     .map(([index, draft]) => `${index}:${draft.test_job_id}`).join(",");
   useEffect(() => {
@@ -223,6 +256,22 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
         testing(result) ? "测试已在后台启动，进度自动更新；关闭窗口不会中断。" : result.test_result?.passed ? "专项Skill已通过独立LLM复核，等待人工启用。" : "已保留草稿，可开始测试和自动优化。");
     } catch (e) { setError(e instanceof Error ? e.message : "专项Skill操作失败"); } finally { setBusy(false); }
   }
+  async function retrySemanticSkill(skillId: number) {
+    if (!reviewer.trim()) { setError("请先填写审核人"); return; }
+    setBusy(true); setError(""); setRecoveryProgress(12);
+    setRecoveryStep("正在重新提交全部关联文档，历史验收批次不会被覆盖…");
+    try {
+      const response = await request<SemanticSkillRetryResponse>(`/document-governance/semantic-skill-status/${skillId}/retry`, {
+        method: "POST", body: JSON.stringify({ reviewer: reviewer.trim() }),
+      });
+      if (response.semantic_skill_status) setSkillStatuses(values => ({ ...values, [skillId]: response.semantic_skill_status }));
+      const next = response.draft || response.result;
+      if (next) setDrafts(values => Object.fromEntries(Object.entries(values).map(([index, draft]) => [index, draft.id === skillId ? next : draft])));
+      setRecoveryProgress(100);
+      setRecoveryStep("已创建新的验收批次。模型不可用时只会保留失败状态，不会伪造治理完成；模型恢复后会自动继续显示进度。");
+    } catch (e) { setError(e instanceof Error ? e.message : "专项 Skill 重试提交失败"); }
+    finally { setBusy(false); }
+  }
   function knowledgeCard(point: Point, editable = false) {
     const id = `${point.point_type}:${point.key}`, marked = Object.prototype.hasOwnProperty.call(rejected, id);
     return <article key={id} className={`${marked ? "nonconforming" : ""} ${point.confirmation_level === "REQUIRED" ? "required-confirmation" : ""}`}>
@@ -239,6 +288,38 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
         {point.confirmation_level === "REQUIRED" && <label className="ds-explicit-confirm"><input type="checkbox" checked={confirmed.includes(id) || point.review_status === "HUMAN_CONFIRMED"} disabled={busy || point.review_status === "HUMAN_CONFIRMED" || marked} onChange={() => toggle(confirmed, id, setConfirmed)} />我已核对并确认该重点项</label>}</>}
     </article>;
   }
+  function specialistStatusLabel(status: string) {
+    return ({ PASSED: "已通过", FAILED: "验收失败", MODEL_UNAVAILABLE: "模型不可用", PENDING: "待处理" } as Record<string, string>)[status] || status;
+  }
+  function specialistOverview() {
+    const entries = Object.entries(skillStatuses);
+    if (!entries.length) return null;
+    return <section className="ds-specialist-overview" aria-label="专项Skill验收总览">
+      <header className="ds-specialist-summary">
+        <div><span className="ds-section-kicker">专项Skill验收</span><h4>全部关联文档的回归状态</h4></div>
+        <small>状态每3秒刷新；验收批次和失败记录均保留</small>
+      </header>
+      {entries.map(([key, status]) => {
+        const summary = status.summary;
+        const draft = Object.values(drafts).find(item => item.id === Number(key));
+        const unavailable = summary.model_unavailable > 0 || status.current_test.failure_kind === "MODEL_UNAVAILABLE";
+        return <article className="ds-specialist-card" key={key}>
+          <div className="ds-specialist-card-header">
+            <div><strong>{status.skill.skill_name}</strong><small>{status.skill.skill_code} · v{status.skill.version} · {status.skill.lifecycle_status === "TESTING" ? "测试中" : status.skill.lifecycle_status}</small></div>
+            <span className={`ds-specialist-status status-${unavailable ? "model-unavailable" : summary.failed ? "failed" : summary.passed === summary.total && summary.total > 0 ? "passed" : "pending"}`}>
+              {unavailable ? "模型不可用" : summary.failed ? "验收失败" : summary.passed === summary.total && summary.total > 0 ? "全部通过" : "待完成"}
+            </span>
+          </div>
+          <div className="ds-specialist-counts"><span>关联 {summary.total} 篇</span><span>已处理 {summary.processed}/{summary.total}</span><span>通过 {summary.passed}</span><span>失败 {summary.failed}</span><span>模型不可用 {summary.model_unavailable}</span><span>待处理 {summary.pending}</span></div>
+          {unavailable && <div className="ds-specialist-alert" role="alert"><strong>专项Skill已创建，但本轮真实模型验收未完成</strong><p>{status.latest_model_errors[0]?.error || status.current_test.error || "模型服务返回HTTP 402，账户余额或额度不可用。"}</p><small>这不是“未创建Skill”。恢复模型服务或额度后，点击“重新测试全部文档”；系统不会用Mock结果冒充真实验收。</small></div>}
+          {summary.current_message && <p className="ds-specialist-progress">{summary.current_message}</p>}
+          <details className="ds-specialist-documents"><summary>查看 {summary.total} 篇文档状态</summary><div>{status.documents.map(document => <div className="ds-specialist-document" key={`${document.source_table}:${document.record_id}`}><span>{document.title || `${document.source_table}:${document.record_id}`}</span><b className={`status-${document.status.toLowerCase()}`}>{specialistStatusLabel(document.status)}</b>{document.error && <small>{document.error}</small>}</div>)}</div></details>
+          <details className="ds-specialist-history"><summary>查看历史验收批次（{status.history.length}）</summary><ol>{status.history.map(run => <li key={run.run_id}><span>批次 #{run.run_id} · v{run.skill_version} · {run.document_count}篇</span><b>{run.passed ? "通过" : run.failure_kind === "MODEL_UNAVAILABLE" ? "模型不可用" : run.status}</b>{run.error && <small>{run.error}</small>}</li>)}</ol></details>
+          <div className="ds-specialist-actions"><span>{status.next_action}</span><button disabled={busy || !reviewer.trim() || Boolean(draft && testing(draft))} onClick={() => void retrySemanticSkill(Number(key))}>重新测试全部文档</button></div>
+        </article>;
+      })}
+    </section>;
+  }
   const missingRequired = report?.knowledge_points.filter(point => point.confirmation_level === "REQUIRED" && point.review_status !== "HUMAN_CONFIRMED" &&
     !confirmed.includes(`${point.point_type}:${point.key}`) && !Object.prototype.hasOwnProperty.call(rejected, `${point.point_type}:${point.key}`)).length || 0;
   return <section className="ds-interactive-flow" aria-label="交互式治理流程">
@@ -252,6 +333,7 @@ export function InteractiveSemanticFlow({ detail, isLatest, reviewer, onReviewer
         <p>{detail.state?.error || "最近一次结构化治理未通过质量门禁。"}</p><small>系统不会继续用相同Skill盲目重试，也不会把失败结果发布为事实。</small></div>
       <div className="ds-recovery-action">{recoveryStep && <><p role="status">{recoveryStep}</p><progress max={100} value={recoveryProgress} aria-label="修复闭环进度" /></>}<button className="ds-primary" disabled={busy} onClick={() => void diagnoseFailure()}>{busy ? "修复闭环执行中…" : "LLM诊断并自动构建／验证Skill"}</button></div>
     </div>}
+    {specialistOverview()}
     {!plan && detail.workflow_status !== "NEEDS_FAILURE_DIAGNOSIS" && <div className="ds-flow-action"><h4>第一步：LLM阅读全文并制定治理方案</h4><p>模型只提出文档类型、知识归属和Skill组合，本阶段不会生成或发布正式知识。</p><button className="ds-primary" disabled={busy} onClick={() => void generate()}>{busy ? "正在阅读全文…" : "生成治理方案"}</button></div>}
     {plan?.status === "PROPOSED" && catalog && <div className="ds-plan-editor">
       <h4>第二步：确认治理方案</h4><p className="ds-plan-overview">{plan.overview}</p>
