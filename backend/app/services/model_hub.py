@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
+import time
 from typing import Any
 
 import httpx
@@ -696,6 +697,11 @@ def seed_default_skills(db: Session) -> None:
 
 
 class ModelHubService:
+    # Retry only transient provider outages. Contract and authentication
+    # failures should move to the next configured provider immediately.
+    _MAX_TRANSIENT_ATTEMPTS = 2
+    _TRANSIENT_BACKOFF_SECONDS = 0.25
+
     def __init__(self, db: Session):
         self.db = db
 
@@ -760,6 +766,8 @@ class ModelHubService:
             if not candidates:
                 raise ValueError("AI治理要求真实模型；请检查模型启用状态和 MODEL_CREDENTIAL_KEY，不能使用 Mock 替代。")
         last_log: ModelCallLog | None = None
+        attempted_models: list[dict[str, Any]] = []
+        stop_after_failure = False
         for routed in candidates:
             # Materialize provider values before _start_log commits. The model
             # instance is already a transient snapshot, so the outbound call
@@ -780,7 +788,8 @@ class ModelHubService:
                 },
             )
             try:
-                result = get_model_adapter(provider_type).chat(
+                result, retry_trace = self._chat_with_transient_retry(
+                    provider_type=provider_type,
                     instance=routed.instance,
                     messages=messages,
                     temperature=temperature,
@@ -795,6 +804,8 @@ class ModelHubService:
                 log.status = "SUCCESS"
                 log.response_text = result.response_text
                 log.response_json = result.response_json
+                attempted_models.extend({**item, "call_log_id": log.id} for item in retry_trace)
+                log.request_json = {**(log.request_json or {}), "attempted_models": attempted_models}
                 log.completed_at = datetime.now(timezone.utc)
                 log.latency_ms = self._compute_latency_ms(log.started_at, log.completed_at)
                 self.db.commit()
@@ -803,10 +814,30 @@ class ModelHubService:
             except Exception as exc:
                 self.db.rollback()
                 last_log = self._mark_failed(log.id, exc, routed.instance.api_key)
+                trace = getattr(exc, "model_attempts", None) or [{
+                    "attempt": 1, "provider": provider_code,
+                    "instance": routed.instance.instance_code,
+                    "model": routed.instance.model_code, "status": "FAILED",
+                    "error": last_log.error_message,
+                    "retryable": self._is_transient_retryable(exc),
+                }]
+                attempted_models.extend({**item, "call_log_id": last_log.id} for item in trace)
+                last_log.request_json = {**(last_log.request_json or {}), "attempted_models": attempted_models}
                 if not self._should_fallback(exc):
+                    stop_after_failure = True
                     break
+            if stop_after_failure:
+                break
 
         if last_log:
+            summary = self._format_attempt_summary(attempted_models)
+            last_log.request_json = {**(last_log.request_json or {}),
+                                     "attempted_models": attempted_models,
+                                     "failure_summary": summary,
+                                     "retryable": any(item.get("retryable") for item in attempted_models)}
+            last_log.error_message = f"{last_log.error_message or '模型调用失败'}；{summary}"
+            self.db.commit()
+            self.db.refresh(last_log)
             return last_log
         raise RuntimeError("No available model instance for this task")
 
@@ -907,6 +938,73 @@ class ModelHubService:
             config_json=instance.config_json or {},
         )
         return RoutedModel(provider=provider, instance=resolved)
+
+    def _chat_with_transient_retry(
+        self,
+        *,
+        provider_type: str,
+        instance: ModelInstance,
+        messages: list[dict[str, str]],
+        temperature: float | None,
+        max_tokens: int | None,
+        metadata_json: dict[str, Any],
+    ):
+        """Call one provider with a bounded retry for transient outages.
+
+        The outer call keeps one durable ModelCallLog for the routed model and
+        stores every transport attempt in ``request_json.attempted_models``.
+        This preserves the existing audit contract while making a 503/timeout
+        visible instead of silently replacing it with the last provider error.
+        """
+        attempts: list[dict[str, Any]] = []
+        adapter = get_model_adapter(provider_type)
+        for attempt in range(1, self._MAX_TRANSIENT_ATTEMPTS + 1):
+            try:
+                result = adapter.chat(
+                    instance=instance,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    metadata_json=metadata_json,
+                )
+                attempts.append({"attempt": attempt, "provider": provider_type,
+                                 "instance": instance.instance_code,
+                                 "model": instance.model_code, "status": "SUCCESS",
+                                 "retryable": False})
+                return result, attempts
+            except Exception as exc:
+                retryable = self._is_transient_retryable(exc)
+                attempts.append({"attempt": attempt, "provider": provider_type,
+                                 "instance": instance.instance_code,
+                                 "model": instance.model_code, "status": "FAILED",
+                                 "error": describe_model_error(exc, instance.api_key),
+                                 "retryable": retryable})
+                if not retryable or attempt >= self._MAX_TRANSIENT_ATTEMPTS:
+                    # Exception objects are mutable; attaching the trace keeps
+                    # the outer audit path independent of provider exception
+                    # classes and avoids losing the first 503 attempt.
+                    exc.model_attempts = attempts
+                    raise
+                time.sleep(self._TRANSIENT_BACKOFF_SECONDS * attempt)
+        raise RuntimeError("No available model attempt")
+
+    @staticmethod
+    def _is_transient_retryable(exc: Exception) -> bool:
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code in {408, 429, 500, 502, 503, 504}
+        return isinstance(exc, (httpx.RequestError, TimeoutError))
+
+    @staticmethod
+    def _format_attempt_summary(attempts: list[dict[str, Any]]) -> str:
+        if not attempts:
+            return "没有可用模型调用记录"
+        parts = []
+        for item in attempts:
+            identity = f"{item.get('provider') or 'UNKNOWN'}/{item.get('instance') or 'UNKNOWN'}"
+            error = str(item.get("error") or "成功").replace("\n", " ")[:500]
+            suffix = "（可重试）" if item.get("retryable") else ""
+            parts.append(f"{identity}#{item.get('call_log_id')}: {error}{suffix}")
+        return "模型调用链：" + "；".join(parts)
 
     @staticmethod
     def _should_fallback(exc: Exception) -> bool:
