@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量化飞轮监控台 — 第一期原型</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --border: #e5e7eb;
+  --text: #1f2937; --muted: #6b7280; --faint: #9ca3af;
+  --blue: #2563eb; --blue-bg: #eff6ff;
+  --green: #16a34a; --green-bg: #f0fdf4;
+  --red: #dc2626; --red-bg: #fef2f2;
+  --amber: #d97706; --amber-bg: #fffbeb;
+  --purple: #7c3aed; --purple-bg: #f5f3ff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+.app { max-width: 1280px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* ===== 顶部 ===== */
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.header h1 { font-size: 20px; font-weight: 600; }
+.header h1 small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 10px; }
+.badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+.header-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+
+/* ===== 管道状态条 ===== */
+.pipeline { display: flex; align-items: stretch; gap: 8px; margin-bottom: 24px; }
+.pipe-step { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; position: relative; }
+.pipe-step .stage { font-size: 11px; color: var(--faint); }
+.pipe-step .name { font-size: 13px; font-weight: 600; margin: 2px 0 6px; }
+.pipe-step .meta { font-size: 12px; color: var(--muted); }
+.pipe-step .status { font-size: 11px; font-weight: 600; }
+.pipe-step.ok .status { color: var(--green); }
+.pipe-step.pending .status { color: var(--amber); }
+.pipe-step.running .status { color: var(--blue); }
+.pipe-arrow { align-self: center; color: var(--faint); font-size: 16px; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.dot.g { background: var(--green); } .dot.a { background: var(--amber); } .dot.b { background: var(--blue); }
+
+/* ===== KPI 卡片 ===== */
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+.kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.kpi .label { font-size: 12px; color: var(--muted); }
+.kpi .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+.kpi .sub { font-size: 11px; color: var(--faint); margin-top: 2px; }
+.kpi .value.up { color: var(--red); }  /* 中国股市惯例：涨红跌绿 */
+.kpi .value.down { color: var(--green); }
+.kpi .value.blue { color: var(--blue); }
+
+/* ===== 标签页 ===== */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+.tab { padding: 10px 18px; font-size: 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; user-select: none; }
+.tab.active { color: var(--blue); font-weight: 600; border-bottom-color: var(--blue); }
+.tab:hover:not(.active) { color: var(--text); }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ===== 卡片与表格 ===== */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.card-head h3 { font-size: 14px; font-weight: 600; }
+.card-head .link { font-size: 12px; color: var(--blue); cursor: pointer; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 9px 14px; background: #fafafa; color: var(--muted); font-weight: 500; font-size: 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 9px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f9fafb; }
+
+/* ===== 标签样式 ===== */
+.tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin: 1px 2px 1px 0; white-space: nowrap; }
+.tag.event { background: var(--blue-bg); color: var(--blue); }
+.tag.sem-pos { background: var(--red-bg); color: var(--red); }
+.tag.sem-neg { background: var(--green-bg); color: var(--green); }
+.tag.sem-neutral { background: #f3f4f6; color: var(--muted); }
+.tag.buy { background: var(--red-bg); color: var(--red); font-weight: 600; }
+.tag.sell { background: var(--green-bg); color: var(--green); font-weight: 600; }
+.tag.hold { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+.tag.st-pass { background: var(--green-bg); color: var(--green); }
+.tag.st-block { background: #f3f4f6; color: var(--faint); text-decoration: line-through; }
+.tag.mock { background: var(--purple-bg); color: var(--purple); }
+.tag.conf { background: #f9fafb; color: var(--muted); border: 1px solid var(--border); }
+
+.hit { color: var(--red); font-weight: 600; }
+.miss { color: var(--green); font-weight: 600; }
+.pending-c { color: var(--amber); }
+.muted { color: var(--muted); font-size: 12px; }
+.evi { font-size: 11px; color: var(--blue); cursor: pointer; text-decoration: underline dotted; }
+
+/* ===== 漏斗图 ===== */
+.funnel-wrap { display: flex; gap: 20px; padding: 18px 16px; }
+.funnel { flex: 1.2; }
+.funnel-row { display: flex; align-items: center; margin-bottom: 10px; }
+.funnel-bar { height: 34px; border-radius: 6px; display: flex; align-items: center; padding: 0 12px; color: #fff; font-weight: 600; font-size: 13px; min-width: 60px; }
+.funnel-count { margin-left: 10px; font-size: 12px; color: var(--muted); }
+.f1 { background: var(--blue); width: 100%; }
+.f2 { background: #3b82f6; width: 62%; }
+.f3 { background: #8b5cf6; width: 38%; }
+.f4 { background: var(--purple); width: 22%; }
+.rules { flex: 1; font-size: 12px; }
+.rules h4 { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.rule-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #f0f0f0; }
+.rule-item b { font-weight: 600; }
+
+/* ===== 基线报告 ===== */
+.report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mini-table td { font-size: 12px; padding: 6px 12px; }
+.bar-wrap { background: #f3f4f6; border-radius: 4px; height: 8px; width: 120px; display: inline-block; vertical-align: middle; }
+.bar { height: 8px; border-radius: 4px; }
+.footer-note { margin-top: 30px; padding: 14px 18px; background: var(--amber-bg); border: 1px solid #fde68a; border-radius: 10px; font-size: 12px; color: #92400e; line-height: 1.8; }
+
+.filter-bar { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.filter-chip { padding: 3px 12px; border-radius: 12px; border: 1px solid var(--border); cursor: pointer; color: var(--muted); }
+.filter-chip.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶部 -->
+  <div class="header">
+    <h1>量化飞轮监控台 <small>gemini-quant-agent · 第一期原型 v0.1</small></h1>
+    <div class="header-right">
+      <span>股票池：<b>86</b> 只</span>
+      <span>参数版本：<b>SCREENING_PROFILE_V1</b></span>
+      <span class="badge"><span class="dot g"></span>管道运行中 · 连续 12 个交易日</span>
+    </div>
+  </div>
+
+  <!-- 管道状态条 -->
+  <div class="pipeline">
+    <div class="pipe-step ok">
+      <div class="stage">每日 18:30</div>
+      <div class="name">池数据刷新</div>
+      <div class="meta">86/86 成功 · 2 只公告源超时</div>
+      <div class="status"><span class="dot g"></span>完成 18:42</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step ok">
+      <div class="stage">L0</div>
+      <div class="name">变化检测</div>
+      <div class="meta">新增事件 <b>23</b> · 去重后 19</div>
+      <div class="status"><span class="dot g"></span>完成 18:44</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step ok">
+      <div class="stage">L0b</div>
+      <div class="name">语义打标</div>
+      <div class="meta">打标 11 条 · 拒答 1 条</div>
+      <div class="status"><span class="dot g"></span>完成 18:51</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step ok">
+      <div class="stage">L1</div>
+      <div class="name">刚性初筛</div>
+      <div class="meta">19 → <b>7</b> 只候选</div>
+      <div class="status"><span class="dot g"></span>完成 18:51</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step ok">
+      <div class="stage">L3</div>
+      <div class="name">语义研判</div>
+      <div class="meta">研判 7 · 预测 <b>4</b> · 拒绝 3</div>
+      <div class="status"><span class="dot g"></span>落账 19:03</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step pending">
+      <div class="stage">L4</div>
+      <div class="name">跟踪复盘</div>
+      <div class="meta">待到期 41 · 已评估 <b>28</b></div>
+      <div class="status"><span class="dot a"></span>次日零点后执行</div>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">累计预测（T+20）</div>
+      <div class="value blue">69</div>
+      <div class="sub">MOCK 兜底 6 条（单列统计）</div>
+    </div>
+    <div class="kpi">
+      <div class="label">方向命中率</div>
+      <div class="value up">61%</div>
+      <div class="sub">已评估 28 条 · 命中 17</div>
+    </div>
+    <div class="kpi">
+      <div class="label">平均超额收益（α）</div>
+      <div class="value up">+2.4%</div>
+      <div class="sub">相对行业基准 · 中位 +1.1%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">拒答率</div>
+      <div class="value">31%</div>
+      <div class="sub">证据不足主动拒绝 · 防幻觉</div>
+    </div>
+    <div class="kpi">
+      <div class="label">样本距离基线门槛</div>
+      <div class="value">28/30</div>
+      <div class="sub">达标前冻结一切规则调参</div>
+    </div>
+  </div>
+
+  <!-- 标签页 -->
+  <div class="tabs">
+    <div class="tab active" onclick="showTab(0)">变化事件流（L0）</div>
+    <div class="tab" onclick="showTab(1)">L0 事件库与迭代</div>
+    <div class="tab" onclick="showTab(2)">初筛漏斗（L1）</div>
+    <div class="tab" onclick="showTab(3)">预测账本（L3）</div>
+    <div class="tab" onclick="showTab(4)">复盘与基线（L4）</div>
+  </div>
+
+  <!-- Panel 0: L0 事件流 -->
+  <div class="panel active" id="p0">
+    <div class="card">
+      <div class="card-head">
+        <h3>今日变化事件 · 2026-10-14</h3>
+        <span class="link">导出 CSV</span>
+      </div>
+      <div class="filter-bar">
+        <span class="filter-chip on">全部 19</span>
+        <span class="filter-chip">价格异动 6</span>
+        <span class="filter-chip">放量 5</span>
+        <span class="filter-chip">技术突破 3</span>
+        <span class="filter-chip">公告簇 3</span>
+        <span class="filter-chip">新闻簇 2</span>
+      </div>
+      <table>
+        <tr><th>股票</th><th>确定性事件</th><th>语义标签（L0b）</th><th>信号值</th><th>证据</th><th>状态</th></tr>
+        <tr>
+          <td><b>000001</b> 平安银行</td>
+          <td><span class="tag event">NOTICE_CLUSTER</span></td>
+          <td><span class="tag sem-pos">业绩预增</span> 置信 0.92</td>
+          <td class="muted">3 日 4 条公告</td>
+          <td><span class="evi">n-88213 …</span></td>
+          <td><span class="tag st-pass">已入候选</span></td>
+        </tr>
+        <tr>
+          <td><b>300750</b> 宁德时代</td>
+          <td><span class="tag event">VOLUME_SPIKE</span> <span class="tag event">BREAKOUT_20D</span></td>
+          <td><span class="tag sem-pos">订单合同</span> 置信 0.88</td>
+          <td class="muted">量比 2.8 · 创 20 日新高</td>
+          <td><span class="evi">n-91002 …</span></td>
+          <td><span class="tag st-pass">已入候选</span></td>
+        </tr>
+        <tr>
+          <td><b>600036</b> 招商银行</td>
+          <td><span class="tag event">PRICE_MOVE</span></td>
+          <td><span class="tag sem-neutral">无新文本</span></td>
+          <td class="muted">+3.8%</td>
+          <td><span class="evi">k-77120</span></td>
+          <td><span class="tag st-pass">已入候选</span></td>
+        </tr>
+        <tr>
+          <td><b>002594</b> 比亚迪</td>
+          <td><span class="tag event">NEWS_CLUSTER</span></td>
+          <td><span class="tag sem-neg">减持</span> 置信 0.81</td>
+          <td class="muted">3 日 7 条新闻</td>
+          <td><span class="evi">w-55001 …</span></td>
+          <td><span class="tag st-block">初筛拦截：风险标签</span></td>
+        </tr>
+        <tr>
+          <td><b>601318</b> 中国平安</td>
+          <td><span class="tag event">MA_CROSS</span></td>
+          <td><span class="tag sem-neutral">—</span></td>
+          <td class="muted">MA5 下穿 MA20</td>
+          <td><span class="evi">k-77456</span></td>
+          <td><span class="tag st-block">初筛拦截：技术形态</span></td>
+        </tr>
+        <tr>
+          <td><b>688981</b> 中芯国际</td>
+          <td><span class="tag event">NOTICE_CLUSTER</span></td>
+          <td><span class="tag sem-neutral">无法判断</span>（拒答）</td>
+          <td class="muted">2 日 3 条公告</td>
+          <td><span class="evi">n-92311 …</span></td>
+          <td><span class="tag st-pass">已入候选（仅确定性事件）</span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="footer-note">
+      <b>L0 设计要点：</b>确定性检测器（价格/量/技术/公告簇/新闻簇）先跑，语义打标只处理"当日新增文本"；标签与证据 ID 一并写入 stock_change_event.signal_json，供 L1 归因与 L3 引用。拒答是合法输出，不算失败。
+    </div>
+  </div>
+
+  <!-- Panel NEW: L0 事件库与迭代 -->
+  <div class="panel" id="p-l0gov">
+    <div class="card">
+      <div class="card-head">
+        <h3>事件目录 · L0_PROFILE_V2（生效中 · 2026-10-10 发布）</h3>
+        <span class="link">版本历史 / 回滚</span>
+      </div>
+      <table>
+        <tr><th>事件定义</th><th>检测方式</th><th>加入版本</th><th>30 日触发</th><th>精确率</th><th>lift</th><th>状态</th></tr>
+        <tr>
+          <td><b>NOTICE_CLUSTER</b> + 业绩预增</td>
+          <td><span class="tag event">语义</span></td>
+          <td class="muted">V1（冷启动）</td>
+          <td>31</td>
+          <td class="hit">74%</td>
+          <td class="hit">2.6x</td>
+          <td><span class="tag st-pass">生效</span></td>
+        </tr>
+        <tr>
+          <td><b>订单合同</b>（公告文本语义）</td>
+          <td><span class="tag event">语义</span></td>
+          <td class="muted">V2 新增</td>
+          <td>18</td>
+          <td class="hit">69%</td>
+          <td class="hit">2.1x</td>
+          <td><span class="tag st-pass">生效</span></td>
+        </tr>
+        <tr>
+          <td><b>BREAKOUT_20D</b>（20 日新高/新低）</td>
+          <td><span class="tag event">确定性</span></td>
+          <td class="muted">V1</td>
+          <td>96</td>
+          <td>58%</td>
+          <td>1.4x</td>
+          <td><span class="tag st-pass">生效</span></td>
+        </tr>
+        <tr>
+          <td><b>VOLUME_SPIKE</b>（放量）</td>
+          <td><span class="tag event">确定性</span></td>
+          <td class="muted">V1</td>
+          <td>214</td>
+          <td class="muted">52%</td>
+          <td class="muted">1.1x</td>
+          <td><span class="tag st-pass">生效（观察）</span></td>
+        </tr>
+        <tr>
+          <td><b>高管减持</b>（语义 · 反向前瞻）</td>
+          <td><span class="tag event">语义</span></td>
+          <td class="muted">V1</td>
+          <td>27</td>
+          <td class="hit">反向 63%</td>
+          <td class="muted">—</td>
+          <td><span class="tag st-pass">生效</span></td>
+        </tr>
+        <tr>
+          <td><b>MA_CROSS</b>（均线交叉）</td>
+          <td><span class="tag event">确定性</span></td>
+          <td class="muted">V1</td>
+          <td>141</td>
+          <td class="muted">41%</td>
+          <td class="miss">0.8x</td>
+          <td><span class="tag st-block">观察态（不进漏斗）</span></td>
+        </tr>
+      </table>
+      <div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f3f4f6">
+        记分卡由每日统计自动维护（无 LLM）：<b>lift &lt; 1.0 自动降级为观察态</b>；事件定义=可版本化资产，L4 归因可追溯到具体版本。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>冷启动：L0_PROFILE_V1 是怎么立起来的（AI 挖掘 → 回测定标 → 人工审定）</h3></div>
+      <div style="padding:16px;font-size:13px;line-height:2.1">
+        <div>① <b>取样</b>：取近 3 年 ±20% 以上大波动样本 <b>800 例</b>（涨跌各半）——"值得捕捉的行情"</div>
+        <div>② <b>AI 事件挖掘</b>：LLM 逐例阅读波动前 5–20 交易日窗口的公告 / 新闻 / 量价，提案可规则化的前置信号 → <b>47 个候选</b>（含确定性代理规则 + 语义事件类型）</div>
+        <div>③ <b>回测定标</b>：对 47 个候选逐一回测——触发频次 / 前瞻收益分布 / 精确率 / lift，并标定阈值</div>
+        <div>④ <b>人工评审</b>：保留 lift ≥ 1.2x 且样本充足者 <b>9 个</b> → 发布 <b>L0_PROFILE_V1</b></div>
+        <div style="color:#6b7280;font-size:12px;margin-top:8px">分工：AI 提假设 · 回测做验证 · 人做审定。确定性指标（放量/突破）不由 AI 发明，AI 只做阈值标定与组合发现；语义事件类型归纳才是 AI 不可替代处。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>复盘驱动的发现队列（L0OptimizationDraft · 候选提案）</h3>
+        <span class="link">对标 SkillOptimizationDraft 审批流</span>
+      </div>
+      <table>
+        <tr><th>提案</th><th>来源（AI 挖掘）</th><th>证据</th><th>门禁状态</th></tr>
+        <tr>
+          <td>新增「大股东增持 + 回购」组合事件</td>
+          <td class="muted">漏报挖掘：3 例大涨样本无任何事件触发</td>
+          <td><span class="evi">案例#F-021 / F-044 / F-102</span></td>
+          <td><span class="pending-c">回测中（第 2 天）</span></td>
+        </tr>
+        <tr>
+          <td>收紧 VOLUME_SPIKE 阈值 2.0 → 2.5</td>
+          <td class="muted">误报挖掘：30 日触发 214 次仅 52% 有效</td>
+          <td><span class="evi">30 日记分卡统计</span></td>
+          <td><span class="pending-c">影子期 第 1/4 周</span></td>
+        </tr>
+        <tr>
+          <td>新增「政策行业利好」语义事件</td>
+          <td class="muted">漏报挖掘：行业级催化未落入单票文本</td>
+          <td><span class="evi">案例#F-077</span>（需行业新闻源）</td>
+          <td><span class="muted">待人工审批</span></td>
+        </tr>
+        <tr>
+          <td>废弃 MA_CROSS（降级观察态）</td>
+          <td class="muted">记分卡：lift 0.8x 低于 1.0 阈值</td>
+          <td><span class="evi">141 例统计</span></td>
+          <td><span class="tag st-block">已自动降级（仅记录）</span></td>
+        </tr>
+      </table>
+      <div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f3f4f6">
+        晋级门禁：回测（lift 显著优于现行）→ 影子期 4 周（与现行版本并行，不触碰线上漏斗）→ 人工/自动审批 → 版本递增 L0_PROFILE_Vn（可回滚）。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>迭代时间线</h3></div>
+      <div style="padding:16px;font-size:13px;line-height:2.1">
+        <div><b>09-01</b> · V1 发布：冷启动 800 例挖掘保留 9 个事件定义（人工审定）</div>
+        <div><b>09-20</b> · V1.1：VOLUME_SPIKE 阈值 1.5 → 2.0（首月误报率 61% → 48%）</div>
+        <div><b>10-10</b> · V2：新增「订单合同」「政策行业利好」语义事件（漏报挖掘驱动，影子期验证通过）</div>
+        <div><b>10-14</b> · 当前：MA_CROSS 自动降级；3 项提案在门禁流程中</div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      <b>L0 自迭代设计要点：</b>三速回路——<b>快回路</b>（每日，纯统计记分卡，噪声事件自动降级）/ <b>慢回路</b>（每月，LLM 挖掘漏报与误报，产出提案）/ <b>门禁</b>（回测 + 4 周影子期 + 审批，版本化晋级）。AI 负责提假设，回测负责验证，人负责准入——L0 目录与 Skill 一样是可修订、可回滚的资产。
+    </div>
+  </div>
+
+  <!-- Panel 1: L1 漏斗 -->
+  <div class="panel" id="p1">
+    <div class="card">
+      <div class="card-head">
+        <h3>今日初筛漏斗 · SCREENING_PROFILE_V1</h3>
+        <span class="link">参数版本对比</span>
+      </div>
+      <div class="funnel-wrap">
+        <div class="funnel">
+          <div class="funnel-row"><div class="funnel-bar f1">股票池</div><span class="funnel-count">86 只</span></div>
+          <div class="funnel-row"><div class="funnel-bar f2">触发变化事件</div><span class="funnel-count">19 只（去重）</span></div>
+          <div class="funnel-row"><div class="funnel-bar f3">通过刚性规则</div><span class="funnel-count">9 只</span></div>
+          <div class="funnel-row"><div class="funnel-bar f4">候选池（≤50 上限）</div><span class="funnel-count">7 只 · 评分排序</span></div>
+        </div>
+        <div class="rules">
+          <h4>规则通过 / 拦截计数（今日）</h4>
+          <div class="rule-item"><span>非 ST · 非退市风险</span><b>19 放行 / 0 拦截</b></div>
+          <div class="rule-item"><span>20 日日均成交额 ≥ 5000 万</span><b>16 放行 / 3 拦截</b></div>
+          <div class="rule-item"><span>价格 2–200 元区间</span><b>15 放行 / 1 拦截</b></div>
+          <div class="rule-item"><span>负向语义标签拦截（减持/风险警示）</span><b>11 放行 / 4 拦截</b></div>
+          <div class="rule-item"><span>事件加权评分排序</span><b>取前 7</b></div>
+          <div style="margin-top:12px" class="muted">每只股票的放行/拦截规则已写入 screening_result 表，供第二期分层归因：错在漏斗还是错在研判。</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">
+      <b>L1 设计要点：</b>100% 确定性、可重放（同输入必同输出）；所有阈值集中在版本化配置 PROFILE_V1 中；基线达标前禁止调参。
+    </div>
+  </div>
+
+  <!-- Panel 2: L3 账本 -->
+  <div class="panel" id="p2">
+    <div class="card">
+      <div class="card-head">
+        <h3>预测账本 · PredictionLedger（近 5 条）</h3>
+        <span class="link">全部 69 条</span>
+      </div>
+      <table>
+        <tr><th>时间</th><th>股票</th><th>方向</th><th>时间窗</th><th>入场价</th><th>置信</th><th>依据链（evidence_ids）</th><th>模型</th><th>状态</th></tr>
+        <tr>
+          <td class="muted">10-14 19:03</td>
+          <td><b>300750</b> 宁德时代</td>
+          <td><span class="tag buy">BUY</span></td>
+          <td>T+20</td>
+          <td>258.60</td>
+          <td><span class="tag conf">0.74</span></td>
+          <td><span class="evi">事件#812(放量+新高)</span> · <span class="evi">公告#n-91002(海外订单)</span> · <span class="evi">K线摘要</span></td>
+          <td class="muted">DeepSeek V4</td>
+          <td><span class="pending-c">跟踪中</span></td>
+        </tr>
+        <tr>
+          <td class="muted">10-14 19:03</td>
+          <td><b>000001</b> 平安银行</td>
+          <td><span class="tag buy">BUY</span></td>
+          <td>T+20</td>
+          <td>11.42</td>
+          <td><span class="tag conf">0.61</span></td>
+          <td><span class="evi">事件#806(公告簇)</span> · <span class="evi">公告#n-88213(业绩预增)</span></td>
+          <td class="muted">DeepSeek V4</td>
+          <td><span class="pending-c">跟踪中</span></td>
+        </tr>
+        <tr>
+          <td class="muted">10-13 19:02</td>
+          <td><b>600036</b> 招商银行</td>
+          <td><span class="tag hold">HOLD</span></td>
+          <td>T+20</td>
+          <td>38.15</td>
+          <td><span class="tag conf">0.55</span></td>
+          <td><span class="evi">事件#795(价格异动)</span></td>
+          <td class="muted">DeepSeek V4</td>
+          <td><span class="pending-c">跟踪中</td>
+        </tr>
+        <tr>
+          <td class="muted">10-09 19:04</td>
+          <td><b>601899</b> 紫金矿业</td>
+          <td><span class="tag buy">BUY</span></td>
+          <td>T+20</td>
+          <td>17.80</td>
+          <td><span class="tag conf">0.69</span></td>
+          <td><span class="evi">事件#740(放量)</span> · <span class="evi">新闻#w-54112(金属价格)</span></td>
+          <td class="muted">DeepSeek V4</td>
+          <td><span class="pending-c">跟踪中 · 已 3 交易日</td>
+        </tr>
+        <tr>
+          <td class="muted">09-15 19:05</td>
+          <td><b>002415</b> 海康威视</td>
+          <td><span class="tag buy">BUY</span></td>
+          <td>T+20</td>
+          <td>29.30</td>
+          <td><span class="tag conf">0.58</span></td>
+          <td><span class="evi">事件#512(技术突破)</span></td>
+          <td><span class="muted">MOCK_GENERAL</span> <span class="tag mock">兜底</span></td>
+          <td><span class="pending-c">已到期 · 待复盘</span></td>
+        </tr>
+      </table>
+    </div>
+    <div class="footer-note">
+      <b>L3 设计要点：</b>服务端组装证据包（不给模型自由检索权）；输出强制符合 PredictionCreate Schema 且 evidence_ids 经服务端硬校验；每日上限 20 条；MOCK 兜底照常落账但单独统计。
+    </div>
+  </div>
+
+  <!-- Panel 3: L4 复盘 -->
+  <div class="panel" id="p3">
+    <div class="report-grid">
+      <div class="card">
+        <div class="card-head"><h3>已评估预测（T+20 到期）</h3></div>
+        <table class="mini-table">
+          <tr><th>股票</th><th>方向</th><th>实际收益</th><th>行业基准</th><th>超额 α</th><th>判定</th></tr>
+          <tr><td><b>600519</b> 贵州茅台</td><td><span class="tag buy">BUY</span></td><td class="hit">+6.2%</td><td class="muted">+2.1%</td><td class="hit">+4.1%</td><td><span class="hit">命中 ✓</span></td></tr>
+          <tr><td><b>000858</b> 五粮液</td><td><span class="tag buy">BUY</span></td><td class="hit">+3.9%</td><td class="muted">+2.1%</td><td class="hit">+1.8%</td><td><span class="hit">命中 ✓</span></td></tr>
+          <tr><td><b>601127</b> 赛力斯</td><td><span class="tag buy">BUY</span></td><td class="miss">-2.4%</td><td class="muted">+0.8%</td><td class="miss">-3.2%</td><td><span class="miss">未命中 ✗</span></td></tr>
+          <tr><td><b>002460</b> 赣锋锂业</td><td><span class="tag sell">SELL</span></td><td class="miss">-1.1%</td><td class="muted">-0.3%</td><td class="miss">-0.8%</td><td><span class="hit">命中 ✓（做空方向对）</span></td></tr>
+          <tr><td><b>603799</b> 华友钴业</td><td><span class="tag hold">HOLD</span></td><td class="muted">+0.4%</td><td class="muted">+0.9%</td><td class="muted">-0.5%</td><td><span class="muted">中性</span></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>基线报告摘要（按事件类型）</h3></div>
+        <table class="mini-table">
+          <tr><th>事件类型</th><th>样本</th><th>命中率</th><th></th><th>平均 α</th></tr>
+          <tr><td>NOTICE_CLUSTER + 业绩预增</td><td>9</td><td class="hit">78%</td><td><span class="bar-wrap"><span class="bar" style="width:78%;background:#dc2626"></span></span></td><td class="hit">+3.6%</td></tr>
+          <tr><td>VOLUME_SPIKE + 订单合同</td><td>7</td><td class="hit">71%</td><td><span class="bar-wrap"><span class="bar" style="width:71%;background:#dc2626"></span></span></td><td class="hit">+2.9%</td></tr>
+          <tr><td>PRICE_MOVE（无文本）</td><td>6</td><td class="muted">50%</td><td><span class="bar-wrap"><span class="bar" style="width:50%;background:#9ca3af"></span></span></td><td class="muted">+0.3%</td></tr>
+          <tr><td>MA_CROSS</td><td>4</td><td class="miss">25%</td><td><span class="bar-wrap"><span class="bar" style="width:25%;background:#16a34a"></span></span></td><td class="miss">-1.2%</td></tr>
+          <tr><td colspan="5" class="muted">MOCK 兜底样本 6 条单独统计，不计入上表。</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="footer-note">
+      <b>L4 设计要点：</b>超额 α = 个股 T+20 收益 − 行业基准 T+20 收益（无行业基准回退沪深300）；按事件类型 / Skill 版本 / 模型实例分组归因。<br>
+      <b>当前纪律：样本 28/30，距离基线门槛还差 2 条 —— 达标前任何阈值调整都是对噪声拟合。</b>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showTab(i) {
+  document.querySelectorAll('.tab').forEach((t, k) => t.classList.toggle('active', k === i));
+  document.querySelectorAll('.panel').forEach((p, k) => p.classList.toggle('active', k === i));
+}
+</script>
+</body>
+</html>
