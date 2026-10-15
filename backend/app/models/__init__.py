@@ -37,6 +37,7 @@ from app.models.ai_hub import (
 )
 from app.models.schema_catalog import DatabaseTableComment
 from app.models.context_event import StockContextEvent
+from app.models.change_event import StockChangeEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.models.decision_review import (
@@ -92,6 +93,7 @@ __all__ = [
     "StockRealtimeQuote",
     "StockSymbol",
     "WatchlistItem",
+    "StockChangeEvent",
     "ResearchReportRecord",
     "PredictionLedger",
     "SkillOptimizationDraft",

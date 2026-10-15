@@ -43,6 +43,14 @@ def enqueue_due_jobs(now: datetime | None = None) -> int:
                 payload={"business_date": day},
             )
             scheduled += 1
+        if (local_now.hour, local_now.minute) >= (16, 0):
+            dispatcher.enqueue(
+                task_type="l0_change_detection",
+                pipeline_type="l0_change_detection",
+                idempotency_key=f"l0_change_detection:{day}",
+                payload={"business_date": day},
+            )
+            scheduled += 1
     return scheduled
 
 
