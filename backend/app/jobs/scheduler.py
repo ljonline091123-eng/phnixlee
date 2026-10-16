@@ -45,6 +45,16 @@ def enqueue_due_jobs(now: datetime | None = None) -> int:
             scheduled += 1
         if (local_now.hour, local_now.minute) >= (16, 0):
             dispatcher.enqueue(
+                task_type="watch_pool_data_refresh",
+                pipeline_type="watch_pool_data_refresh",
+                idempotency_key=f"watch_pool_data_refresh:{day}",
+                payload={"business_date": day},
+            )
+            scheduled += 1
+        if (local_now.hour, local_now.minute) >= (17, 0):
+            # Fallback only: the pool refresh chains the detection job as soon
+            # as it finishes (same idempotency key, first enqueue wins).
+            dispatcher.enqueue(
                 task_type="l0_change_detection",
                 pipeline_type="l0_change_detection",
                 idempotency_key=f"l0_change_detection:{day}",

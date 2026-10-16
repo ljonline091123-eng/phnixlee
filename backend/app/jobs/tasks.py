@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.orchestration.background import MasterDataSyncWorkflow, PredictionReviewWorkflow
+from app.orchestration.watch_pool import WatchPoolRefreshWorkflow
 from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.orchestration.company_governance import CompanyGovernanceWorkflow
 from app.services.selection import refresh_tracking
@@ -25,6 +26,7 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
     "daily_master_sync": MasterDataSyncWorkflow().execute,
     "daily_prediction_review": PredictionReviewWorkflow().execute,
     "daily_selection_tracking_refresh": lambda payload: _refresh_selection_tracking(payload),
+    "watch_pool_data_refresh": WatchPoolRefreshWorkflow().execute,
     "l0_change_detection": lambda payload: _run_l0_change_detection(payload),
     STOCK_BATCH_TASK: execute_stock_batch_governance,
     QA_TASK: execute_qa_sync,
