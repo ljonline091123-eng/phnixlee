@@ -11,7 +11,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.core.config import get_settings
 from app.connectors.model_adapters import ModelExecutionResult
-from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule
+from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
 from app.services.model_hub import ModelHubService, seed_default_models
 
 
@@ -89,6 +89,19 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(log.status, "SUCCESS")
         self.assertIn("已收到", log.response_text)
         self.assertIsNotNone(self.db.scalar(select(ModelCallLog).where(ModelCallLog.id == log.id)))
+
+    def test_soft_analysis_limit_includes_skill_instructions(self) -> None:
+        self.db.add(ModelSkill(
+            skill_code="TEST_LONG_PROMPT", skill_name="Long prompt", instructions="s" * 2_000,
+            enabled=True, skill_type="PROMPT_SOP",
+        ))
+        self.db.commit()
+        with self.assertRaisesRegex(ValueError, "after skill instructions"):
+            ModelHubService(self.db).chat(
+                task_type="stock_screening",
+                messages=[{"role": "user", "content": "u" * 59_000}],
+                metadata_json={"skill_code": "TEST_LONG_PROMPT"},
+            )
 
     def test_gemini_runtime_key_is_used_without_persisting_it(self) -> None:
         instance = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "GEMINI_FLASH"))
