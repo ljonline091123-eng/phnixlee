@@ -510,22 +510,68 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
     return run
 
 
+def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
+    """Build a bounded model view; the persisted evidence remains unabridged."""
+    evidence = item.get("evidence_json") or {}
+    analysis = item.get("analysis_json") or {}
+
+    def clip(value: Any, limit: int) -> Any:
+        if value is None or isinstance(value, (int, float, bool)):
+            return value
+        text = str(value)
+        return text[:limit]
+
+    def rows(key: str, limit: int, fields: tuple[str, ...], excerpt_limit: int = 320) -> list[dict[str, Any]]:
+        source = evidence.get(key) or []
+        result = []
+        if isinstance(source, list):
+            for row in source[:limit]:
+                if not isinstance(row, dict):
+                    continue
+                result.append({
+                    field: clip(row.get(field), excerpt_limit if field in {"excerpt", "content", "text", "evidence_text", "evidence_excerpt"} else 180)
+                    for field in fields if row.get(field) is not None
+                })
+        return result
+
+    compact_evidence = {
+        "data_mode": evidence.get("data_mode"), "data_cutoff": evidence.get("data_cutoff"),
+        "model_document_ids": (evidence.get("model_document_ids") or evidence.get("document_ids") or [])[:20],
+        "document_ids": (evidence.get("document_ids") or [])[:20],
+        "evidence_fact_ids": (evidence.get("evidence_fact_ids") or [])[:40],
+        "documents": rows("documents", 6, ("id", "title", "source_table", "url", "excerpt", "content"), 360),
+        "facts": rows("facts", 8, ("id", "fact_type", "title", "indicator", "value", "unit", "report_period", "source_table", "source_record_id", "verification_status", "evidence_excerpt", "evidence_text"), 240),
+        "chunks": rows("chunks", 6, ("id", "document_id", "section_title", "title", "text", "content", "embedding_status"), 320),
+        "relations": rows("relations", 6, ("id", "head", "relation", "tail", "evidence_text"), 240),
+        "graph_paths": rows("graph_paths", 6, ("id", "subject_name", "predicate", "object_name", "evidence_document_id", "evidence_excerpt", "verification_status"), 240),
+        "missing_data": [clip(value, 180) for value in (evidence.get("missing_data") or [])[:12]],
+        "counts": evidence.get("counts") or {},
+    }
+    return {
+        "market": item.get("market"), "symbol": item.get("symbol"), "name": item.get("name"),
+        "entry_price": item.get("entry_price"), "entry_date": item.get("entry_date"),
+        "hard_score": item.get("hard_score"), "hard_rules_json": item.get("hard_rules_json") or {},
+        "analysis_json": {key: clip(analysis.get(key), 700) for key in ("summary", "thesis", "source", "inference_boundary", "missing_data") if analysis.get(key) is not None},
+        "evidence_json": compact_evidence,
+    }
+
+
 def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple[dict[str, Any], float]]) -> None:
     """Ask the selected model to rank only the bounded hard-filter pool."""
     import json
 
     from app.services.model_hub import ModelHubService
 
-    selected = [item for item, _ in candidates[:50]]
+    selected = [_model_candidate_context(item) for item, _ in candidates[:50]]
     schema = SelectionModelOutput.model_json_schema()
-    # Each batch stays below the model hub's 60k-character input guard.
-    # Preserve all selected source types instead of dropping late candidates.
+    # Keep headroom for the system schema and the model skill prompt. The full,
+    # untruncated evidence remains in SelectionCandidate.evidence_json.
     batches: list[list[dict[str, Any]]] = []
     batch: list[dict[str, Any]] = []
     batch_size = 0
     for item in selected:
         size = len(json.dumps(item, ensure_ascii=False))
-        if batch and (batch_size + size > 50_000 or len(batch) >= 5):
+        if batch and (batch_size + size > 32_000 or len(batch) >= 5):
             batches.append(batch)
             batch, batch_size = [], 0
         batch.append(item)

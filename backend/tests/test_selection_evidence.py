@@ -122,7 +122,9 @@ def test_unmatched_news_is_excluded_from_selection_and_graph_rag_without_deletin
 def test_model_calls_batch_large_evidence_and_use_workflow_schema():
     run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None)
     pool = [({"symbol": f"DEMO{index:03}", "analysis_json": {}, "evidence_json": {
-        "document_ids": [index], "documents": [{"id": index, "excerpt": "x" * 12_000}],
+        "document_ids": [index], "documents": [{"id": index, "excerpt": "x" * 120_000}],
+        "chunks": [{"id": f"chunk-{index}", "text": "y" * 100_000}],
+        "lineage": [{"metadata": {"oversized": "z" * 100_000}}],
     }}, 1.0) for index in range(20)]
     requests = []
 
@@ -133,6 +135,8 @@ def test_model_calls_batch_large_evidence_and_use_workflow_schema():
         text = kwargs["messages"][-1]["content"]
         batch = json.loads(text[text.index("["):])
         assert len(batch) <= 5
+        assert all(len(json.dumps(row, ensure_ascii=False)) < 32_000 for row in batch)
+        assert len(batch[0]["evidence_json"]["documents"][0]["excerpt"]) <= 360
         output = {"candidates": [{"symbol": row["symbol"], "decision": "WATCH", "confidence": .5,
             "reasoning": "Demo inference", "target_price": None, "stop_price": None,
             "horizon_sessions": 10, "evidence_document_ids": row["evidence_json"]["document_ids"]} for row in batch]}
@@ -143,4 +147,5 @@ def test_model_calls_batch_large_evidence_and_use_workflow_schema():
     assert len(requests) > 1
     assert run.analysis_mode == "MODEL_COMPLETED"
     assert all(row["analysis_json"]["model_output_status"] == "SUCCESS" for row, _ in pool)
+    assert len(pool[0][0]["evidence_json"]["documents"][0]["excerpt"]) == 120_000
     assert all(request["instance_code"] is None for request in requests)
