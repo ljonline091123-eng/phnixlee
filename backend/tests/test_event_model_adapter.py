@@ -13,6 +13,8 @@ from app.models.ai_hub import ModelInstance
     ("deepseek-v4-flash", "NEWS_NOTICE_SEMANTIC_ANALYSIS", True, True),
     ("deepseek-v4-flash", "DOCUMENT_GOVERNANCE_PLANNING", True, True),
     ("deepseek-v4-flash", "DOCUMENT_SPECIALIST_DRAFT", True, True),
+    ("deepseek-v4-pro", "STOCK_SELECTION_ANALYSIS", True, True),
+    ("deepseek-v4-pro", "STOCK_SELECTION_ANALYSIS", False, False),
     ("deepseek-v4-flash", "ADVISORY_QUALITY_REVIEW", True, False),
     ("deepseek-v4-flash", "NEWS_NOTICE_EVENT_EXTRACTION", False, False),
     ("other-model", "NEWS_NOTICE_EVENT_EXTRACTION", True, False),

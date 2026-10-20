@@ -174,6 +174,8 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
         "content": content[:1200] if include_content else None,
         "content_hash": _hash(content),
         "metadata": metadata,
+        "published_at": metadata.get("published_at"),
+        "url": metadata.get("url"),
         "updated_at": _iso(row.updated_at),
     }
 
@@ -575,6 +577,14 @@ def _eligible_chunk_rows(
 
 
 def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:
+    metadata = row.metadata_json or {}
+    embedding = metadata.get("embedding") or {}
+    kind = (row.embedding_kind or "NONE").upper()
+    quality = embedding.get("model_quality")
+    is_hash = kind == "HASH" or quality == "HASH_ONLY" or "HASH" in (row.embedding_model or "").upper()
+    embedding_status = "HASH_ONLY" if is_hash else (
+        "AVAILABLE" if kind == "SEMANTIC" and embedding.get("vector") else "MISSING"
+    )
     return {
         "id": row.id,
         "document_id": row.document_id,
@@ -586,12 +596,13 @@ def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:
         "end_offset": row.end_offset,
         "parser_version": row.parser_version,
         "embedding_model": row.embedding_model,
-        "embedding_status": "AVAILABLE" if (row.metadata_json or {}).get("embedding", {}).get("vector") else
-                            ("DECLARED_ONLY" if row.embedding_model else "NOT_GENERATED"),
-        "embedding_quality": (row.metadata_json or {}).get("embedding", {}).get("model_quality"),
-        "section_title": (row.metadata_json or {}).get("section_title"),
-        "boundary_type": (row.metadata_json or {}).get("boundary_type"),
-        "metadata": row.metadata_json or {},
+        "embedding_status": embedding_status,
+        "embedding_kind": kind,
+        "embedding_quality": quality,
+        "section_title": row.section_title or metadata.get("section_title"),
+        "section_status": row.section_status,
+        "boundary_type": metadata.get("boundary_type"),
+        "metadata": metadata,
     }
 
 

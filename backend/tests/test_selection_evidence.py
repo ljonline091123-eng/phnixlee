@@ -149,3 +149,31 @@ def test_model_calls_batch_large_evidence_and_use_workflow_schema():
     assert all(row["analysis_json"]["model_output_status"] == "SUCCESS" for row, _ in pool)
     assert len(pool[0][0]["evidence_json"]["documents"][0]["excerpt"]) == 120_000
     assert all(request["instance_code"] is None for request in requests)
+
+
+def test_compact_document_whitelist_matches_visible_text_and_chunk_proofs():
+    from app.services.selection import _model_candidate_context
+    item = {"evidence_json": {"model_document_ids": list(range(1, 50)), "document_ids": list(range(1, 50)),
+        "documents": [{"id": 49, "excerpt": "实际可见原文"}],
+        "chunks": [{"id": "chunk", "document_id": "48", "text": "可见切片"}],
+        "graph_paths": [{"id": 1, "evidence_document_id": 47, "evidence_excerpt": "关系证据"}]}}
+    evidence = _model_candidate_context(item)["evidence_json"]
+    assert evidence["model_document_ids"] == [47, 48, 49]
+    assert evidence["document_ids"] == [47, 48, 49]
+
+
+def test_compact_financial_evidence_retains_revenue_and_profit_after_source_metadata():
+    from app.services.selection import _model_candidate_context
+    raw = {f"SOURCE_METADATA_{index}": str(index) for index in range(25)}
+    raw.update(TOTALOPERATEREVE=1205169675.91, PARENTNETPROFIT=-68175381.59,
+               KCFJCXSYJLR=-72603322.09, EPSJB=-0.1144,
+               REPORT_DATE="2026-06-30", CURRENCY="CNY")
+    item = {"evidence_json": {"facts": [{"id": "finance:1", "fact_type": "FINANCIAL_OBSERVATION",
+        "properties": {"report_period": "2026-06-30", "currency": "CNY", "data": raw}}]}}
+    view = _model_candidate_context(item)["evidence_json"]["facts"][0]["properties"]
+    assert view["data"]["TOTALOPERATEREVE"] == 1205169675.91
+    assert view["data"]["PARENTNETPROFIT"] == -68175381.59
+    assert view["data"]["KCFJCXSYJLR"] == -72603322.09
+    assert view["report_period"] == "2026-06-30"
+    assert len(view["data"]) <= 16
+    assert len(raw) == 31  # bounded view must not mutate historical evidence

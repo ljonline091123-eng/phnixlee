@@ -121,13 +121,23 @@ export type SelectionTracking = {
   snapshots: SelectionSnapshot[];
 };
 export type SelectionRunCreate = {
+  universe_scope?: string;
   market: string; symbols: string[]; candidate_limit: number; min_abs_change_pct: number; min_volume_ratio: number;
   model_instance_code: string | null; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
 };
+export type BatchAcceptance = {
+  prepared: boolean; graph_id: number | null; knowledge_base_id: number | null; graph_status: string;
+  market: string; symbols: string[]; rows: Array<{symbol: string; name: string; company_linked: boolean;
+    documents: number; selected_chunks: number; facts: number; relations: number; lineage: number; passed: boolean; missing_data: string[]}>;
+  scope_notes: string[]; prepared_at: string | null; datasets: Record<string, SelectionRecord>;
+};
 export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?: number; stop_price?: number; target_return_pct?: number; confidence?: number; notes?: string };
 export const selectionApi = {
+  acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
+  startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
+  document: (graphId: number, documentId: number) => request<SelectionRecord>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
   createRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs", { method: "POST", body: JSON.stringify(payload) }),
   review: (id: number, payload: SelectionReview) => request<SelectionCandidate>(`/selection/candidates/${id}/review`, { method: "POST", body: JSON.stringify(payload) }),
   listTracking: () => request<SelectionTracking[]>("/selection/tracking"),

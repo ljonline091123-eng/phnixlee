@@ -9,7 +9,7 @@ from app.orchestration.background import MasterDataSyncWorkflow, PredictionRevie
 from app.orchestration.watch_pool import WatchPoolRefreshWorkflow
 from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.orchestration.company_governance import CompanyGovernanceWorkflow
-from app.services.selection import refresh_tracking
+from app.services.selection import refresh_tracking, execute_selection_job
 from app.services.change_detection import run_change_detection
 from app.services.stock_batch import TASK_TYPE as STOCK_BATCH_TASK, execute_stock_batch_governance
 from app.services.investor_qa import TASK_TYPE as QA_TASK, execute_qa_sync
@@ -21,6 +21,7 @@ TaskHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 TASK_HANDLERS: dict[str, TaskHandler] = {
+    "selection_analysis": execute_selection_job,
     "company_graph_governance": CompanyGovernanceWorkflow().execute,
     'foundation_archive_evidence': LegacyEvidenceArchiveWorkflow().execute,
     "daily_master_sync": MasterDataSyncWorkflow().execute,
