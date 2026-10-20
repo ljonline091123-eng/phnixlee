@@ -773,6 +773,19 @@ def _validate_multi_source_output(output: dict[str, Any], item: dict[str, Any], 
     """Fail closed on fabricated citations, quotes and silently omitted sources."""
     evidence = item["evidence_json"]
     documents = {row["id"]: row for row in evidence.get("documents", [])}
+    # A document can be present in the prompt as a cited graph-path or chunk
+    # source without also being in the capped disclosure/document list.
+    # Preserve citation traceability for those references, while leaving them
+    # ineligible as news/notice full-text evidence below.
+    for chunk in evidence.get("chunks", []):
+        doc_id = chunk.get("document_id")
+        if doc_id is not None:
+            documents.setdefault(int(doc_id) if str(doc_id).isdigit() else doc_id,
+                                 {"id": doc_id, "source_table": None, "content_state": "CHUNK_ONLY"})
+    for path in evidence.get("graph_paths", []):
+        doc_id = path.get("evidence_document_id")
+        if doc_id is not None:
+            documents.setdefault(doc_id, {"id": doc_id, "source_table": None, "content_state": "GRAPH_REFERENCE_ONLY"})
     fact_ids = set(evidence.get("evidence_fact_ids") or [])
     path_ids = {row["id"] for row in evidence.get("graph_paths", [])}
     dimensions = output.get("dimensions") or []
@@ -781,7 +794,15 @@ def _validate_multi_source_output(output: dict[str, Any], item: dict[str, Any], 
         raise ValueError("模型返回重复的分析维度")
     if required and set(keys) != {"NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"}:
         raise ValueError("模型遗漏新闻、公告或其他必需的分析维度")
-    all_docs = set(output.get("evidence_document_ids") or [])
+    # Normalize the aggregate citation list from dimension/event references.
+    # Each reference is still checked against the exact bounded prompt below.
+    referenced_docs = {doc_id for row in dimensions for doc_id in (row.get("evidence_document_ids") or [])}
+    referenced_docs.update(event["document_id"] for event in (output.get("events") or [])
+                           if event.get("document_id") is not None)
+    all_docs = set(output.get("evidence_document_ids") or []) | referenced_docs
+    output["evidence_document_ids"] = sorted(all_docs)
+    if not all_docs.issubset(documents):
+        raise ValueError("模型引用了本次压缩上下文之外的文档")
     for row in dimensions:
         docs = set(row.get("evidence_document_ids") or [])
         if not docs.issubset(documents) or not docs.issubset(all_docs):
@@ -806,6 +827,62 @@ def _validate_multi_source_output(output: dict[str, Any], item: dict[str, Any], 
         normalize = lambda value: "".join(str(value or "").split())
         if normalize(event["quote"]) not in normalize(doc.get("content") or doc.get("excerpt")):
             raise ValueError("事件原文引句未出现在本次模型读取的正文中")
+
+
+def _build_local_multi_source_analysis(item: dict[str, Any]) -> dict[str, Any]:
+    """Create an auditable, non-semantic fallback report from loaded evidence.
+
+    This is deliberately not presented as an LLM conclusion.  It makes every
+    source dimension visible when a model provider is unavailable, while
+    preserving the distinction between evidence presence and interpretation.
+    """
+    evidence = item.get("evidence_json") or {}
+    documents = [row for row in (evidence.get("documents") or []) if isinstance(row, dict)]
+    facts = [row for row in (evidence.get("facts") or []) if isinstance(row, dict)]
+    for category, rows in (evidence.get("structured_observations") or {}).items():
+        for row in rows if isinstance(rows, list) else []:
+            if isinstance(row, dict):
+                facts.append({**row, "_category": category, "id": row.get("id") or f"structured:{category}:{len(facts)}"})
+    paths = [row for row in (evidence.get("graph_paths") or []) if isinstance(row, dict)]
+    source_docs = lambda source: [row for row in documents if row.get("source_table") == source
+                                  and row.get("content_state") != "METADATA_ONLY"]
+    source_facts = lambda needles: [row for row in facts if any(needle in str(row.get("fact_type") or row.get("source_table") or row.get("_category") or "").upper()
+                                                                  for needle in needles)]
+    dimensions: list[dict[str, Any]] = []
+    specs = [
+        ("NEWS", "新闻", source_docs("stock_news"), "新闻正文"),
+        ("NOTICE", "公告", source_docs("stock_notice"), "公告正文"),
+        ("FINANCIAL", "财务", source_facts(("FINANC", "REPORT")), "财务事实"),
+        ("PRICE_VOLUME", "量价", source_facts(("MARKET", "PRICE", "KLINE", "QUOTE")), "量价观测"),
+        ("FUND_FLOW", "资金", source_facts(("FUND", "CAPITAL", "MARGIN", "FLOW")), "资金流事实"),
+        ("COMPANY", "经营与股东", source_facts(("COMPANY", "SHAREHOLDER", "CORPORATE", "HOLDER")), "公司/股东事实"),
+        ("GRAPH", "公司关联与图谱", paths, "图谱关系路径"),
+    ]
+    for code, label, rows, kind in specs:
+        ids = [row.get("id") for row in rows if row.get("id") is not None]
+        if code == "GRAPH":
+            summary = f"已载入 {len(rows)} 条{kind}；这里只说明图谱中存在可追溯关系，不推断因果或涨跌方向。" if rows else "当前选定图谱没有载入可用关系，不能据此判断公司关联。"
+            relation_ids = ids
+            doc_ids: list[int] = []
+            fact_ids: list[str] = []
+        elif rows:
+            summary = f"已载入 {len(rows)} 条{kind}，可在证据明细中核对原文或数值；本地回退报告不对其作语义方向判断。"
+            relation_ids = []
+            doc_ids = ids if code in {"NEWS", "NOTICE"} else []
+            fact_ids = [str(value) for value in ids if value is not None] if code not in {"NEWS", "NOTICE"} else []
+        else:
+            summary = f"当前证据范围没有可用{label}数据，已标记为缺口；不能将缺失解释为利好或利空。"
+            relation_ids, doc_ids, fact_ids = [], [], []
+        dimensions.append({"dimension": code, "status": "SUPPORTED" if rows else "INSUFFICIENT",
+                           "direction": "UNKNOWN", "summary": summary,
+                           "evidence_document_ids": doc_ids[:12], "evidence_fact_ids": fact_ids[:12],
+                           "evidence_relation_ids": relation_ids[:12]})
+    return {"headline": "本地多源证据已汇总，等待模型或人工复核",
+            "decision": "WATCH", "confidence": None, "target_price": None, "stop_price": None,
+            "dimensions": dimensions, "events": [], "evidence_document_ids": sorted({value for row in dimensions for value in row["evidence_document_ids"]}),
+            "positives": [], "risks": ["本次模型服务未返回有效结果，不能把本地证据汇总视为投资结论。"],
+            "watch_conditions": ["模型服务恢复后重新执行七维语义研判。"],
+            "report_type": "LOCAL_MULTI_SOURCE_EVIDENCE", "source_note": "仅统计本次实际载入的证据，不进行语义推断。"}
 
 
 def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple[dict[str, Any], float]]) -> None:
@@ -856,10 +933,12 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
             by_symbol = {item.symbol: item.model_dump() for item in parsed.candidates}
             if len(by_symbol) != len(parsed.candidates) or set(by_symbol) != {item["symbol"] for item in batch}:
                 raise ValueError("模型必须逐一返回候选池中的股票，不能遗漏、重复或增加股票")
+            invalid_items: list[tuple[dict[str, Any], str]] = []
             for item in batch:
                 allowed_ids = set(item["evidence_json"].get("model_document_ids") or
                                   item["evidence_json"].get("document_ids", []))
-                if not set(by_symbol[item["symbol"]]["evidence_document_ids"]).issubset(allowed_ids):
+                output_item = by_symbol[item["symbol"]]
+                if not set(output_item["evidence_document_ids"]).issubset(allowed_ids):
                     raise ValueError("模型引用了候选上下文之外的文档")
                 allowed_facts = set(item["evidence_json"].get("evidence_fact_ids", []))
                 returned_facts = set(by_symbol[item["symbol"]].get("evidence_fact_ids") or [])
@@ -870,9 +949,46 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
                 returned_chunks = {str(value) for value in (by_symbol[item["symbol"]].get("evidence_chunk_ids") or [])}
                 if not returned_chunks.issubset(allowed_chunks):
                     raise ValueError("模型引用了候选上下文之外的文档切片")
-                _validate_multi_source_output(by_symbol[item["symbol"]], item,
-                    required=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_V2")
-                predictions[item["symbol"]] = (by_symbol[item["symbol"]], log.id, log.instance_code)
+                try:
+                    _validate_multi_source_output(output_item, item,
+                        required=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_V2")
+                except ValueError as exc:
+                    invalid_items.append((item, str(exc)))
+            if invalid_items:
+                retry_items = [item for item, _reason in invalid_items]
+                retry_context = json.dumps(retry_items, ensure_ascii=False, separators=(",", ":"))
+                retry_errors = "；".join(f"{item['symbol']}: {reason}" for item, reason in invalid_items)
+                retry_log = ModelHubService(db).chat(
+                    task_type="stock_screening", instance_code=run.model_instance_code,
+                    messages=[
+                        {"role": "system", "content": "上次输出未通过七维分析/证据契约校验（" + retry_errors + "）。请完整重答以下候选，必须包含NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH七项各一次。数据缺失也须返回INSUFFICIENT并说明缺口；不可省略、编造或引用上下文之外的证据。输出符合JSON Schema：" + json.dumps(schema, ensure_ascii=False)},
+                        {"role": "user", "content": "仅修正并重答这些候选：" + retry_context},
+                    ], max_tokens=8192,
+                    metadata_json={"candidate_count": len(retry_items), "batch_index": batch_index,
+                        "skill_code": "STOCK_SELECTION_ANALYST", "purpose": "STOCK_SELECTION_CONTRACT_RETRY",
+                        "json_schema_output": schema, "native_structured_output": False,
+                        "require_real_model": getattr(run, "data_mode", "REAL") == "REAL"},
+                )
+                if retry_log.status != "SUCCESS":
+                    raise ValueError(f"model contract retry failed; log_id={retry_log.id}")
+                retry_result = SelectionModelOutput.model_validate_json(retry_log.response_text or "{}")
+                retry_by_symbol = {row.symbol: row.model_dump() for row in retry_result.candidates}
+                if len(retry_by_symbol) != len(retry_items) or set(retry_by_symbol) != {item["symbol"] for item in retry_items}:
+                    raise ValueError("模型定向重试必须逐一返回待修复候选")
+                for item in retry_items:
+                    repaired = retry_by_symbol[item["symbol"]]
+                    allowed_ids = set(item["evidence_json"].get("model_document_ids") or item["evidence_json"].get("document_ids", []))
+                    if not set(repaired["evidence_document_ids"]).issubset(allowed_ids):
+                        raise ValueError("模型重试引用了候选上下文之外的文档")
+                    if not set(repaired.get("evidence_fact_ids") or []).issubset(set(item["evidence_json"].get("evidence_fact_ids", []))):
+                        raise ValueError("模型重试引用了候选上下文之外的事实")
+                    _validate_multi_source_output(repaired, item,
+                        required=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_V2")
+                    by_symbol[item["symbol"]] = repaired
+                    predictions[item["symbol"]] = (repaired, retry_log.id, retry_log.instance_code)
+            for item in batch:
+                if item["symbol"] not in predictions:
+                    predictions[item["symbol"]] = (by_symbol[item["symbol"]], log.id, log.instance_code)
         for item, _score in candidates:
             prediction = predictions.get(str(item["symbol"]))
             if prediction is not None:
@@ -896,6 +1012,7 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
     if run.analysis_mode == "MODEL_FAILED_FALLBACK_LOCAL":
         for item, _score in candidates:
             item["analysis_json"]["model_output_status"] = "FAILED"
+            item["analysis_json"]["local_multi_source"] = _build_local_multi_source_analysis(item)
 
 
 def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewRequest) -> SelectionCandidate:
