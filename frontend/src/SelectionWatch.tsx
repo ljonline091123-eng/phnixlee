@@ -14,7 +14,7 @@ const labels: Record<string, string> = {
   LOCAL_EVIDENCE: "本地规则预选",
   MODEL_REQUESTED: "模型分析中",
   MODEL_COMPLETED: "模型综合分析",
-  MODEL_FAILED_FALLBACK_LOCAL: "模型失败 · 规则预选",
+  MODEL_FAILED_FALLBACK_LOCAL: "模型失败 · 本地多源证据",
   MODEL_UNAVAILABLE: "真实模型不可用",
   NOT_RUN: "未运行",
   NOT_AVAILABLE: "暂不可用",

@@ -6,15 +6,17 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? value.filte
 
 export function SelectionAnalysis({candidate, onDocument}: {candidate: SelectionCandidate; onDocument?: (id: number) => void}) {
   const analysis = candidate.analysis_json;
-  const model = (analysis.model || {}) as SelectionRecord;
+  const model = (analysis.model || analysis.local_multi_source || {}) as SelectionRecord;
+  const localFallback = analysis.model_output_status === "FAILED" && !!analysis.local_multi_source;
   const usage = (analysis.input_usage || {}) as SelectionRecord;
   const dimensions = array(model.dimensions), events = array(model.events);
   const documents = [...array(candidate.evidence_json.documents), ...array(candidate.evidence_json.evidence_context?.documents)];
   const document = (id: number) => documents.find(item => item.id === id);
   const reference = (id: number) => <button type="button" className="analysis-reference" key={id} title={document(id)?.title || `文档${id}`} onClick={() => onDocument?.(id)}>{document(id)?.source_table === "stock_news" ? "新闻" : document(id)?.source_table === "stock_notice" ? "公告" : "证据"} · {document(id)?.title || `#${id}`}</button>;
   const money = (value: unknown) => typeof value === "number" ? `${value.toFixed(2)} 元` : "证据不足";
-  if (analysis.model_output_status !== "SUCCESS") return <p className="batch-alert error">模型分析尚未成功完成，请查看错误后重试。</p>;
+  if (analysis.model_output_status !== "SUCCESS" && !localFallback) return <p className="batch-alert error">模型分析尚未成功完成，请查看错误后重试。</p>;
   return <section className="selection-analysis">
+    {localFallback && <p className="batch-alert warning">模型服务本次未返回有效结果。以下为本地知识库、图谱和结构化数据的证据盘点，不是模型投资结论；模型恢复后请重新分析。</p>}
     <div className="analysis-verdict"><span className={`analysis-signal ${model.decision === "WATCH" ? "watch" : ""}`}>{names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 置信度不等于收益概率</small></div>
     <div className="analysis-metrics"><div><small>推断目标价</small><strong>{money(model.target_price)}</strong></div><div><small>观察止损价</small><strong>{money(model.stop_price)}</strong></div><div><small>观察周期</small><strong>10 个交易日</strong></div></div>
     {dimensions.length ? <><h3>逐项研判</h3><div className="analysis-dimensions">{dimensions.map(item => <article key={item.dimension} className={`analysis-dimension ${item.status === "INSUFFICIENT" ? "missing" : ""}`}><div className="analysis-card-heading"><h4>{names[item.dimension]}</h4><span className={`analysis-direction ${String(item.direction).toLowerCase()}`}>{item.status === "INSUFFICIENT" ? "证据不足" : names[item.direction]}</span></div><p>{item.summary}</p><div className="analysis-references">{(item.evidence_document_ids || []).map(reference)}</div>{!!item.evidence_fact_ids?.length && <small>{item.evidence_fact_ids.length} 条数值/事实依据</small>}{!!item.evidence_relation_ids?.length && <small>{item.evidence_relation_ids.length} 条图谱关系依据</small>}</article>)}</div></> : <><p className="batch-missing">此历史批次尚未生成分项分析；重新分析可获得新闻、公告等七项研判。</p><p>{String(analysis.summary || "")}</p></>}
