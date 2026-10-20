@@ -738,8 +738,6 @@ class ModelHubService:
     ) -> ModelCallLog:
         metadata = metadata_json or {}
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
-            if sum(len(item.get("content", "")) for item in messages) > 60_000:
-                raise ValueError("Soft-analysis input exceeds 60,000 characters; run Python/SQL filtering first")
             if int(metadata.get("candidate_count") or 0) > 50:
                 raise ValueError("Soft-analysis candidate pool cannot exceed 50 stocks")
         skill_code = str(metadata.get("skill_code") or "").strip()
@@ -757,6 +755,11 @@ class ModelHubService:
                     {"role": "system", "content": skill.instructions},
                     *messages,
                 ]
+        # Enforce the limit on the exact prompt sent to the provider, including
+        # any enabled Skill instructions added above.
+        if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
+            if sum(len(item.get("content", "")) for item in messages) > 60_000:
+                raise ValueError("Soft-analysis input exceeds 60,000 characters after skill instructions; run Python/SQL filtering first")
         candidates = self.list_route_options(task_type=task_type, requested_instance_code=instance_code)
         if metadata.get("require_real_model"):
             candidates = [

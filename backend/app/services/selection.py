@@ -518,6 +518,10 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     def clip(value: Any, limit: int) -> Any:
         if value is None or isinstance(value, (int, float, bool)):
             return value
+        if isinstance(value, dict):
+            return {str(key): clip(child, min(limit, 320)) for key, child in list(value.items())[:16]}
+        if isinstance(value, (list, tuple)):
+            return [clip(child, min(limit, 320)) for child in value[:4]]
         text = str(value)
         return text[:limit]
 
@@ -534,13 +538,32 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
                 })
         return result
 
+    # Balance types: a large financial history must not displace current prices
+    # or shareholder observations. Numeric properties are evidence, not titles.
+    fact_rows: list[dict[str, Any]] = []
+    type_counts: dict[str, int] = {}
+    for fact in evidence.get("facts") or []:
+        if not isinstance(fact, dict):
+            continue
+        kind = str(fact.get("fact_type") or "OTHER")
+        if type_counts.get(kind, 0) < 2:
+            fact_rows.append(fact)
+            type_counts[kind] = type_counts.get(kind, 0) + 1
+    for category in (evidence.get("structured_observations") or {}).values():
+        for fact in category[:1] if isinstance(category, list) else []:
+            if isinstance(fact, dict) and fact.get("id") not in {row.get("id") for row in fact_rows}:
+                fact_rows.append(fact)
+    visible_facts = [{key: clip(row[key], 240) for key in (
+        "id", "fact_type", "title", "properties", "status", "observed_at", "source_table", "evidence",
+    ) if key in row} for row in fact_rows[:10]]
     compact_evidence = {
         "data_mode": evidence.get("data_mode"), "data_cutoff": evidence.get("data_cutoff"),
         "model_document_ids": (evidence.get("model_document_ids") or evidence.get("document_ids") or [])[:20],
         "document_ids": (evidence.get("document_ids") or [])[:20],
-        "evidence_fact_ids": (evidence.get("evidence_fact_ids") or [])[:40],
+        "evidence_fact_ids": [row["id"] for row in visible_facts if row.get("id")],
         "documents": rows("documents", 6, ("id", "title", "source_table", "url", "excerpt", "content"), 360),
-        "facts": rows("facts", 8, ("id", "fact_type", "title", "indicator", "value", "unit", "report_period", "source_table", "source_record_id", "verification_status", "evidence_excerpt", "evidence_text"), 240),
+        "facts": visible_facts,
+        "identity": clip(evidence.get("identity") or {}, 200),
         "chunks": rows("chunks", 6, ("id", "document_id", "section_title", "title", "text", "content", "embedding_status"), 320),
         "relations": rows("relations", 6, ("id", "head", "relation", "tail", "evidence_text"), 240),
         "graph_paths": rows("graph_paths", 6, ("id", "subject_name", "predicate", "object_name", "evidence_document_id", "evidence_excerpt", "verification_status"), 240),
@@ -591,7 +614,8 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
                 ],
                 max_tokens=8192,
                 metadata_json={"candidate_count": len(batch), "batch_index": batch_index, "skill_code": "STOCK_SELECTION_ANALYST",
-                               "json_schema_output": schema, "native_structured_output": True},
+                               "json_schema_output": schema, "native_structured_output": True,
+                               "require_real_model": getattr(run, "data_mode", "REAL") == "REAL"},
             )
             if log.status != "SUCCESS":
                 raise ValueError(f"model analysis failed; log_id={log.id}")
