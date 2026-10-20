@@ -36,7 +36,7 @@ import {
   type WatchlistItem,
 } from "./api";
 import { StockDetailDrawer } from "./StockDetailDrawer";
-import { SelectionWorkbench } from "./SelectionWatch";
+import { StockBatchWorkbench as SelectionWorkbench } from "./StockBatchWorkbench";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 import { DataFoundation } from "./DataFoundation";
 import { CompanyGraphWorkbench } from "./CompanyGraphWorkbench";
