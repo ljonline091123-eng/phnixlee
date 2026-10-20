@@ -20,6 +20,35 @@ class SelectionRunCreate(BaseModel):
     data_mode: Literal["REAL", "MOCK"] = "REAL"
 
 
+class SelectionScopePreview(BaseModel):
+    market: str = Field(default="CN_A", max_length=16)
+    symbols: list[str] = Field(default_factory=list, max_length=500)
+    knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
+    graph_ids: list[int] = Field(default_factory=list, max_length=50)
+
+
+class SelectionDimension(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    dimension: Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
+    status: Literal["SUPPORTED", "INSUFFICIENT"]
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    summary: str = Field(min_length=1, max_length=400)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+
+
+class SelectionEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=120)
+    source_type: Literal["NEWS", "NOTICE"]
+    document_id: int
+    quote: str = Field(min_length=8, max_length=400)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    mechanism: str = Field(min_length=1, max_length=400)
+    timing: str = Field(min_length=1, max_length=160)
+
+
 class SelectionModelRecommendation(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     symbol: str
@@ -36,6 +65,12 @@ class SelectionModelRecommendation(BaseModel):
     # GraphRAG context before persisting the analysis.
     evidence_fact_ids: list[str] = Field(default_factory=list)
     evidence_chunk_ids: list[str] = Field(default_factory=list)
+    headline: str | None = Field(default=None, max_length=160)
+    dimensions: list[SelectionDimension] = Field(default_factory=list, max_length=7)
+    events: list[SelectionEvent] = Field(default_factory=list, max_length=6)
+    positives: list[str] = Field(default_factory=list, max_length=4)
+    risks: list[str] = Field(default_factory=list, max_length=4)
+    watch_conditions: list[str] = Field(default_factory=list, max_length=4)
 
 
 class SelectionModelOutput(BaseModel):

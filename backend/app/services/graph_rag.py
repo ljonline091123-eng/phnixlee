@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import ast
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
@@ -40,7 +41,7 @@ from app.services.lakehouse import current_knowledge_document_chunks, knowledge_
 from app.services.news_identity import check_news_identity
 
 
-CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V3"
+CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V4"
 
 
 def _iso(value: Any) -> str | None:
@@ -160,6 +161,37 @@ def _relation_provenance(
     }
 
 
+def document_content_state(content: str) -> str:
+    if not content.strip():
+        return "EMPTY"
+    payload_start = content.find("{")
+    if payload_start >= 0 and any(marker in content for marker in ("adjunctUrl", "disclosure_entry", "announcementContent")):
+        try:
+            payload = ast.literal_eval(content[payload_start:])
+        except (ValueError, SyntaxError, RecursionError):
+            payload = {}
+        if not any(isinstance(payload.get(key), str) and payload[key].strip()
+                   for key in ("announcementContent", "content", "text", "body", "governance_full_text")):
+            return "METADATA_ONLY"
+    return "TEXT_AVAILABLE"
+
+
+def ranked_documents(db: Session, query, *, per_source: int = 12) -> list[KnowledgeDocument]:
+    """Rank by business publication time inside each source, never import order.
+
+    A large price/history source must not hide all news before source balancing.
+    The JSON expression compiles for SQLite and PostgreSQL through SQLAlchemy.
+    """
+    published = func.coalesce(*(KnowledgeDocument.metadata_json[key].as_string()
+        for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date")))
+    ranked = query.with_only_columns(KnowledgeDocument.id, func.row_number().over(
+        partition_by=KnowledgeDocument.source_table,
+        order_by=(func.coalesce(published, "").desc(), KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc()),
+    ).label("position")).subquery()
+    return list(db.scalars(select(KnowledgeDocument).join(ranked, ranked.c.id == KnowledgeDocument.id)
+        .where(ranked.c.position <= per_source).order_by(ranked.c.position, KnowledgeDocument.source_table)).all())
+
+
 def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dict[str, Any]:
     metadata = row.metadata_json or {}
     content = row.content or ""
@@ -171,9 +203,14 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
         "market": row.market,
         "symbol": row.symbol,
         "graph_id": row.graph_id,
-        "content": content[:1200] if include_content else None,
+        "knowledge_base_id": row.knowledge_base_id,
+        "content": content[:3000] if include_content else None,
+        "content_state": document_content_state(content),
+        "content_truncated": len(content) > 3000 or bool(metadata.get("content_truncated")),
         "content_hash": _hash(content),
         "metadata": metadata,
+        "published_at": next((metadata[key] for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date") if metadata.get(key)), None),
+        "url": metadata.get("url"),
         "updated_at": _iso(row.updated_at),
     }
 
@@ -575,6 +612,14 @@ def _eligible_chunk_rows(
 
 
 def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:
+    metadata = row.metadata_json or {}
+    embedding = metadata.get("embedding") or {}
+    kind = (row.embedding_kind or "NONE").upper()
+    quality = embedding.get("model_quality")
+    is_hash = kind == "HASH" or quality == "HASH_ONLY" or "HASH" in (row.embedding_model or "").upper()
+    embedding_status = "HASH_ONLY" if is_hash else (
+        "AVAILABLE" if kind == "SEMANTIC" and embedding.get("vector") else "MISSING"
+    )
     return {
         "id": row.id,
         "document_id": row.document_id,
@@ -586,12 +631,13 @@ def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:
         "end_offset": row.end_offset,
         "parser_version": row.parser_version,
         "embedding_model": row.embedding_model,
-        "embedding_status": "AVAILABLE" if (row.metadata_json or {}).get("embedding", {}).get("vector") else
-                            ("DECLARED_ONLY" if row.embedding_model else "NOT_GENERATED"),
-        "embedding_quality": (row.metadata_json or {}).get("embedding", {}).get("model_quality"),
-        "section_title": (row.metadata_json or {}).get("section_title"),
-        "boundary_type": (row.metadata_json or {}).get("boundary_type"),
-        "metadata": row.metadata_json or {},
+        "embedding_status": embedding_status,
+        "embedding_kind": kind,
+        "embedding_quality": quality,
+        "section_title": row.section_title or metadata.get("section_title"),
+        "section_status": row.section_status,
+        "boundary_type": metadata.get("boundary_type"),
+        "metadata": metadata,
     }
 
 
@@ -710,20 +756,14 @@ def build_selection_context(
         doc_query = doc_query.where(KnowledgeDocument.knowledge_base_id.in_(kb_ids))
     if graph_ids:
         doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
-    doc_candidates = list(db.scalars(
-        doc_query.order_by(KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc())
-        .limit(max(max_documents * 20, max_documents))
-    ).all())
+    doc_candidates = ranked_documents(db, doc_query, per_source=max(100, max_documents * 2))
     by_source: dict[str, list[KnowledgeDocument]] = {}
     for row in doc_candidates:
-        if not usable_document(row):
+        if not usable_document(row) or not _date_known(_doc_payload(row, include_content=False)["published_at"], cutoff):
             continue
         by_source.setdefault(row.source_table, []).append(row)
-    source_keys = sorted(
-        by_source,
-        key=lambda key: (_aware(by_source[key][0].updated_at) or datetime.min.replace(tzinfo=timezone.utc)),
-        reverse=True,
-    )
+    priority = ["stock_news", "stock_notice", "stock_context_event", "research_report"]
+    source_keys = sorted(by_source, key=lambda key: (priority.index(key) if key in priority else len(priority), key))
     docs: list[KnowledgeDocument] = []
     offset = 0
     while len(docs) < max_documents and source_keys:
@@ -802,6 +842,10 @@ def build_selection_context(
     relation_doc_query = select(KnowledgeDocument).where(
         KnowledgeDocument.id.in_(relation_doc_ids)
     )
+    if kb_ids:
+        relation_doc_query = relation_doc_query.where(KnowledgeDocument.knowledge_base_id.in_(kb_ids))
+    if graph_ids:
+        relation_doc_query = relation_doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
     if cutoff is not None:
         relation_doc_query = relation_doc_query.where(
             KnowledgeDocument.created_at <= cutoff,

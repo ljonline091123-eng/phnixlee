@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,7 +16,9 @@ from app.schemas.selection import (
     SelectionSnapshotRead,
     SelectionTrackingRead,
 )
-from app.services.selection import create_selection_run, refresh_tracking, review_candidate
+from app.services.selection import create_selection_run, queue_selection_run, refresh_tracking, review_candidate
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.selection_audit import retrospective_read, snapshot_read
 
@@ -79,6 +81,60 @@ def create_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> Se
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/runs/start", response_model=SelectionRunRead, status_code=202)
+def start_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> SelectionRunRead:
+    try:
+        return _run_read(db, queue_selection_run(db, payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/acceptance")
+def acceptance(db: Session = Depends(get_db)) -> dict:
+    graph = db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.graph_code == "FIXED20_ACCEPTANCE_20261021"))
+    if graph is None:
+        return {"prepared": False, "message": "20股验证数据尚未准备完成", "graph_id": None,
+                "knowledge_base_id": None, "graph_status": "MISSING", "market": "CN_A",
+                "symbols": [], "rows": [], "scope_notes": [], "prepared_at": None,
+                "datasets": {}, "coverage": {}}
+    report = graph.governance_report_json or {}
+    return {"prepared": bool(report.get("acceptance_passed")), "graph_id": graph.id,
+            "knowledge_base_id": graph.knowledge_base_id, "graph_status": graph.governance_status,
+            "market": report.get("market", "CN_A"), "symbols": report.get("symbols", []),
+            "rows": report.get("acceptance_rows", []), "scope_notes": report.get("scope_notes", []),
+            "prepared_at": report.get("prepared_at"), "datasets": report.get("datasets", {}),
+            "coverage": report.get("coverage", {})}
+
+
+@router.post("/scope-preview")
+def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db)) -> dict:
+    """Read-only visibility into the exact selected KB/graph intersection."""
+    bases = list(db.scalars(select(KnowledgeBase).where(KnowledgeBase.id.in_(payload.knowledge_base_ids))).all())
+    graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
+    if (len(bases) != len(set(payload.knowledge_base_ids)) or any(not row.enabled for row in bases)
+            or len(graphs) != len(set(payload.graph_ids)) or any(not row.enabled or row.knowledge_base_id not in payload.knowledge_base_ids for row in graphs)):
+        raise HTTPException(status_code=422, detail="知识库或图谱不可用，或图谱不属于所选知识库")
+    query = select(KnowledgeDocument.symbol, KnowledgeDocument.source_table, func.count(KnowledgeDocument.id)).where(
+        KnowledgeDocument.market == payload.market.upper(),
+        KnowledgeDocument.knowledge_base_id.in_(payload.knowledge_base_ids),
+        KnowledgeDocument.graph_id.in_(payload.graph_ids),
+    )
+    if payload.symbols:
+        query = query.where(KnowledgeDocument.symbol.in_(payload.symbols))
+    counts = db.execute(query.group_by(KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all()
+    symbols, totals = {}, {}
+    for symbol, source, count in counts:
+        symbols.setdefault(symbol, {})[source] = count
+        totals[source] = totals.get(source, 0) + count
+    return {"market": payload.market.upper(), "source_counts": totals,
+            "covered_stocks": len(symbols), "requested_stocks": len(payload.symbols),
+            "rows": [{"symbol": symbol, "source_counts": symbols.get(symbol, {}),
+                      "status": "AVAILABLE" if symbols.get(symbol) else "MISSING"}
+                     for symbol in payload.symbols],
+            "ready": bool(bases and graphs and counts and all(row.governance_status in {"GOVERNED", "LOCKED"} for row in graphs)),
+            "scope_note": "仅读取所选知识库与图谱的交集；记录数不代表正文完整或语义核验通过。实际模型引用在分析结果中逐项显示。"}
+
+
 @router.get("/runs", response_model=list[SelectionRunRead])
 def list_runs(limit: int = 50, db: Session = Depends(get_db)) -> list[SelectionRunRead]:
     if not 1 <= limit <= 200:
@@ -138,6 +194,23 @@ def candidate_audit(candidate_id: int, db: Session = Depends(get_db)) -> dict:
     ).order_by(SelectionRetrospective.created_at, SelectionRetrospective.id)).all()) if snapshot_ids else []
     return {"candidate_id": candidate_id, "snapshots": [snapshot_read(row) for row in snapshots],
             "retrospectives": [retrospective_read(row) for row in retrospectives]}
+
+
+@router.get("/candidates/{candidate_id}/documents/{document_id}")
+def analysis_document(candidate_id: int, document_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="选股候选不存在")
+    evidence = candidate.evidence_json or {}
+    doc = next((row for row in [*(evidence.get("documents") or []),
+        *((evidence.get("evidence_context") or {}).get("documents") or [])] if row.get("id") == document_id), None)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不在本次候选证据范围内")
+    original = (evidence.get("analysis_originals") or {}).get(str(document_id))
+    return {**doc, **(original or {}), "document_id": document_id,
+            "content": (original or {}).get("content") or doc.get("content") or doc.get("excerpt") or "",
+            "metadata_json": {**(doc.get("metadata") or {}), "url": doc.get("url"), "published_at": doc.get("published_at")},
+            "snapshot": True}
 
 
 @router.get("/tracking/{tracking_id}/retrospectives")

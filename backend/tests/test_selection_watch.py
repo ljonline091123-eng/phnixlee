@@ -12,7 +12,8 @@ from app.models.ai_hub import PredictionLedger
 from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.selection import SelectionCandidate, SelectionSnapshot, SelectionTracking
 from app.schemas.selection import SelectionReviewRequest, SelectionRunCreate
-from app.services.selection import _last_completed_trade_date, create_selection_run, refresh_tracking, review_candidate
+from app.services.selection import _candidate_payload, _last_completed_trade_date, create_selection_run, refresh_tracking, review_candidate
+from app.models.selection import SelectionRun
 from app.services.prediction_review import review_predictions
 
 
@@ -28,6 +29,28 @@ def test_market_cutoff_uses_local_date_and_market_close():
     # Hong Kong's later close keeps a 15:30 local bar incomplete.
     assert _last_completed_trade_date("HK", datetime(2025, 1, 6, 7, 30, tzinfo=timezone.utc)) == "2025-01-05"
     assert _last_completed_trade_date("HK", datetime(2025, 1, 6, 8, 30, tzinfo=timezone.utc)) == "2025-01-06"
+
+
+def test_screening_never_divides_quote_shares_by_history_lots():
+    run = SelectionRun(market="CN_A", criteria_json={"min_abs_change_pct": 0}, analysis_mode="LOCAL_EVIDENCE")
+    quote = SimpleNamespace(symbol="000006", current_price=10, previous_close_price=10,
+        change_pct=0, volume=1000000, quote_time="2026-10-15", fetched_at=NOW,
+        raw_payload={"derived": {"volume_ratio": 0.72}})
+    bars = [StockKline(source_id=1, trade_date="2026-10-08", volume=12000, close_price=10,
+                       raw_payload={"source_method": "tx", "volume_unit": "unknown"}),
+            StockKline(source_id=1, trade_date="2026-10-07", volume=10000, close_price=10,
+                       raw_payload={"source_method": "tx", "volume_unit": "unknown"})]
+    item, _ = _candidate_payload(None, run, quote, bars)
+    assert item["hard_rules_json"]["volume_ratio"] == 0.72
+    assert item["hard_rules_json"]["volume_ratio_date"] == "2026-10-15"
+    assert item["hard_rules_json"]["volume_ratio_basis"] == "SOURCE_QUOTE_RATIO"
+    quote.raw_payload = {}
+    bars.append(StockKline(source_id=2, trade_date="2026-10-06", volume=1000000, close_price=10,
+                          raw_payload={"source_method": "another", "volume_unit": "shares"}))
+    item, _ = _candidate_payload(None, run, quote, bars)
+    assert item["hard_rules_json"]["volume_ratio"] == 1.2
+    assert item["hard_rules_json"]["volume_ratio_date"] == "2026-10-08"
+    assert item["hard_rules_json"]["price_observed_date"] == "2026-10-15"
 
 
 @pytest.fixture
@@ -87,7 +110,9 @@ def test_universe_scan_is_not_silently_limited_to_first_500(db):
 def test_auto_route_and_model_prediction_are_recorded(db):
     result = {"candidates": [{"symbol": "DEMO001", "decision": "WATCH", "confidence": .7,
         "reasoning": "Demo inference; limited evidence", "target_price": 12, "stop_price": 9,
-        "horizon_sessions": 10, "evidence_document_ids": []}]}
+        "horizon_sessions": 10, "evidence_document_ids": [], "dimensions": [
+            {"dimension": key, "status": "INSUFFICIENT", "direction": "UNKNOWN", "summary": "Evidence unavailable"}
+            for key in ("NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH")]}]}
     log = SimpleNamespace(id=99, status="SUCCESS", instance_code="DEMO_MODEL", response_text=json.dumps(result))
     with patch("app.services.model_hub.ModelHubService.chat", return_value=log) as chat:
         run, item = candidate(db, use_model=True)

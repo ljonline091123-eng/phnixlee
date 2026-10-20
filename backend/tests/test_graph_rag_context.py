@@ -154,7 +154,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
         assert context["chunks"][0]["section_title"] == "测试章节"
         assert context["chunk_coverage"]["coverage_ratio"] == 1.0
         assert context["chunk_coverage"]["context_inclusion_ratio"] == 1.0
-        assert context["context_version"].endswith("V3")
+        assert context["context_version"].endswith("V4")
 
         empty = build_selection_context(db, "CN_A", "999999", as_of=now + timedelta(days=1))
         assert empty["chunk_coverage"]["coverage_status"] == "NO_DOCUMENTS"
