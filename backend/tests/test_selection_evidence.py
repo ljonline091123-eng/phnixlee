@@ -149,3 +149,14 @@ def test_model_calls_batch_large_evidence_and_use_workflow_schema():
     assert all(row["analysis_json"]["model_output_status"] == "SUCCESS" for row, _ in pool)
     assert len(pool[0][0]["evidence_json"]["documents"][0]["excerpt"]) == 120_000
     assert all(request["instance_code"] is None for request in requests)
+
+
+def test_compact_document_whitelist_matches_visible_text_and_chunk_proofs():
+    from app.services.selection import _model_candidate_context
+    item = {"evidence_json": {"model_document_ids": list(range(1, 50)), "document_ids": list(range(1, 50)),
+        "documents": [{"id": 49, "excerpt": "实际可见原文"}],
+        "chunks": [{"id": "chunk", "document_id": "48", "text": "可见切片"}],
+        "graph_paths": [{"id": 1, "evidence_document_id": 47, "evidence_excerpt": "关系证据"}]}}
+    evidence = _model_candidate_context(item)["evidence_json"]
+    assert evidence["model_document_ids"] == [47, 48, 49]
+    assert evidence["document_ids"] == [47, 48, 49]

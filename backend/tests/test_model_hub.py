@@ -96,7 +96,7 @@ class ModelHubFoundationTest(unittest.TestCase):
             enabled=True, skill_type="PROMPT_SOP",
         ))
         self.db.commit()
-        with self.assertRaisesRegex(ValueError, "after skill instructions"):
+        with TemporaryDirectory() as temporary, patch("app.services.skill_files.SKILL_ROOT", Path(temporary) / "skills"), self.assertRaisesRegex(ValueError, "after skill instructions"):
             ModelHubService(self.db).chat(
                 task_type="stock_screening",
                 messages=[{"role": "user", "content": "u" * 59_000}],

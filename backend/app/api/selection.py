@@ -16,7 +16,8 @@ from app.schemas.selection import (
     SelectionSnapshotRead,
     SelectionTrackingRead,
 )
-from app.services.selection import create_selection_run, refresh_tracking, review_candidate
+from app.services.selection import create_selection_run, queue_selection_run, refresh_tracking, review_candidate
+from app.models.ai_hub import KnowledgeGraph
 from app.services.graph_rag import build_selection_context
 from app.services.selection_audit import retrospective_read, snapshot_read
 
@@ -77,6 +78,31 @@ def create_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> Se
         return _run_read(db, create_selection_run(db, payload))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/runs/start", response_model=SelectionRunRead, status_code=202)
+def start_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> SelectionRunRead:
+    try:
+        return _run_read(db, queue_selection_run(db, payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/acceptance")
+def acceptance(db: Session = Depends(get_db)) -> dict:
+    graph = db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.graph_code == "FIXED20_ACCEPTANCE_20261021"))
+    if graph is None:
+        return {"prepared": False, "message": "20股验证数据尚未准备完成", "graph_id": None,
+                "knowledge_base_id": None, "graph_status": "MISSING", "market": "CN_A",
+                "symbols": [], "rows": [], "scope_notes": [], "prepared_at": None,
+                "datasets": {}, "coverage": {}}
+    report = graph.governance_report_json or {}
+    return {"prepared": bool(report.get("acceptance_passed")), "graph_id": graph.id,
+            "knowledge_base_id": graph.knowledge_base_id, "graph_status": graph.governance_status,
+            "market": report.get("market", "CN_A"), "symbols": report.get("symbols", []),
+            "rows": report.get("acceptance_rows", []), "scope_notes": report.get("scope_notes", []),
+            "prepared_at": report.get("prepared_at"), "datasets": report.get("datasets", {}),
+            "coverage": report.get("coverage", {})}
 
 
 @router.get("/runs", response_model=list[SelectionRunRead])

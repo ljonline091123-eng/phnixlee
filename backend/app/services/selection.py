@@ -385,7 +385,7 @@ def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote
     }, missing
 
 
-def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun:
+def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun:
     market = payload.market.upper()
     symbols = [str(item).strip() for item in payload.symbols if str(item).strip()]
     model_code = payload.model_instance_code
@@ -420,6 +420,81 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
     )
     db.add(run)
     db.flush()
+    return run
+
+
+def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message: str) -> None:
+    if db is None or not isinstance(run, SelectionRun):
+        return
+    run.criteria_json = {**run.criteria_json, "progress": {"stage": stage, "percent": percent, "message": message,
+        "updated_at": _now().isoformat()}}
+    db.commit()
+
+
+def queue_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun:
+    """Persist the request and job together; the managed worker survives refreshes."""
+    from app.models.pipeline import PipelineRun, ScheduledJob
+    run = _new_selection_run(db, payload)
+    run.status = "QUEUED"
+    run.criteria_json = {**run.criteria_json, "request": payload.model_dump(),
+        "progress": {"stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行"}}
+    pipeline = PipelineRun(pipeline_type="selection_analysis", trigger_type="API", status="PENDING",
+        idempotency_key=f"selection:{run.id}", input_json={"selection_run_id": run.id})
+    db.add(pipeline)
+    db.flush()
+    db.add(ScheduledJob(task_type="selection_analysis", idempotency_key=f"selection:{run.id}", pipeline_run_id=pipeline.id,
+        payload_json={"selection_run_id": run.id}, max_attempts=3))
+    db.commit()
+    from app.jobs.governance_runner import wake_governance_runner
+    wake_governance_runner()
+    return run
+
+
+def execute_selection_job(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        run = db.get(SelectionRun, int(payload["selection_run_id"]))
+        if run is None:
+            raise LookupError("选股任务不存在")
+        request = SelectionRunCreate.model_validate(run.criteria_json["request"])
+        try:
+            run = create_selection_run(db, request, run_id=run.id)
+        except Exception as exc:
+            db.rollback()
+            run = db.get(SelectionRun, int(payload["selection_run_id"]))
+            run.status = "FAILED"
+            run.error_message = str(exc)[:500]
+            _progress(db, run, "FAILED", 100, "执行失败，可查看原因后重新分析")
+            raise
+        return {"selection_run_id": run.id, "status": run.status, "analysis_mode": run.analysis_mode,
+                "candidate_count": run.candidate_count}
+
+
+def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: int | None = None) -> SelectionRun:
+    run = db.get(SelectionRun, run_id) if run_id is not None else _new_selection_run(db, payload)
+    if run is None:
+        raise LookupError("选股任务不存在")
+    if run.completed_at is not None:
+        return run
+    if run_id is not None:
+        # A queued request can outlive changes in the asset catalog. Validate
+        # the persisted scope again before handing any evidence to a model.
+        bases = list(db.scalars(select(KnowledgeBase).where(KnowledgeBase.id.in_(run.knowledge_base_ids_json))).all())
+        scoped_graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(run.graph_ids_json))).all())
+        if (len(bases) != len(set(run.knowledge_base_ids_json)) or any(not row.enabled for row in bases)
+                or len(scoped_graphs) != len(set(run.graph_ids_json))
+                or any(not row.enabled or row.knowledge_base_id not in run.knowledge_base_ids_json for row in scoped_graphs)):
+            raise ValueError("排队期间知识库或图谱已停用，请重新选择数据范围")
+        if (run.analysis_mode == "MODEL_REQUESTED" and run.data_mode == "REAL"
+                and any(row.governance_status not in {"GOVERNED", "LOCKED"} for row in scoped_graphs)):
+            raise ValueError("排队期间图谱治理状态已变化，请完成治理后重新分析")
+    run.status = "RUNNING"
+    run.error_message = None
+    market = run.market
+    symbols = list(run.criteria_json.get("symbols") or [])
+    graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
+    model_requested = run.analysis_mode == "MODEL_REQUESTED"
+    _progress(db, run, "SCREENING", 5, "读取本地行情并筛选固定样本")
     quotes = _latest_quotes(db, market, symbols, run.as_of)
     # SQL/Python scans the locally available universe. Only the final <=50
     # candidates are enriched with documents and sent to the model.
@@ -459,7 +534,7 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
             candidates.append((item, item["hard_score"]))
     candidates.sort(key=lambda item: item[1], reverse=True)
     candidates = candidates[:run.candidate_limit]
-    for item, _score in candidates:
+    for position, (item, _score) in enumerate(candidates):
         evidence = _evidence(
             db, market, item["symbol"], payload.knowledge_base_ids, payload.graph_ids,
             as_of=run.as_of,
@@ -468,6 +543,8 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
         evidence["missing_data"] += [f"图谱 {row.graph_name} 尚有待治理事项" for row in graphs if row.governance_status == "PENDING"]
         item["evidence_json"] = evidence
         item["analysis_json"]["evidence"] = evidence["evidence_text"]
+        _progress(db, run, "EVIDENCE", 10 + round(30 * (position + 1) / len(candidates)),
+                  f"已加载 {position + 1}/{len(candidates)} 只股票的图谱证据")
     priced_symbols = {row.symbol for row in quotes}
     missing.extend(f"{market}:{symbol}:quote" for symbol in stock_map if symbol not in priced_symbols)
     if payload.use_model and not model_requested:
@@ -503,9 +580,10 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
         )
     run.candidate_count = min(len(candidates), run.candidate_limit)
     run.missing_data_json = sorted(set((run.missing_data_json or []) + missing))[:100]
-    run.status = "REVIEW" if run.candidate_count else "PARTIAL"
+    run.status = "REVIEW" if run.candidate_count and run.analysis_mode != "MODEL_FAILED_FALLBACK_LOCAL" else "PARTIAL"
     run.completed_at = _now()
-    db.commit()
+    _progress(db, run, "COMPLETED" if run.analysis_mode != "MODEL_FAILED_FALLBACK_LOCAL" else "PARTIAL", 100,
+              f"已完成 {run.candidate_count} 只，等待人工复核" if run.analysis_mode == "MODEL_COMPLETED" else "执行结束，请查看模型状态及缺口")
     db.refresh(run)
     return run
 
@@ -561,7 +639,7 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         "model_document_ids": (evidence.get("model_document_ids") or evidence.get("document_ids") or [])[:20],
         "document_ids": (evidence.get("document_ids") or [])[:20],
         "evidence_fact_ids": [row["id"] for row in visible_facts if row.get("id")],
-        "documents": rows("documents", 6, ("id", "title", "source_table", "url", "excerpt", "content"), 360),
+        "documents": rows("documents", 6, ("id", "title", "source_table", "published_at", "url", "excerpt", "content"), 360),
         "facts": visible_facts,
         "identity": clip(evidence.get("identity") or {}, 200),
         "chunks": rows("chunks", 6, ("id", "document_id", "section_title", "title", "text", "content", "embedding_status"), 320),
@@ -570,6 +648,15 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         "missing_data": [clip(value, 180) for value in (evidence.get("missing_data") or [])[:12]],
         "counts": evidence.get("counts") or {},
     }
+    # Build the whitelist from the evidence actually sent. A sorted, truncated
+    # full-document list can exclude a document whose text is visible here.
+    visible_document_ids = {row["id"] for row in compact_evidence["documents"] if row.get("id") is not None}
+    visible_document_ids.update(int(row["document_id"]) for row in compact_evidence["chunks"]
+                                if str(row.get("document_id", "")).isdigit())
+    visible_document_ids.update(row["evidence_document_id"] for row in compact_evidence["graph_paths"]
+                                if row.get("evidence_document_id") is not None)
+    compact_evidence["model_document_ids"] = sorted(visible_document_ids)
+    compact_evidence["document_ids"] = sorted(visible_document_ids)
     return {
         "market": item.get("market"), "symbol": item.get("symbol"), "name": item.get("name"),
         "entry_price": item.get("entry_price"), "entry_date": item.get("entry_date"),
@@ -604,6 +691,8 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
     predictions: dict[str, tuple[dict[str, Any], int, str]] = {}
     try:
         for batch_index, batch in enumerate(batches):
+            _progress(db, run, "MODEL", 40 + round(50 * batch_index / len(batches)),
+                      f"真实模型研判第 {batch_index + 1}/{len(batches)} 批")
             context = json.dumps(batch, ensure_ascii=False, separators=(",", ":"))
             log = ModelHubService(db).chat(
                 task_type="stock_screening",
@@ -614,7 +703,7 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
                 ],
                 max_tokens=8192,
                 metadata_json={"candidate_count": len(batch), "batch_index": batch_index, "skill_code": "STOCK_SELECTION_ANALYST",
-                               "json_schema_output": schema, "native_structured_output": True,
+                               "json_schema_output": schema, "native_structured_output": False,
                                "require_real_model": getattr(run, "data_mode", "REAL") == "REAL"},
             )
             if log.status != "SUCCESS":
@@ -664,6 +753,10 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
         raise ValueError("selection candidate has already been reviewed")
     if payload.decision == "APPROVED" and (not candidate.entry_price or not candidate.entry_date):
         raise ValueError("candidate has no dated real price; cannot start tracking")
+    run = db.get(SelectionRun, candidate.run_id)
+    if (payload.decision == "APPROVED" and run and run.data_mode == "REAL"
+            and run.analysis_mode.startswith("MODEL") and candidate.analysis_json.get("model_output_status") != "SUCCESS"):
+        raise ValueError("真实模型尚未完成研判，不能确认入选；请先重新分析")
     candidate.decision = payload.decision
     candidate.review_notes = payload.notes
     candidate.target_price = payload.target_price
