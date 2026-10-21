@@ -8,7 +8,10 @@ from app.jobs.worker import JobWorker
 
 class GovernanceRunner:
     def __init__(self, worker=None):
-        self.worker = worker or JobWorker(task_types=("stock_batch_governance", "document_specialist_skill_test", "selection_analysis"), lease_seconds=120)
+        self.worker = worker or JobWorker(task_types=(
+            "stock_batch_governance", "document_specialist_skill_test",
+            "selection_analysis", "selection_retry_failed",
+        ), lease_seconds=120)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
         self.thread = threading.Thread(target=self._run, name="stock-governance-runner", daemon=True)

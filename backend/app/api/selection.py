@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,8 +16,11 @@ from app.schemas.selection import (
     SelectionSnapshotRead,
     SelectionTrackingRead,
 )
-from app.services.selection import create_selection_run, queue_selection_run, refresh_tracking, review_candidate
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.services.selection import (
+    create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
+    refresh_tracking, review_candidate,
+)
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.selection_audit import retrospective_read, snapshot_read
@@ -89,6 +92,24 @@ def start_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> Sel
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/runs/{run_id}/retry", response_model=SelectionRunRead, status_code=202)
+def retry_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
+    """Create a new auditable attempt after a whole selection job failed."""
+    original = db.get(SelectionRun, run_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail="选股任务不存在")
+    if original.status != "FAILED":
+        raise HTTPException(status_code=409, detail="只有整批执行失败的任务可以重新执行；模型失败项请使用逐股重试")
+    request_data = (original.criteria_json or {}).get("request")
+    if not isinstance(request_data, dict):
+        raise HTTPException(status_code=409, detail="原任务没有可复用的请求快照，无法安全重试")
+    try:
+        payload = SelectionRunCreate.model_validate(request_data)
+        return _run_read(db, queue_selection_run(db, payload, retry_of_run_id=original.id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/acceptance")
 def acceptance(db: Session = Depends(get_db)) -> dict:
     graph = db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.graph_code == "FIXED20_ACCEPTANCE_20261021"))
@@ -114,25 +135,174 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
     if (len(bases) != len(set(payload.knowledge_base_ids)) or any(not row.enabled for row in bases)
             or len(graphs) != len(set(payload.graph_ids)) or any(not row.enabled or row.knowledge_base_id not in payload.knowledge_base_ids for row in graphs)):
         raise HTTPException(status_code=422, detail="知识库或图谱不可用，或图谱不属于所选知识库")
-    query = select(KnowledgeDocument.symbol, KnowledgeDocument.source_table, func.count(KnowledgeDocument.id)).where(
+    base_query = select(KnowledgeDocument.knowledge_base_id, KnowledgeDocument.symbol,
+                        KnowledgeDocument.source_table, func.count(KnowledgeDocument.id)).where(
         KnowledgeDocument.market == payload.market.upper(),
         KnowledgeDocument.knowledge_base_id.in_(payload.knowledge_base_ids),
-        KnowledgeDocument.graph_id.in_(payload.graph_ids),
     )
     if payload.symbols:
-        query = query.where(KnowledgeDocument.symbol.in_(payload.symbols))
-    counts = db.execute(query.group_by(KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all()
-    symbols, totals = {}, {}
-    for symbol, source, count in counts:
-        symbols.setdefault(symbol, {})[source] = count
+        base_query = base_query.where(KnowledgeDocument.symbol.in_(payload.symbols))
+    base_counts = db.execute(base_query.group_by(KnowledgeDocument.knowledge_base_id,
+        KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all()
+
+    effective_query = select(KnowledgeDocument.knowledge_base_id, KnowledgeDocument.graph_id,
+                             KnowledgeDocument.symbol, KnowledgeDocument.source_table,
+                             func.count(KnowledgeDocument.id)).where(
+        KnowledgeDocument.market == payload.market.upper(),
+        KnowledgeDocument.knowledge_base_id.in_(payload.knowledge_base_ids),
+    )
+    if payload.graph_ids:
+        effective_query = effective_query.where(KnowledgeDocument.graph_id.in_(payload.graph_ids))
+    if payload.symbols:
+        effective_query = effective_query.where(KnowledgeDocument.symbol.in_(payload.symbols))
+    counts = db.execute(effective_query.group_by(KnowledgeDocument.knowledge_base_id,
+        KnowledgeDocument.graph_id, KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all() if payload.graph_ids else []
+    symbols, base_symbols, totals, kb_stats, graph_stats = {}, {}, {}, {}, {}
+    for kb_id, symbol, source, count in base_counts:
+        kb = kb_stats.setdefault(kb_id, {"document_count": 0, "symbols": set(), "source_counts": {}})
+        kb["document_count"] += count
+        if symbol:
+            kb["symbols"].add(symbol)
+            base_symbols.setdefault(symbol, {})[source] = base_symbols.setdefault(symbol, {}).get(source, 0) + count
+        kb["source_counts"][source] = kb["source_counts"].get(source, 0) + count
+    for kb_id, graph_id, symbol, source, count in counts:
+        if symbol:
+            symbols.setdefault(symbol, {})[source] = symbols.setdefault(symbol, {}).get(source, 0) + count
         totals[source] = totals.get(source, 0) + count
+        kb = kb_stats.setdefault(kb_id, {"document_count": 0, "symbols": set(), "source_counts": {}})
+        kb["effective_document_count"] = kb.get("effective_document_count", 0) + count
+        graph = graph_stats.setdefault(graph_id, {"document_count": 0, "symbols": set(), "source_counts": {}})
+        graph["document_count"] += count
+        if symbol:
+            graph["symbols"].add(symbol)
+        graph["source_counts"][source] = graph["source_counts"].get(source, 0) + count
+
+    stock_entity_query = select(KnowledgeEntity).where(
+        KnowledgeEntity.graph_id.in_(payload.graph_ids), KnowledgeEntity.entity_type == "STOCK",
+    )
+    if payload.symbols:
+        stock_keys = [f"{payload.market.upper()}:{symbol}" for symbol in payload.symbols]
+        namespaced_keys = [KnowledgeEntity.entity_key.endswith(f":{payload.market.upper()}:{symbol}") for symbol in payload.symbols]
+        stock_entity_query = stock_entity_query.where(or_(KnowledgeEntity.entity_key.in_(stock_keys), *namespaced_keys))
+    stock_entities = list(db.scalars(stock_entity_query).all()) if payload.graph_ids else []
+    stock_by_entity_id = {row.id: row for row in stock_entities}
+    stock_relation_counts: dict[str, int] = {}
+    stock_relation_types: dict[str, dict[str, int]] = {}
+    for entity in stock_entities:
+        properties = entity.properties_json or {}
+        symbol = str(properties.get("symbol") or entity.entity_key.rsplit(":", 1)[-1])
+        stock_relation_counts.setdefault(symbol, 0)
+        stock_relation_types.setdefault(symbol, {})
+    relations = list(db.execute(select(
+        KnowledgeRelation.graph_id, KnowledgeRelation.subject_entity_id, KnowledgeRelation.predicate,
+        KnowledgeRelation.object_entity_id,
+    ).where(
+        KnowledgeRelation.graph_id.in_(payload.graph_ids),
+        or_(KnowledgeRelation.subject_entity_id.in_(stock_by_entity_id),
+            KnowledgeRelation.object_entity_id.in_(stock_by_entity_id)),
+    )).all()) if stock_by_entity_id else []
+    for graph_id, subject_id, predicate, object_id in relations:
+        graph = graph_stats.setdefault(graph_id, {"document_count": 0, "symbols": set(), "source_counts": {}, "direct_relation_count": 0, "relation_type_counts": {}})
+        graph["direct_relation_count"] = graph.get("direct_relation_count", 0) + 1
+        relation_types = graph.setdefault("relation_type_counts", {})
+        relation_types[predicate] = relation_types.get(predicate, 0) + 1
+        for entity_id in {subject_id, object_id}:
+            entity = stock_by_entity_id.get(entity_id)
+            if entity is not None:
+                properties = entity.properties_json or {}
+                symbol = str(properties.get("symbol") or entity.entity_key.rsplit(":", 1)[-1])
+                stock_relation_counts[symbol] = stock_relation_counts.get(symbol, 0) + 1
+                types = stock_relation_types.setdefault(symbol, {})
+                types[predicate] = types.get(predicate, 0) + 1
+    source_names = {
+        "stock_news": "新闻正文", "stock_notice": "上市公司公告/法定披露原文",
+        "stock_context_event": "政策、产业链等外部事件线索（非公司公告）",
+        "stock_financial_report": "财务报告", "stock_kline": "历史量价", "stock_realtime_quote": "实时行情",
+        "stock_f10_cache": "F10资料", "research_report": "研究报告",
+    }
+    source_explanations = {
+        "stock_notice": "上市公司自身的法定披露，包含公告及依法披露的财务报告。",
+        "stock_context_event": "公司之外的政策、原材料、产业链等外部线索，不是上市公司公告。",
+    }
+    usable_graphs = [row for row in graphs if row.governance_status in {"GOVERNED", "LOCKED"}]
+    missing_sources = sorted({source for source, count in totals.items() if not count})
+    kb_rows = [{"id": row.id, "name": row.kb_name, "description": row.description,
+                "source_tables": row.source_tables or [], "source_names": [source_names.get(source, source) for source in row.source_tables or []],
+                "source_explanations": [source_explanations[source] for source in row.source_tables or [] if source in source_explanations],
+                "document_count": kb_stats.get(row.id, {}).get("document_count", 0),
+                "covered_stocks": len(kb_stats.get(row.id, {}).get("symbols", set())),
+                "source_counts": kb_stats.get(row.id, {}).get("source_counts", {}),
+                "effective_document_count": kb_stats.get(row.id, {}).get("effective_document_count", 0)} for row in bases]
+    graph_rows = [{"id": row.id, "knowledge_base_id": row.knowledge_base_id, "name": row.graph_name,
+                   "description": row.description, "status": row.governance_status, "version": row.version,
+                   "entity_count": row.entity_count, "relation_count": row.relation_count,
+                   "document_count": graph_stats.get(row.id, {}).get("document_count", 0),
+                   "covered_stocks": len(graph_stats.get(row.id, {}).get("symbols", set())),
+                   "direct_relation_count": graph_stats.get(row.id, {}).get("direct_relation_count", 0),
+                   "relation_type_counts": graph_stats.get(row.id, {}).get("relation_type_counts", {}),
+                   "source_counts": graph_stats.get(row.id, {}).get("source_counts", {}),
+                   "analysis_eligible": row in usable_graphs} for row in graphs]
+    blockers = []
+    if not bases:
+        blockers.append("至少选择一个启用的知识库")
+    if not graphs:
+        blockers.append("至少选择一张图谱")
+    if graphs and not usable_graphs:
+        blockers.append("所选图谱均未治理完成；请选一张已治理图谱，待治理图谱不能作为模型依据")
+    stock_rows = []
+    for symbol in payload.symbols:
+        knowledge_sources = base_symbols.get(symbol, {})
+        graph_sources = symbols.get(symbol, {})
+        knowledge_document_count = sum(knowledge_sources.values())
+        graph_document_count = sum(graph_sources.values())
+        direct_relation_count = stock_relation_counts.get(symbol, 0)
+        if knowledge_document_count and direct_relation_count:
+            coverage_label = "文档与直接关系均有"
+        elif knowledge_document_count:
+            coverage_label = "有文档，暂无直接关系"
+        elif direct_relation_count:
+            coverage_label = "有直接关系，暂无文档"
+        else:
+            coverage_label = "暂无关联资料"
+        source_diversity = len({source for source, count in knowledge_sources.items() if count > 0})
+        coverage_level = (
+            "RICH" if knowledge_document_count >= 3 and source_diversity >= 2 and direct_relation_count >= 1
+            else "SOME" if knowledge_document_count or direct_relation_count
+            else "NONE"
+        )
+        stock_rows.append({
+            "symbol": symbol,
+            "source_counts": graph_sources,
+            "knowledge_document_count": knowledge_document_count,
+            "knowledge_source_counts": knowledge_sources,
+            "graph_document_count": graph_document_count,
+            "graph_source_counts": graph_sources,
+            "document_count": knowledge_document_count,
+            "direct_relation_count": direct_relation_count,
+            "relation_type_counts": stock_relation_types.get(symbol, {}),
+            "coverage_level": coverage_level,
+            "coverage_label": coverage_label,
+            "status": "AVAILABLE" if knowledge_document_count or graph_document_count or direct_relation_count else "MISSING",
+        })
+    warnings = []
+    if not counts:
+        warnings.append("所选范围没有图谱投影文档；仍可按已选证券的结构化观测运行，文档类结论将标为缺失。")
+    if not totals.get("stock_news"):
+        warnings.append("本次图谱范围没有新闻正文。")
+    if not totals.get("stock_notice"):
+        warnings.append("本次图谱范围没有公司公告正文。")
+    if not any(stock_relation_counts.values()):
+        warnings.append("本次所选股票没有直接图谱关系；图谱不会为本次分析提供实体连接线索。")
+    if any(row not in usable_graphs for row in graphs) and usable_graphs:
+        warnings.append("混选了待治理图谱，模型只读取已治理图谱。")
     return {"market": payload.market.upper(), "source_counts": totals,
             "covered_stocks": len(symbols), "requested_stocks": len(payload.symbols),
-            "rows": [{"symbol": symbol, "source_counts": symbols.get(symbol, {}),
-                      "status": "AVAILABLE" if symbols.get(symbol) else "MISSING"}
-                     for symbol in payload.symbols],
-            "ready": bool(bases and graphs and counts and all(row.governance_status in {"GOVERNED", "LOCKED"} for row in graphs)),
-            "scope_note": "仅读取所选知识库与图谱的交集；记录数不代表正文完整或语义核验通过。实际模型引用在分析结果中逐项显示。"}
+            "rows": stock_rows,
+            "knowledge_bases": kb_rows, "graphs": graph_rows,
+            "ready": bool(bases and usable_graphs), "blockers": blockers,
+            "warnings": warnings,
+            "source_labels": source_names,
+            "scope_note": "覆盖层级只按本次选择范围内的文档数量、来源种类和直接关系数量计算，不是语义相关度、来源可靠度或投资价值评分。模型只引用本次证据；图谱关系仅提供实体连接线索，不直接证明因果。上市公司公告是公司法定披露；外部事件是政策、原材料、产业链等外部线索，不是公告。"}
 
 
 @router.get("/runs", response_model=list[SelectionRunRead])
@@ -150,6 +320,16 @@ def get_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     if run is None:
         raise HTTPException(status_code=404, detail="selection run not found")
     return _run_read(db, run)
+
+
+@router.post("/runs/{run_id}/retry-failed", response_model=SelectionRunRead, status_code=202)
+def retry_failed(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
+    try:
+        return _run_read(db, queue_failed_selection_reanalysis(db, run_id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/candidates/{candidate_id}/review", response_model=SelectionCandidateRead)
