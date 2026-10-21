@@ -19,6 +19,15 @@ class SelectionRunCreate(BaseModel):
     use_model: bool = True
     data_mode: Literal["REAL", "MOCK"] = "REAL"
 
+    @model_validator(mode="after")
+    def explicit_symbols_fit_candidate_limit(self) -> "SelectionRunCreate":
+        symbols = [str(symbol).strip() for symbol in self.symbols if str(symbol).strip()]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("手选股票中存在重复代码，请先去重")
+        if symbols and len(symbols) > self.candidate_limit:
+            raise ValueError("手选股票数量超过候选上限，请提高候选数量上限")
+        return self
+
 
 class SelectionScopePreview(BaseModel):
     market: str = Field(default="CN_A", max_length=16)
