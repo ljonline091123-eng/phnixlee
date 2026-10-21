@@ -27,11 +27,20 @@
 
 ## 模型、Skill 与跟踪
 
+- 本轮最新实库验收为 run #12：20/20 候选持久化，七维本地证据清单均已写入；状态为 `PARTIAL / MODEL_FAILED_FALLBACK_LOCAL`，模型契约重试失败（日志 #831）。该运行不是 20 只股票的 LLM 选股结论，不能作为质量达标或正式发布通过的证明。
+- 七维覆盖统计：公告、财报、量价、公司、图谱 20/20 有证据；新闻 6/20 有匹配证据、14/20 为不足；资金流 0/20 有证据。所有本地回退方向均为 `UNKNOWN`，不会把数据存在误报为利好/利空判断。
+- 已安全中断无进展的验收进程；对应 run #12 后来完成并落库。工作台当前显示模型失败与本地证据回退，供查看证据，不代表模型分析完成。
+
 - 本次分析保存模型版本、`STOCK_SELECTION_ANALYST` Skill `1.0.1`、证据 ID 与 20 条不可变决策快照；执行经由受控后台任务队列，不授予模型任意 SQL 或数据库写权限。
 - 对 20 股已存历史日线执行隔离功能回放：200 个价格快照、40 个复盘修订、20 个回归案例。回放使用隔离内存数据库，生产写入 0 次、模型调用 0 次、线上 Skill 修改 0 次。
 - 该回放仅验证程序流程和幂等性；当前模型输出被作为流程夹具，不能用于预测更早行情，也不是回测。回归 `PASSED/FAILED` 是规则评分，不是工作流成功/失败。Skill 修改仍须审核，不会自动发布。
 
 ## 验证
+
+- 选股证据、队列、监盘、审计与 API 定向测试：28 passed。
+- 全量后端测试：修复 `document_semantic_review` 的表与列描述目录后，`913 passed`、`543` 个子断言通过；仅有第三方依赖弃用/兼容性警告。
+- 最新代码快照已推送至 `backup/pre-selection-maturity-20261021-034756`；数据库一致性快照位于 `backend/backups/quant_before_selection_maturity_20261021-034758.db`（`PRAGMA quick_check=ok`）。表注释修复前另有快照 `backup/pre-table-comment-fix-20261021-035708` 与 `backend/backups/quant_before_table_comment_fix_20261021-035710.db`。
+- 最新表注释修复快照位于本地分支 `backup/pre-delivery-report-update-20261021-040542`，数据库快照 `backend/backups/quant_before_delivery_report_update_20261021-040543.db`（`PRAGMA quick_check=ok`）。远端推送两次分别遇到 `Empty reply from server` 和连接超时，该快照仅确认在本地，不能视为远程备份。
 
 - 后端相关回归：75 passed，2 条来自 `pypinyin` 依赖的弃用警告。
 - 前端生产构建：通过；Vite 提示主 JS chunk 大于 500 kB，属于现存拆包优化项。

@@ -91,6 +91,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "lake_dataset_version": TableDescription("湖仓数据集版本", "湖仓", "保存数据集每次发布的版本、对象地址、行数、字段结构和质量检查结果。"),
     "lake_lineage_event": TableDescription("湖仓数据血缘", "湖仓", "记录数据从上游表或文档到下游对象、数据集及知识资产的转换链路和解析版本。"),
     "document_chunk_version": TableDescription("文档切片版本", "湖仓", "保存文档切片正文、原文偏移、解析器版本和向量模型版本，支持 RAG 可追溯重建。"),
+    "document_semantic_review": TableDescription("文档语义审核记录", "知识治理", "追加保存文档语义审核、纠正和复核结果，关联原始文档版本及事实，不替代或覆盖原文。"),
 }
 
 
@@ -504,6 +505,15 @@ TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
         "status": "切片状态，例如就绪或废弃",
         "metadata_json": "切片的扩展元数据",
         "created_at": "切片版本创建时间",
+    },
+    "document_semantic_review": {
+        "id": "语义审核记录 ID", "source_table": "被审核原文所在的数据表", "source_record_id": "被审核原文记录 ID",
+        "version_index": "同一原文的版本序号", "version_key": "原文版本稳定键", "review_round": "该版本的审核轮次",
+        "action": "审核动作", "target_type": "审核目标类型", "target_key": "审核目标稳定键",
+        "event_key": "关联事件键", "item_index": "审核目标在原文中的序号", "field_name": "被审核字段名",
+        "old_value_json": "修改前字段值", "new_value_json": "审核确认的新字段值", "reason": "审核理由",
+        "reviewer": "审核人", "resulting_status": "审核后的状态", "fact_ids_json": "关联事实 ID 列表",
+        "corrected_fact_ids_json": "由本次纠正产生的事实 ID 列表", "created_at": "审核记录创建时间",
     },
     "foundation_company_mapping_state": {
         "stock_symbol_id": "既有股票主数据的记录标识。", "status": "发行公司映射结果；未映射不表示公司不存在。",

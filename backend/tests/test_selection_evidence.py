@@ -162,6 +162,90 @@ def test_compact_document_whitelist_matches_visible_text_and_chunk_proofs():
     assert evidence["document_ids"] == [47, 48, 49]
 
 
+def test_multi_source_validator_accepts_visible_graph_and_chunk_document_refs():
+    from app.services.selection import _validate_multi_source_output
+    evidence = {"documents": [{"id": 49, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE",
+        "content": "公司披露新增订单，预计改善收入。"}],
+        "chunks": [{"id": "chunk-1", "document_id": "48", "text": "业务资料"}],
+        "graph_paths": [{"id": "path-1", "evidence_document_id": 47, "evidence_excerpt": "供应关系"}],
+        "facts": [], "evidence_fact_ids": []}
+    output = {"evidence_document_ids": [49], "dimensions": [
+        {"dimension": "NEWS", "status": "SUPPORTED", "evidence_document_ids": [49],
+         "evidence_fact_ids": [], "evidence_relation_ids": []},
+        {"dimension": "GRAPH", "status": "SUPPORTED", "evidence_document_ids": [47],
+         "evidence_fact_ids": [], "evidence_relation_ids": ["path-1"]}],
+        "events": [{"document_id": 49, "source_type": "NEWS", "quote": "公司披露新增订单",
+            "title": "订单披露", "direction": "POSITIVE", "mechanism": "收入改善", "timing": "中期"}]}
+    _validate_multi_source_output(output, {"evidence_json": evidence}, required=False)
+    assert output["evidence_document_ids"] == [47, 49]
+
+
+def test_multi_source_validator_rejects_unseen_citation_and_metadata_only_news():
+    import pytest
+    from app.services.selection import _validate_multi_source_output
+    base = {"evidence_json": {"documents": [{"id": 1, "source_table": "stock_news",
+        "content_state": "TEXT_AVAILABLE", "content": "公司发布新增订单"}], "facts": [],
+        "evidence_fact_ids": [], "chunks": [], "graph_paths": []}}
+    output = {"evidence_document_ids": [2], "dimensions": [{"dimension": "NEWS", "status": "INSUFFICIENT",
+        "evidence_document_ids": [2], "evidence_fact_ids": [], "evidence_relation_ids": []}], "events": []}
+    with pytest.raises(ValueError):
+        _validate_multi_source_output(output, base, required=False)
+    base["evidence_json"]["documents"][0]["content_state"] = "METADATA_ONLY"
+    output["evidence_document_ids"] = [1]
+    output["dimensions"][0]["status"] = "SUPPORTED"
+    output["dimensions"][0]["evidence_document_ids"] = [1]
+    with pytest.raises(ValueError):
+        _validate_multi_source_output(output, base, required=False)
+
+
+def test_selection_retries_missing_dimensions_and_only_marks_success_after_validation():
+    required = ["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
+
+    def recommendation(with_dimensions):
+        row = {"symbol": "DEMO001", "decision": "WATCH", "confidence": .5, "reasoning": "证据不足，等待人工复核",
+            "target_price": None, "stop_price": None, "horizon_sessions": 10, "evidence_document_ids": []}
+        if with_dimensions:
+            row["dimensions"] = [{"dimension": dimension, "status": "INSUFFICIENT", "direction": "UNKNOWN",
+                "summary": "当前压缩上下文没有可验证证据", "evidence_document_ids": [], "evidence_fact_ids": [],
+                "evidence_relation_ids": []} for dimension in required]
+        return json.dumps({"candidates": [row]}, ensure_ascii=False)
+
+    run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None,
+        criteria_json={"analysis_contract": "MULTI_SOURCE_V2"}, data_mode="MOCK")
+    item = {"symbol": "DEMO001", "market": "CN_A", "name": "Demo", "analysis_json": {},
+        "evidence_json": {"document_ids": [], "documents": [], "facts": [], "evidence_fact_ids": [],
+            "chunks": [], "relations": [], "graph_paths": [], "missing_data": [], "evidence_context": {}}}
+    calls = []
+
+    def chat(**kwargs):
+        calls.append(kwargs)
+        response = recommendation(with_dimensions=len(calls) > 1)
+        return SimpleNamespace(id=len(calls), status="SUCCESS", instance_code="DEMO_MODEL", response_text=response)
+
+    with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat):
+        _apply_model_analysis(None, run, [(item, 1.0)])
+
+    assert len(calls) == 2
+    assert calls[1]["metadata_json"]["purpose"] == "STOCK_SELECTION_CONTRACT_RETRY"
+    assert run.analysis_mode == "MODEL_COMPLETED"
+    assert item["analysis_json"]["model_output_status"] == "SUCCESS"
+    assert item["analysis_json"]["analysis_contract"] == "MULTI_SOURCE_V2"
+    assert {row["dimension"] for row in item["analysis_json"]["model"]["dimensions"]} == set(required)
+
+
+def test_local_fallback_reports_all_source_dimensions_without_claiming_semantics():
+    from app.services.selection import _build_local_multi_source_analysis
+    report = _build_local_multi_source_analysis({"evidence_json": {
+        "documents": [{"id": 1, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE"},
+                      {"id": 2, "source_table": "stock_notice", "content_state": "TEXT_AVAILABLE"}],
+        "facts": [{"id": "finance:1", "fact_type": "FINANCIAL_OBSERVATION"}],
+        "structured_observations": {"market": [{"id": "market:1"}], "shareholder": [{"id": "holder:1"}]},
+        "graph_paths": [{"id": "path:1"}],
+    }})
+    assert {row["dimension"] for row in report["dimensions"]} == {"NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"}
+    assert report["report_type"] == "LOCAL_MULTI_SOURCE_EVIDENCE"
+    assert all(row["direction"] == "UNKNOWN" for row in report["dimensions"])
+    assert report["evidence_document_ids"] == [1, 2]
 def test_compact_financial_evidence_retains_revenue_and_profit_after_source_metadata():
     from app.services.selection import _model_candidate_context
     raw = {f"SOURCE_METADATA_{index}": str(index) for index in range(25)}
