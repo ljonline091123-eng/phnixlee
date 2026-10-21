@@ -323,7 +323,14 @@ def _evidence(
     return result
 
 
-def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote, bars: list[StockKline]) -> tuple[dict[str, Any] | None, list[str]]:
+def _candidate_payload(
+    db: Session,
+    run: SelectionRun,
+    quote: StockRealtimeQuote,
+    bars: list[StockKline],
+    *,
+    force_include: bool = False,
+) -> tuple[dict[str, Any] | None, list[str]]:
     latest, previous, _avg_volume = _bar_summary(bars)
     entry = _as_float(quote.current_price)
     prev_close = _as_float(quote.previous_close_price)
@@ -334,7 +341,6 @@ def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote
     missing: list[str] = []
     if entry is None or entry <= 0:
         missing.append(f"{run.market}:{quote.symbol}:current_price")
-        return None, missing
     change = _as_float(quote.change_pct)
     if change is None and prev_close and prev_close > 0:
         change = (entry / prev_close - 1) * 100
@@ -370,10 +376,13 @@ def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote
         "price_observed_date": quote_date,
         "volume_ratio_date": volume_date,
         "volume_ratio_basis": volume_basis,
+        "manual_selection": force_include,
     }
-    if not rules["price_trigger"] and not rules["volume_trigger"]:
+    if (entry is None or entry <= 0) and not force_include:
         return None, missing
-    score = abs(change or 0) + (volume_ratio or 0)
+    if not rules["price_trigger"] and not rules["volume_trigger"] and not force_include:
+        return None, missing
+    score = abs(change or 0) + (volume_ratio or 0) if entry is not None and entry > 0 else 0
     if quote_date is None:
         missing.append(f"{run.market}:{quote.symbol}:quote_observed_at")
     evidence: dict[str, Any] = {"data_mode": run.data_mode}
@@ -570,7 +579,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
         } for row in candidates]
         try:
             _apply_model_analysis(db, run, [(item, float(item.get("hard_score") or 0)) for item in retry_items],
-                                  update_run_summary=False)
+                                  update_run_summary=False, max_batch_candidates=1)
             by_symbol = {item["symbol"]: item for item in retry_items}
             for row in candidates:
                 item = by_symbol.get(row.symbol)
@@ -692,15 +701,31 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
                 change_pct=((close / prev_close - 1) * 100) if prev_close and prev_close > 0 else None,
                 volume=latest.volume, quote_time=latest.trade_date, fetched_at=latest.fetched_at,
             ))
-    run.criteria_json = {**run.criteria_json, "local_universe_count": len(stock_map), "priced_stock_count": len(quotes)}
+    quote_symbols = {row.symbol for row in quotes}
+    if symbols:
+        # A user-selected security remains in the review set even when no
+        # usable quote or daily bar exists. The missing price is explicit and
+        # approval remains blocked until a dated price is available.
+        quotes.extend(SimpleNamespace(
+            market=market, symbol=symbol, current_price=None,
+            previous_close_price=None, change_pct=None, volume=None,
+            quote_time=None, fetched_at=None, raw_payload={},
+        ) for symbol in symbols if symbol in stock_map and symbol not in quote_symbols)
+    priced_stock_count = sum(
+        (_as_float(row.current_price) or 0) > 0 for row in quotes
+    )
+    run.criteria_json = {**run.criteria_json, "local_universe_count": len(stock_map), "priced_stock_count": priced_stock_count}
     if not quotes and symbols:
         run.missing_data_json = [f"{market}:{symbol}:quote" for symbol in symbols]
     elif not quotes:
         run.missing_data_json = [f"{market}:universe:stock_realtime_quote"]
     candidates: list[tuple[dict[str, Any], float]] = []
     missing: list[str] = []
+    manual_selection = bool(symbols)
     for quote in quotes:
-        item, item_missing = _candidate_payload(db, run, quote, bar_map.get(quote.symbol, []))
+        item, item_missing = _candidate_payload(
+            db, run, quote, bar_map.get(quote.symbol, []), force_include=manual_selection,
+        )
         missing.extend(item_missing)
         if item:
             stock = stock_map.get(quote.symbol)
@@ -1098,6 +1123,7 @@ def _apply_model_analysis(
     candidates: list[tuple[dict[str, Any], float]],
     *,
     update_run_summary: bool = True,
+    max_batch_candidates: int = 5,
 ) -> None:
     """Ask the selected model to rank only the bounded hard-filter pool."""
     import json
@@ -1113,7 +1139,7 @@ def _apply_model_analysis(
     batch_size = 0
     for item in selected:
         size = len(json.dumps(item, ensure_ascii=False))
-        if batch and (batch_size + size > 32_000 or len(batch) >= 5):
+        if batch and (batch_size + size > 32_000 or len(batch) >= max(1, max_batch_candidates)):
             batches.append(batch)
             batch, batch_size = [], 0
         batch.append(item)
@@ -1172,9 +1198,48 @@ def _apply_model_analysis(
             by_symbol, row_errors = _parse_model_recommendations(log.response_text or "{}", expected)
         except Exception as exc:
             detail = str(exc)[:240]
+            # A malformed batch response should not make every included stock
+            # fail together. Isolate the candidates only when the provider did
+            # return successfully; transport/provider failures remain visible
+            # and are retried by the explicit per-stock retry action.
+            if log is not None and getattr(log, "status", None) == "SUCCESS" and len(batch) > 1:
+                for item in batch:
+                    symbol = str(item["symbol"])
+                    isolated_log = None
+                    try:
+                        single_context = json.dumps([item], ensure_ascii=False, separators=(",", ":"))
+                        isolated_log = ModelHubService(db).chat(
+                            task_type="stock_screening", instance_code=run.model_instance_code,
+                            messages=[{"role": "system", "content": system_prompt},
+                                      {"role": "system", "content": contract_prompt},
+                                      {"role": "user", "content": user_prompt.split("候选上下文：", 1)[0] + "候选上下文：" + single_context}],
+                            max_tokens=4096,
+                            metadata_json={"candidate_count": 1, "batch_index": batch_index,
+                                "skill_code": "STOCK_SELECTION_ANALYST", "purpose": "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
+                                "json_schema_output": schema, "native_structured_output": False,
+                                "require_real_model": real_model},
+                        )
+                        if isolated_log.status != "SUCCESS":
+                            raise ValueError(f"单股模型恢复未成功（调用记录 #{isolated_log.id}）")
+                        isolated_rows, isolated_errors = _parse_model_recommendations(
+                            isolated_log.response_text or "{}", {symbol},
+                        )
+                        isolated_output = isolated_rows.get(symbol)
+                        if isolated_output is None:
+                            raise ValueError(isolated_errors.get(symbol, "单股恢复未返回有效结果"))
+                        check_prediction(isolated_output, item)
+                        predictions[symbol] = (isolated_output, isolated_log.id, isolated_log.instance_code)
+                        failures.pop(symbol, None)
+                        record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", log=isolated_log)
+                    except Exception as isolated_exc:
+                        reason = f"批次响应异常：{detail}；单股恢复失败：{str(isolated_exc)[:160]}"
+                        failures[symbol] = reason
+                        record_attempt(symbol, "FAILED", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", reason, isolated_log or log)
+                continue
             for item in batch:
-                failures[item["symbol"]] = detail
-                record_attempt(item["symbol"], "FAILED", "STOCK_SELECTION_ANALYSIS", detail, log)
+                symbol = str(item["symbol"])
+                failures[symbol] = detail
+                record_attempt(symbol, "FAILED", "STOCK_SELECTION_ANALYSIS", detail, log)
             continue
 
         invalid_items: list[tuple[dict[str, Any], str]] = []

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -20,7 +20,7 @@ from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     refresh_tracking, review_candidate,
 )
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.selection_audit import retrospective_read, snapshot_read
@@ -138,13 +138,14 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
     if payload.symbols:
         effective_query = effective_query.where(KnowledgeDocument.symbol.in_(payload.symbols))
     counts = db.execute(effective_query.group_by(KnowledgeDocument.knowledge_base_id,
-        KnowledgeDocument.graph_id, KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all()
-    symbols, totals, kb_stats, graph_stats = {}, {}, {}, {}
+        KnowledgeDocument.graph_id, KnowledgeDocument.symbol, KnowledgeDocument.source_table)).all() if payload.graph_ids else []
+    symbols, base_symbols, totals, kb_stats, graph_stats = {}, {}, {}, {}, {}
     for kb_id, symbol, source, count in base_counts:
         kb = kb_stats.setdefault(kb_id, {"document_count": 0, "symbols": set(), "source_counts": {}})
         kb["document_count"] += count
         if symbol:
             kb["symbols"].add(symbol)
+            base_symbols.setdefault(symbol, {})[source] = base_symbols.setdefault(symbol, {}).get(source, 0) + count
         kb["source_counts"][source] = kb["source_counts"].get(source, 0) + count
     for kb_id, graph_id, symbol, source, count in counts:
         if symbol:
@@ -157,6 +158,34 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
         if symbol:
             graph["symbols"].add(symbol)
         graph["source_counts"][source] = graph["source_counts"].get(source, 0) + count
+
+    stock_entities = list(db.scalars(select(KnowledgeEntity).where(
+        KnowledgeEntity.graph_id.in_(payload.graph_ids), KnowledgeEntity.entity_type == "STOCK",
+        KnowledgeEntity.entity_key.in_([f"{payload.market.upper()}:{symbol}" for symbol in payload.symbols])
+            if payload.symbols else KnowledgeEntity.entity_key.startswith(f"{payload.market.upper()}:")
+    )).all()) if payload.graph_ids else []
+    stock_by_entity_id = {row.id: row for row in stock_entities}
+    stock_relation_counts: dict[str, int] = {}
+    for entity in stock_entities:
+        properties = entity.properties_json or {}
+        symbol = str(properties.get("symbol") or entity.entity_key.rsplit(":", 1)[-1])
+        stock_relation_counts.setdefault(symbol, 0)
+    relations = list(db.execute(select(
+        KnowledgeRelation.graph_id, KnowledgeRelation.subject_entity_id, KnowledgeRelation.object_entity_id,
+    ).where(
+        KnowledgeRelation.graph_id.in_(payload.graph_ids),
+        or_(KnowledgeRelation.subject_entity_id.in_(stock_by_entity_id),
+            KnowledgeRelation.object_entity_id.in_(stock_by_entity_id)),
+    )).all()) if stock_by_entity_id else []
+    for graph_id, subject_id, object_id in relations:
+        graph = graph_stats.setdefault(graph_id, {"document_count": 0, "symbols": set(), "source_counts": {}, "direct_relation_count": 0})
+        graph["direct_relation_count"] = graph.get("direct_relation_count", 0) + 1
+        for entity_id in {subject_id, object_id}:
+            entity = stock_by_entity_id.get(entity_id)
+            if entity is not None:
+                properties = entity.properties_json or {}
+                symbol = str(properties.get("symbol") or entity.entity_key.rsplit(":", 1)[-1])
+                stock_relation_counts[symbol] = stock_relation_counts.get(symbol, 0) + 1
     source_names = {
         "stock_news": "新闻正文", "stock_notice": "上市公司公告/法定披露原文",
         "stock_context_event": "政策、产业链等外部事件线索（非公司公告）",
@@ -176,6 +205,7 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
                    "entity_count": row.entity_count, "relation_count": row.relation_count,
                    "document_count": graph_stats.get(row.id, {}).get("document_count", 0),
                    "covered_stocks": len(graph_stats.get(row.id, {}).get("symbols", set())),
+                   "direct_relation_count": graph_stats.get(row.id, {}).get("direct_relation_count", 0),
                    "source_counts": graph_stats.get(row.id, {}).get("source_counts", {}),
                    "analysis_eligible": row in usable_graphs} for row in graphs]
     blockers = []
@@ -189,9 +219,14 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
             "covered_stocks": len(symbols), "requested_stocks": len(payload.symbols),
             "rows": [{"symbol": symbol, "source_counts": symbols.get(symbol, {}),
                       "document_count": sum(symbols.get(symbol, {}).values()),
-                      "coverage_label": ("有多条资料" if sum(symbols.get(symbol, {}).values()) >= 3 else
-                                         "有少量资料" if symbols.get(symbol) else "暂无关联文档"),
-                      "status": "AVAILABLE" if symbols.get(symbol) else "MISSING"}
+                      "knowledge_document_count": sum(base_symbols.get(symbol, {}).values()),
+                      "knowledge_source_counts": base_symbols.get(symbol, {}),
+                      "direct_relation_count": stock_relation_counts.get(symbol, 0),
+                      "coverage_label": ("文档与图谱均有" if symbols.get(symbol) and stock_relation_counts.get(symbol) else
+                                         "有图谱关系" if stock_relation_counts.get(symbol) else
+                                         "有图谱关联文档" if symbols.get(symbol) else
+                                         "仅知识库有文档" if base_symbols.get(symbol) else "暂无关联资料"),
+                      "status": "AVAILABLE" if (base_symbols.get(symbol) or symbols.get(symbol) or stock_relation_counts.get(symbol)) else "MISSING"}
                      for symbol in payload.symbols],
             "knowledge_bases": kb_rows, "graphs": graph_rows,
             "ready": bool(bases and usable_graphs), "blockers": blockers,
