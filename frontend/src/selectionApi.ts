@@ -137,6 +137,7 @@ export const selectionApi = {
   scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
   acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
   startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
+  retryFailed: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry-failed`, { method: "POST" }),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
   document: (graphId: number, documentId: number) => request<SelectionRecord>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
