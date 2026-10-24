@@ -74,6 +74,9 @@ class SelectionEventLink(BaseModel):
     ]
     source_document_ids: list[int] = Field(default_factory=list, min_length=1, max_length=12)
     target_document_ids: list[int] = Field(default_factory=list, min_length=1, max_length=12)
+    relation_scope: Literal["CURRENT_SECURITY", "RELATED_SECURITY"] = "CURRENT_SECURITY"
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
     summary: str = Field(min_length=1, max_length=800)
     evidence_quotes: list[str] = Field(default_factory=list, max_length=8)
     direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]

@@ -756,21 +756,32 @@ class ModelHubService:
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
             if int(metadata.get("candidate_count") or 0) > 50:
                 raise ValueError("Soft-analysis candidate pool cannot exceed 50 stocks")
-        skill_code = str(metadata.get("skill_code") or "").strip()
-        if skill_code:
+        requested_skills = metadata.get("skill_codes") or [metadata.get("skill_code")]
+        skill_codes = list(dict.fromkeys(
+            str(code).strip() for code in requested_skills if str(code or "").strip()
+        ))
+        applied_skills: list[dict[str, str]] = []
+        skill_prompts: list[dict[str, str]] = []
+        for skill_code in skill_codes:
             skill = self.db.scalar(
                 select(ModelSkill).where(
                     ModelSkill.skill_code == skill_code,
                     ModelSkill.enabled.is_(True),
                 )
             )
-            if skill and skill.skill_type == "PROMPT_SOP":
+            if skill is None:
+                if metadata.get("require_skills"):
+                    raise ValueError(f"Requested enabled Skill was not found: {skill_code}")
+                continue
+            if skill.skill_type == "PROMPT_SOP":
                 sync_skill_from_file(self.db, skill)
-                self.db.commit()
-                messages = [
-                    {"role": "system", "content": skill.instructions},
-                    *messages,
-                ]
+                self.db.flush()
+                skill_prompts.append({"role": "system", "content": skill.instructions})
+            applied_skills.append({"skill_code": skill.skill_code, "skill_version": skill.version})
+        if applied_skills:
+            self.db.commit()
+            metadata = {**metadata, "skill_codes": skill_codes, "skill_chain": applied_skills}
+            messages = [*skill_prompts, *messages]
         # Enforce the limit on the exact prompt sent to the provider, including
         # any enabled Skill instructions added above.
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:

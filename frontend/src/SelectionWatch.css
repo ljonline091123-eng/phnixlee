@@ -167,6 +167,12 @@
 .analysis-linkage, .analysis-findings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0 22px; }
 .analysis-linkage article, .analysis-findings article { min-width: 0; border: 1px solid #dce7df; border-radius: 8px; padding: 14px; background: #fff; }
 .analysis-linkage blockquote { margin: 9px 0; padding: 8px 10px; background: #f5f7f5; border-left: 3px solid #86a995; font-size: 12px; line-height: 1.65; }
+.analysis-related-securities { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 12px 0; }
+.analysis-related-securities article { display: grid; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid #d8e0da; border-left: 3px solid #b17c29; border-radius: 8px; background: #fff; }
+.analysis-related-securities span, .analysis-related-securities small, .analysis-help { color: #617468; }
+.analysis-related-securities small { line-height: 1.5; }
+.analysis-help { margin: -3px 0 20px; font-size: 12px; }
+.analysis-repair { width: fit-content; margin-top: 10px; border: 1px solid #b17c29; background: #fff; color: #7b5318; }
 .analysis-findings article > span { display: inline-block; color: #315f4a; background: #e8f2ec; border-radius: 5px; padding: 3px 7px; font-size: 11px; margin-bottom: 8px; }
 .analysis-findings article > strong, .analysis-findings article > small { display: block; }
 .analysis-confidence { margin: 16px 0 22px; border: 1px solid #dce7df; border-radius: 8px; padding: 12px 14px; }

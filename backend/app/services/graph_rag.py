@@ -236,6 +236,8 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
         "content_truncated": len(content) > 3000 or bool(metadata.get("content_truncated")),
         "content_hash": _hash(content),
         "metadata": metadata,
+        "source_name": next((metadata[key] for key in ("source_name", "media_name", "source", "provider")
+                             if metadata.get(key)), None),
         "published_at": next((metadata[key] for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date") if metadata.get(key)), None),
         "url": metadata.get("url"),
         "updated_at": _iso(row.updated_at),
@@ -282,6 +284,117 @@ def _identity(db: Session, market: str, symbol: str, cutoff: datetime | None) ->
                 "properties": company.properties_json or {},
             }
     return result
+
+
+def _related_security_documents(
+    db: Session,
+    *,
+    company_id: str | None,
+    market: str,
+    symbol: str,
+    kb_ids: list[int],
+    graph_ids: list[int],
+    cutoff: datetime,
+    period_start: date | None,
+    period_end: date | None,
+    max_documents: int = 12,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load disclosures from securities connected by reviewed company facts.
+
+    Sector membership is intentionally not used here. A related security may
+    enter the selection prompt only when an ACCEPTED FoundationFact connects
+    the two issuer entities and both entities have canonical listings.
+    """
+    if not company_id or max_documents <= 0:
+        return [], []
+    relation_facts = list(db.scalars(facts_query(
+        status="ACCEPTED", entity_id=company_id, as_of=cutoff.date(), known_at=cutoff,
+    ).limit(120)).all())
+    related_fact_ids: dict[str, list[str]] = {}
+    for fact in relation_facts:
+        other_id = fact.object_entity_id if fact.subject_entity_id == company_id else fact.subject_entity_id
+        if other_id and other_id != company_id:
+            related_fact_ids.setdefault(other_id, []).append(fact.id)
+    if not related_fact_ids:
+        return [], []
+
+    listing_rows = list(db.execute(select(
+        FoundationListing, FoundationSecurity.entity_id,
+    ).join(
+        FoundationSecurity, FoundationSecurity.id == FoundationListing.security_id,
+    ).where(
+        FoundationSecurity.entity_id.in_(related_fact_ids),
+        FoundationListing.created_at <= cutoff,
+        FoundationSecurity.created_at <= cutoff,
+    )).all())
+    pairs = {(listing.market, listing.symbol) for listing, _entity_id in listing_rows
+             if (listing.market, listing.symbol) != (market, symbol)}
+    if not pairs:
+        return [], []
+    masters = {(row.market, row.symbol): row for row in db.scalars(select(StockSymbol).where(
+        or_(*[and_(StockSymbol.market == pair[0], StockSymbol.symbol == pair[1]) for pair in pairs]),
+    )).all()}
+    securities = []
+    pair_metadata: dict[tuple[str, str], dict[str, Any]] = {}
+    for listing, entity_id in listing_rows:
+        pair = (listing.market, listing.symbol)
+        if pair not in pairs or pair in pair_metadata:
+            continue
+        master = masters.get(pair)
+        metadata = {
+            "market": listing.market,
+            "symbol": listing.symbol,
+            "name": master.name if master else listing.name,
+            "company_id": entity_id,
+            "related_via_fact_ids": sorted(set(related_fact_ids.get(entity_id, []))),
+        }
+        pair_metadata[pair] = metadata
+        securities.append(metadata)
+
+    doc_query = select(KnowledgeDocument).where(
+        KnowledgeDocument.source_table.in_(("stock_news", "stock_notice")),
+        KnowledgeDocument.created_at <= cutoff,
+        KnowledgeDocument.updated_at <= cutoff,
+        or_(*[
+            and_(KnowledgeDocument.market == pair[0], KnowledgeDocument.symbol == pair[1])
+            for pair in pair_metadata
+        ]),
+    )
+    if kb_ids:
+        doc_query = doc_query.where(KnowledgeDocument.knowledge_base_id.in_(kb_ids))
+    if graph_ids:
+        doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
+    candidates = list(db.scalars(doc_query.order_by(
+        KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc(),
+    ).limit(max(200, max_documents * 12))).all())
+    selected: list[dict[str, Any]] = []
+    per_pair: dict[tuple[str, str], int] = {}
+    for row in candidates:
+        pair = (row.market, row.symbol)
+        master = masters.get(pair)
+        payload = _doc_payload(row)
+        if pair not in pair_metadata or not _date_known(payload["published_at"], cutoff):
+            continue
+        if not _date_in_window(payload["published_at"], period_start, period_end):
+            continue
+        if row.source_table == "stock_news" and (
+            master is None or check_news_identity(
+                row.market, row.symbol, master.name, row.title, row.content, master.ext_json,
+            )["status"] != "MENTION_MATCHED"
+        ):
+            continue
+        if per_pair.get(pair, 0) >= 3:
+            continue
+        selected.append({
+            **payload,
+            "relation_scope": "RELATED_SECURITY",
+            "related_security": pair_metadata[pair],
+            "related_via_fact_ids": pair_metadata[pair]["related_via_fact_ids"],
+        })
+        per_pair[pair] = per_pair.get(pair, 0) + 1
+        if len(selected) >= max_documents:
+            break
+    return securities, selected
 
 
 def _structured_observations(
@@ -1001,10 +1114,42 @@ def build_selection_context(
             context_documents.append(row)
             documents.append(_doc_payload(row))
             document_ids.append(row.id)
+    related_securities, related_documents = _related_security_documents(
+        db,
+        company_id=company_id,
+        market=market,
+        symbol=symbol,
+        kb_ids=kb_ids,
+        graph_ids=graph_ids,
+        cutoff=cutoff,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    reviewed_fact_ids = {str(row.get("id")) for row in facts if row.get("status") == "ACCEPTED"}
+    related_securities = [
+        {**row, "related_via_fact_ids": [fact_id for fact_id in row["related_via_fact_ids"]
+                                           if fact_id in reviewed_fact_ids]}
+        for row in related_securities
+    ]
+    related_securities = [row for row in related_securities if row["related_via_fact_ids"]]
+    allowed_related_pairs = {(row["market"], row["symbol"]) for row in related_securities}
+    related_documents = [
+        {**row, "related_via_fact_ids": [fact_id for fact_id in row["related_via_fact_ids"]
+                                          if fact_id in reviewed_fact_ids]}
+        for row in related_documents
+        if (row.get("market"), row.get("symbol")) in allowed_related_pairs
+    ]
+    related_documents = [row for row in related_documents if row["related_via_fact_ids"]]
+    for row in related_documents:
+        if row["id"] not in document_ids:
+            documents.append(row)
+            document_ids.append(row["id"])
     eligible_chunks = _eligible_chunk_rows(db, context_documents, cutoff)
     chunks = _chunks(eligible_chunks, document_ids, max_chunks)
     chunk_coverage = _chunk_coverage(document_ids, eligible_chunks, chunks)
-    source_tables = {row.source_table for row in context_documents} | set(structured["source_tables"])
+    source_tables = ({row.source_table for row in context_documents}
+                     | {str(row["source_table"]) for row in related_documents}
+                     | set(structured["source_tables"]))
     datasets = _dataset_versions(
         db, source_tables, market=market, symbol=symbol, cutoff=cutoff,
     )
@@ -1035,8 +1180,8 @@ def build_selection_context(
         "lineage": [row["id"] for row in lineage_rows],
         "structured_records": structured["source_record_refs"],
     })[:32]
-    document_version = _hash({"documents": [(row.id, row.updated_at, _hash(row.content or ""))
-                                              for row in context_documents],
+    document_version = _hash({"documents": [(row.get("id"), row.get("updated_at"), row.get("content_hash"))
+                                              for row in documents],
                               "chunks": [(row["id"], row["chunk_version"]) for row in chunks]})[:32]
     evidence_span = [{
         "document_id": row["id"],
@@ -1097,6 +1242,8 @@ def build_selection_context(
         "lakehouse_datasets": datasets,
         "lineage": lineage_rows,
         "documents": documents,
+        "related_securities": related_securities,
+        "related_security_documents": related_documents,
         "facts": facts,
         "structured_observations": structured["by_category"],
         "graph_paths": graph_paths,
@@ -1120,6 +1267,8 @@ def build_selection_context(
             "period_source_counts": period_source_counts,
             "period_documents_included": len(documents),
             "undated_documents_excluded": undated_documents,
+            "related_securities": len(related_securities),
+            "related_security_documents": len(related_documents),
         },
     }
     context["context_hash"] = _hash({key: value for key, value in context.items() if key != "context_hash"})

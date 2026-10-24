@@ -426,8 +426,12 @@ def analysis_document(candidate_id: int, document_id: int, db: Session = Depends
     if candidate is None:
         raise HTTPException(status_code=404, detail="选股候选不存在")
     evidence = candidate.evidence_json or {}
-    doc = next((row for row in [*(evidence.get("documents") or []),
-        *((evidence.get("evidence_context") or {}).get("documents") or [])]
+    doc = next((row for row in [
+        *(evidence.get("documents") or []),
+        *(evidence.get("related_security_documents") or []),
+        *((evidence.get("evidence_context") or {}).get("documents") or []),
+        *((evidence.get("evidence_context") or {}).get("related_security_documents") or []),
+    ]
         if str(row.get("id")) == str(document_id)), None)
     if doc is None:
         # Graph/chunk context can cite a document without including it in the

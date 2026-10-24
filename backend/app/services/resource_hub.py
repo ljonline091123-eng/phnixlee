@@ -403,7 +403,7 @@ def seed_default_agents(db: Session) -> None:
             continue
         skill_ids = [skill_by_code[code] for code in agent_config["skill_codes"] if code in skill_by_code]
         if agent_config["agent_code"] not in created_codes:
-            if agent.agent_code == "STOCK_DATA_GOVERNANCE_AGENT":
+            if agent.agent_code in {"STOCK_DATA_GOVERNANCE_AGENT", "STOCK_SELECTION_AGENT"}:
                 # Append newly introduced semantic routing/specialist skills
                 # without removing user-maintained links from this Agent.
                 for code in agent_config["skill_codes"]:
