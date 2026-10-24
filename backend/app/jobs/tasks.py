@@ -10,7 +10,8 @@ from app.orchestration.watch_pool import WatchPoolRefreshWorkflow
 from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.orchestration.company_governance import CompanyGovernanceWorkflow
 from app.services.selection import (
-    refresh_tracking, execute_failed_selection_reanalysis, execute_selection_job,
+    refresh_tracking, execute_failed_selection_reanalysis, execute_selection_data_backfill,
+    execute_selection_job,
 )
 from app.services.change_detection import run_change_detection
 from app.services.stock_batch import TASK_TYPE as STOCK_BATCH_TASK, execute_stock_batch_governance
@@ -25,6 +26,7 @@ TaskHandler = Callable[[dict[str, Any]], dict[str, Any]]
 TASK_HANDLERS: dict[str, TaskHandler] = {
     "selection_analysis": execute_selection_job,
     "selection_retry_failed": execute_failed_selection_reanalysis,
+    "selection_data_backfill": execute_selection_data_backfill,
     "company_graph_governance": CompanyGovernanceWorkflow().execute,
     'foundation_archive_evidence': LegacyEvidenceArchiveWorkflow().execute,
     "daily_master_sync": MasterDataSyncWorkflow().execute,

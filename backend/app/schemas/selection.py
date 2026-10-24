@@ -13,6 +13,10 @@ class SelectionRunCreate(BaseModel):
     candidate_limit: int = Field(default=30, ge=1, le=50)
     min_abs_change_pct: float = Field(default=2.0, ge=0, le=50)
     min_volume_ratio: float = Field(default=1.2, ge=0, le=100)
+    # Natural calendar months are used for the evidence window.  The run's
+    # ``as_of`` remains the availability cutoff, so historical runs stay
+    # reproducible even when they are opened later.
+    period_months: int = Field(default=3, ge=1, le=60)
     model_instance_code: str | None = Field(default=None, max_length=64)
     knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
@@ -34,6 +38,7 @@ class SelectionScopePreview(BaseModel):
     symbols: list[str] = Field(default_factory=list, max_length=500)
     knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
+    period_months: int = Field(default=3, ge=1, le=60)
 
 
 class SelectionDimension(BaseModel):
@@ -56,6 +61,57 @@ class SelectionEvent(BaseModel):
     direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
     mechanism: str = Field(min_length=1, max_length=400)
     timing: str = Field(min_length=1, max_length=160)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    validation_status: Literal["UNVERIFIED", "PARTIALLY_REALIZED", "REALIZED", "NOT_REALIZED", "CONFLICTED", "INSUFFICIENT"] = "UNVERIFIED"
+
+
+class SelectionEventLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    relation_type: Literal[
+        "FOLLOW_UP", "VALIDATES", "CONTRADICTS", "REALIZES", "FAILS_TO_REALIZE",
+        "SAME_TOPIC", "EXECUTIVE_UNLOCKING_RISK", "SHAREHOLDER_CONFIDENCE_SIGNAL",
+        "RELATED_SECURITY_IMPACT",
+    ]
+    source_document_ids: list[int] = Field(default_factory=list, min_length=1, max_length=12)
+    target_document_ids: list[int] = Field(default_factory=list, min_length=1, max_length=12)
+    summary: str = Field(min_length=1, max_length=800)
+    evidence_quotes: list[str] = Field(default_factory=list, max_length=8)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    confidence: float = Field(ge=0, le=1)
+
+
+class SelectionTimelineEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event_id: str = Field(min_length=1, max_length=80)
+    event_date: str = Field(min_length=4, max_length=32)
+    source_type: Literal["NEWS", "NOTICE"]
+    document_ids: list[int] = Field(default_factory=list, min_length=1, max_length=12)
+    topic: str = Field(min_length=1, max_length=120)
+    claim: str = Field(min_length=1, max_length=600)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    confidence: float = Field(ge=0, le=1)
+
+
+class SelectionValidationFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    claim: str = Field(min_length=1, max_length=400)
+    validation_status: Literal["UNVERIFIED", "PARTIALLY_REALIZED", "REALIZED", "NOT_REALIZED", "CONFLICTED", "INSUFFICIENT"]
+    validation_window: str = Field(min_length=1, max_length=120)
+    supporting_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    supporting_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    confidence: float = Field(ge=0, le=1)
+    explanation: str = Field(min_length=1, max_length=800)
+
+
+class SelectionConfidenceBreakdown(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_reliability: float = Field(ge=0, le=1)
+    temporal_consistency: float = Field(ge=0, le=1)
+    cross_document_support: float = Field(ge=0, le=1)
+    structured_fact_support: float = Field(ge=0, le=1)
+    model_extraction_confidence: float = Field(ge=0, le=1)
+    conflict_penalty: float = Field(ge=0, le=1)
+    final_confidence: float = Field(ge=0, le=1)
 
 
 class SelectionModelRecommendation(BaseModel):
@@ -77,6 +133,10 @@ class SelectionModelRecommendation(BaseModel):
     headline: str | None = Field(default=None, max_length=160)
     dimensions: list[SelectionDimension] = Field(default_factory=list, max_length=7)
     events: list[SelectionEvent] = Field(default_factory=list, max_length=6)
+    event_timeline: list[SelectionTimelineEvent] = Field(default_factory=list, max_length=24)
+    event_links: list[SelectionEventLink] = Field(default_factory=list, max_length=24)
+    validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=24)
+    confidence_breakdown: SelectionConfidenceBreakdown | None = None
     positives: list[str] = Field(default_factory=list, max_length=4)
     risks: list[str] = Field(default_factory=list, max_length=4)
     watch_conditions: list[str] = Field(default_factory=list, max_length=4)
@@ -198,3 +258,17 @@ class SelectionTrackingRead(BaseModel):
 
 class SelectionRefreshRequest(BaseModel):
     tracking_ids: list[int] = Field(default_factory=list, max_length=500)
+
+
+class SelectionBackfillRequest(BaseModel):
+    candidate_ids: list[int] = Field(default_factory=list, max_length=500)
+    dimensions: list[Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]] = Field(default_factory=list, max_length=7)
+    period_months: int | None = Field(default=None, ge=1, le=60)
+    force_refresh: bool = False
+    rerun_analysis: bool = False
+
+    @model_validator(mode="after")
+    def unique_backfill_scope(self) -> "SelectionBackfillRequest":
+        self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
+        self.dimensions = list(dict.fromkeys(self.dimensions))
+        return self

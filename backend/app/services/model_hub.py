@@ -563,6 +563,22 @@ DEFAULT_MODEL_SKILLS_V2 = (
         "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT"},
     },
     {
+        "skill_code": "STOCK_EVENT_LINKAGE_ANALYST",
+        "skill_name": "新闻公告事件联动与兑现验证",
+        "description": "在指定自然月窗口内联合分析新闻和公告，建立事件时间线、前后关系、兑现验证及可解释置信度。",
+        "instructions": (
+            "你是证券事件联动分析智能体。仅使用本次白名单内、处于分析周期内的新闻公告正文和结构化事实。"
+            "先按主体、事项和时间归一化事件，再识别后续跟进、相互验证、冲突、利好兑现或未兑现、股东高管与解禁时间关联、关联证券影响。"
+            "高管辞职与解禁临近只能形成待验证的时间关联线索，除非原文明确说明，不得推断减持动机。"
+            "同源转载不得当作多份独立证据；来源可靠性、模型抽取置信度和最终置信度必须分开。"
+            "所有事件与联动必须引用文档ID及连续原文引句；无法核实则返回UNVERIFIED或INSUFFICIENT。"
+            "输出包括EVENT_TIMELINE、EVENT_LINKS、VALIDATION_FINDINGS和CONFIDENCE_BREAKDOWN。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
+                        "managed_contract_version": "EVENT_LINKAGE_V1"},
+    },
+    {
         "skill_code": "RESEARCH_REPORT_REVIEW",
         "skill_name": "研报历史复盘与修正",
         "description": "生成新研报时对比历史研报，评估历史预测是否有效，并提出需要调整的判断。",

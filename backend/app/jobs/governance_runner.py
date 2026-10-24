@@ -11,6 +11,7 @@ class GovernanceRunner:
         self.worker = worker or JobWorker(task_types=(
             "stock_batch_governance", "document_specialist_skill_test",
             "selection_analysis", "selection_retry_failed",
+            "selection_data_backfill",
         ), lease_seconds=120)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
