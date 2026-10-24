@@ -25,7 +25,7 @@ from app.services.prediction_review import propose_failed_skill_revisions, revie
 from app.services.prediction_ledger import record_report_rating
 from app.services.resource_hub import seed_default_agents, seed_default_data_assets, seed_default_knowledge_bases
 from app.services.skill_files import skill_file_path
-from app.connectors.model_adapters import AnthropicMessagesAdapter, GeminiRestAdapter, MockModelAdapter, ModelExecutionResult
+from app.connectors.model_adapters import AnthropicMessagesAdapter, GeminiRestAdapter, MockModelAdapter, ModelExecutionResult, MODEL_HTTP_TIMEOUT
 from app.db.migrations import ensure_compat_columns
 
 
@@ -173,6 +173,8 @@ class CoreModelRefactorTest(unittest.TestCase):
         self.assertEqual({first.api_key, second.api_key}, {"shared-old-key", "different-old-key"})
 
     def test_claude_and_gemini_adapters_use_provider_message_formats(self) -> None:
+        self.assertEqual(MODEL_HTTP_TIMEOUT.connect, 8.0)
+        self.assertEqual(MODEL_HTTP_TIMEOUT.read, 90.0)
         claude = ModelInstance(provider_id=1, instance_code="CLAUDE_TEST", model_code="claude-sonnet-5",
                                model_name="Claude", api_key="private-key", api_base_url="https://api.anthropic.com/v1",
                                api_path="messages", max_tokens=1024, temperature=1, top_p=1, config_json={})

@@ -47,7 +47,10 @@ class SelectionDimension(BaseModel):
     status: Literal["SUPPORTED", "INSUFFICIENT"]
     direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
     summary: str = Field(min_length=1, max_length=400)
-    evidence_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    # A single NEWS or NOTICE dimension can legitimately cover every document
+    # loaded for the period analysis. Keep this aligned with the bounded
+    # 80-document context and the 100-item analyzed-document contract.
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=100)
     evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
     evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
 
@@ -136,9 +139,11 @@ class SelectionModelRecommendation(BaseModel):
     headline: str | None = Field(default=None, max_length=160)
     dimensions: list[SelectionDimension] = Field(default_factory=list, max_length=7)
     events: list[SelectionEvent] = Field(default_factory=list, max_length=6)
-    event_timeline: list[SelectionTimelineEvent] = Field(default_factory=list, max_length=24)
-    event_links: list[SelectionEventLink] = Field(default_factory=list, max_length=24)
-    validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=24)
+    # These are decision-oriented summaries, not one row per source document.
+    # Full reading coverage is recorded separately in analyzed_document_ids.
+    event_timeline: list[SelectionTimelineEvent] = Field(default_factory=list, max_length=4)
+    event_links: list[SelectionEventLink] = Field(default_factory=list, max_length=4)
+    validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=4)
     analyzed_document_ids: list[int] = Field(default_factory=list, max_length=100)
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
     positives: list[str] = Field(default_factory=list, max_length=4)

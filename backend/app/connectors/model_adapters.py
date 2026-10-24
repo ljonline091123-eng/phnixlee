@@ -8,6 +8,13 @@ import httpx
 from app.models.ai_hub import ModelInstance
 
 
+# Provider connections can fail before a model starts generating. Keep that
+# failure short so one unreachable provider cannot hold the durable job queue
+# for several minutes, while allowing long evidence-analysis responses enough
+# time to arrive once the connection is established.
+MODEL_HTTP_TIMEOUT = httpx.Timeout(connect=8.0, read=90.0, write=30.0, pool=8.0)
+
+
 @dataclass(frozen=True)
 class ModelExecutionResult:
     response_text: str
@@ -94,16 +101,21 @@ class OpenAICompatAdapter(ModelAdapter):
         # Evidence extraction needs bounded JSON, rather than a long reasoning
         # stream consuming the entire budget before any answer is returned.
         # Scope this provider option to controlled JSON workflows.
-        if (metadata.get("purpose") in {"NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS",
-                                       "DOCUMENT_GOVERNANCE_PLANNING", "DOCUMENT_SPECIALIST_DRAFT",
-                                       "DOCUMENT_FAILURE_DIAGNOSIS", "DOCUMENT_SPECIALIST_EVALUATION",
-                                       "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_ANALYSIS",
-                                       "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
-                                       "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY"}
-                and metadata.get("require_real_model")
-                and instance.model_code.lower().startswith("deepseek")):
-            payload["thinking"] = {"type": "disabled"}
+        controlled_json = (
+            metadata.get("purpose") in {
+                "NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS",
+                "DOCUMENT_GOVERNANCE_PLANNING", "DOCUMENT_SPECIALIST_DRAFT",
+                "DOCUMENT_FAILURE_DIAGNOSIS", "DOCUMENT_SPECIALIST_EVALUATION",
+                "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_ANALYSIS",
+                "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
+                "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
+            }
+            and metadata.get("require_real_model")
+        )
+        if controlled_json:
             payload["response_format"] = {"type": "json_object"}
+            if instance.model_code.lower().startswith("deepseek"):
+                payload["thinking"] = {"type": "disabled"}
         output_schema = metadata.get("json_schema_output")
         if output_schema and metadata.get("native_structured_output"):
             payload["response_format"] = {
@@ -118,7 +130,7 @@ class OpenAICompatAdapter(ModelAdapter):
             "Authorization": f"Bearer {instance.api_key}",
             "Content-Type": "application/json",
         }
-        with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
+        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
             response = client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             response_json = response.json()
@@ -181,7 +193,7 @@ class AnthropicMessagesAdapter(ModelAdapter):
         workspace_id = (instance.config_json or {}).get("workspace_id")
         if workspace_id:
             headers["anthropic-workspace-id"] = str(workspace_id)
-        with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
+        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
             response = client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             response_json = response.json()
@@ -240,7 +252,7 @@ class GeminiRestAdapter(ModelAdapter):
             generation_config["responseJsonSchema"] = output_schema
         payload.update(extra_body)
         payload["generationConfig"] = generation_config
-        with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
+        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
             response = client.post(url, json=payload, headers={"x-goog-api-key": instance.api_key})
             response.raise_for_status()
             response_json = response.json()

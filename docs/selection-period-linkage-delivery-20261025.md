@@ -59,7 +59,7 @@
 
 ## 3. 验证结果
 
-- 后端完整回归：`929 passed`，`544 subtests passed`。
+- 后端完整回归：`931 passed`，`544 subtests passed`。
 - 专项测试：自然月月末、亚洲市场跨 UTC 日界线、75 篇公告全量压缩、周期文档覆盖门禁、关联证券关系门禁、多 Skill 顺序及版本留痕均通过。
 - 前端：`npm run build` 通过。
 - Python：`python -m compileall -q backend/app` 通过。
@@ -80,3 +80,33 @@
 - 单股周期内超过 80 篇可读披露时，当前版本会明确提示上下文预算不足，不会声称全量完成。后续可增加分批语义归纳再汇总的 Map-Reduce Skill。
 - 港股司法、经营和供应链公开来源覆盖仍受数据源支持范围限制；无公开或无授权数据时保持 `MISSING`/`UNSUPPORTED`。
 - LLM 联动结论仍是研究候选，需保留人工复核；系统不会据此自动交易。
+
+## 6. 证据上限与模型兼容补充验证
+
+### 补充备份
+
+- 本地补充备份分支：`backup/selection-period-evidence-limit-20261025-004830`
+- 补充备份提交：`351052bc0134a23864209d05afdac731fe1e44a5`
+- 一致性数据库备份：`backend/backups/quant_before_selection_evidence_limit_20261025-004830.db`
+- 数据库备份完整性：`PRAGMA integrity_check = ok`
+- 补充备份统计：股票 19,561；知识文档 22,894；公司事实 304；图谱实体 30,760；图谱关系 59,358；选股批次 19；模型调用日志 914。
+- GitHub 在补充备份时无法连接 443 端口，因此该补充分支当前只能称为本地备份；上一轮远程备份分支仍为 `backup/selection-period-linkage-final-20261025-000158`。
+
+### 修复内容
+
+- 单个 NEWS/NOTICE 分析维度的证据文档上限由 12 调整为 100，与最多 80 篇周期上下文及 100 个 `analyzed_document_ids` 契约一致。
+- 增加 80 篇文档专项回归：80 个白名单内 ID 可以通过，白名单外 ID 仍被拒绝。
+- 事件时间线、联动关系和兑现验证调整为各最多 4 条代表性结果；原文阅读覆盖仍单独保存在 `analyzed_document_ids`，不以展示条数代替全文覆盖。
+- OpenAI 兼容真实模型在受控 JSON 任务中统一请求 `json_object`；DeepSeek 专属的关闭思考流参数不发送给其他供应商。
+- 模型 HTTP 超时拆分为连接 8 秒、读取 90 秒、写入 30 秒、连接池 8 秒，避免不可达端点长时间占用持久化治理队列，同时保留长文本生成时间。
+- 提示契约补充来源枚举、字段大小写和精简输出规则，NEWS/NOTICE 仍按 `source_table` 严格校验，不按主题猜测来源。
+
+### 真实模型验证结论
+
+- 旧契约调用 `#913`：DeepSeek 已返回 43 个有效公告文档 ID，但被旧 `maxItems=12` 拒绝，直接证明原上限与真实周期分析冲突。
+- 修复后 DeepSeek 返回 `402 Insufficient Balance`；Gemini 当前网络不可达，均保留独立失败日志和供应商错误原因。
+- `SILICONFLOW_QWEN3_8B` 与 `ZHIPU_FLASH` 连通性验证成功；Zhipu 可返回通过 JSON Schema 的完整候选响应，但免费小模型在来源证据、必填字段和枚举遵循上仍不稳定。
+- 真实批次 `#24` 按严格门禁结束为 `PARTIAL / MODEL_FAILED_FALLBACK_LOCAL`：首轮 Zhipu 响应通过 Schema，但 NEWS 维度缺少对应正文引用；定向修复遗漏必填字段，DeepSeek 欠费且 Gemini 网络超时。该结果用于证明失败关闭和审计链路，不作为选股成果。
+- 系统没有放宽 Schema 或伪造完成状态：不合格结果保持 `PARTIAL`/`MODEL_FAILED_FALLBACK_LOCAL`，原始调用、回退链、Skill 版本和失败原因均保留。
+- 开发热加载中断的 7 条本轮 Gemini 调用日志（`#920/#927/#931/#935/#939/#942/#953`）已按实际情况对账为 `FAILED`，错误说明为“供应商终态未知，未计为成功”；未改动历史旧日志。
+- 要完成强模型真实终验，需要恢复 DeepSeek 余额或提供另一可稳定遵守复杂 JSON Schema 的模型；终验标准保持为 `MODEL_COMPLETED`、`validation_status=PASSED`、52 篇有效周期新闻公告全部列入 `analyzed_document_ids`。

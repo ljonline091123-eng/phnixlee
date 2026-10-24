@@ -15,6 +15,7 @@ from app.models.foundation import (
     FoundationListing, FoundationSecurity,
 )
 from app.models.market_data import DataSource, StockSymbol
+from app.schemas.selection import SelectionDimension, SelectionModelOutput
 from app.services.graph_rag import build_selection_context, selection_period_bounds
 from app.services.model_hub import ModelHubService, seed_default_models
 from app.services.selection import _model_candidate_context, _validate_multi_source_output
@@ -183,6 +184,43 @@ def test_linkage_contract_rejects_unreported_period_document_coverage():
         _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
     output["analyzed_document_ids"] = [1, 2]
     _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
+
+
+def test_dimension_accepts_full_period_document_set_but_rejects_out_of_scope_id():
+    schema = SelectionModelOutput.model_json_schema()
+    recommendation = schema["$defs"]["SelectionModelRecommendation"]["properties"]
+    assert recommendation["event_timeline"]["maxItems"] == 4
+    assert recommendation["event_links"]["maxItems"] == 4
+    assert recommendation["validation_findings"]["maxItems"] == 4
+
+    document_ids = list(range(1, 81))
+    dimension = SelectionDimension.model_validate({
+        "dimension": "NOTICE", "status": "SUPPORTED", "direction": "MIXED",
+        "summary": "分析周期内公告已全部纳入联动分析。",
+        "evidence_document_ids": document_ids,
+        "evidence_fact_ids": [], "evidence_relation_ids": [],
+    })
+    assert dimension.evidence_document_ids == document_ids
+
+    item = {"evidence_json": {
+        "documents": [{
+            "id": document_id, "source_table": "stock_notice", "content_state": "TEXT_AVAILABLE",
+            "content": f"第{document_id}份公告正文",
+        } for document_id in document_ids],
+        "facts": [], "evidence_fact_ids": [], "chunks": [], "graph_paths": [],
+    }}
+    output = {
+        "evidence_document_ids": document_ids,
+        "dimensions": [dimension.model_dump()],
+        "events": [], "event_timeline": [], "event_links": [], "validation_findings": [],
+        "analyzed_document_ids": document_ids,
+    }
+    _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
+    assert output["dimensions"][0]["evidence_document_ids"] == document_ids
+
+    output["dimensions"][0]["evidence_document_ids"] = [*document_ids, 999]
+    with pytest.raises(ValueError):
+        _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
 
 
 def test_model_hub_injects_ordered_skill_chain_and_records_versions():
