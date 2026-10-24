@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import ast
+import calendar
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
 
@@ -84,6 +85,32 @@ def _date_known(value: Any, cutoff: datetime | None) -> bool:
     except ValueError:
         return True
     return observed <= cutoff.date()
+
+
+def selection_period_bounds(as_of: datetime, period_months: int) -> tuple[date, date]:
+    """Return a rolling calendar-month window while preserving month ends."""
+    months = max(1, min(int(period_months), 60))
+    end = _aware(as_of).date() if _aware(as_of) else as_of.date()
+    month_index = end.year * 12 + end.month - 1 - months
+    year, zero_based_month = divmod(month_index, 12)
+    month = zero_based_month + 1
+    day = min(end.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day), end
+
+
+def _date_in_window(value: Any, start: date | None, end: date | None) -> bool:
+    if start is None and end is None:
+        return True
+    if value in (None, ""):
+        return False
+    text = str(value).strip()
+    try:
+        observed = (datetime.strptime(text[:8], "%Y%m%d").date()
+                    if len(text) >= 8 and text[:8].isdigit()
+                    else date.fromisoformat(text[:10]))
+    except ValueError:
+        return False
+    return (start is None or observed >= start) and (end is None or observed <= end)
 
 
 def _hash(value: Any) -> str:
@@ -263,6 +290,8 @@ def _structured_observations(
     symbol: str,
     cutoff: datetime | None,
     limit: int,
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> dict[str, Any]:
     """Project bounded source-table observations into the GraphRAG contract.
 
@@ -274,7 +303,7 @@ def _structured_observations(
     limit = max(1, min(int(limit or 1), 50))
     facts: list[dict[str, Any]] = []
     by_category: dict[str, list[dict[str, Any]]] = {
-        "financial": [], "market": [], "realtime": [], "shareholder": [],
+        "financial": [], "market": [], "realtime": [], "shareholder": [], "fund_flow": [],
     }
     source_record_refs: list[str] = []
     source_tables: set[str] = set()
@@ -339,6 +368,10 @@ def _structured_observations(
             StockKline.fetched_at <= cutoff,
             StockKline.trade_date <= cutoff.date().isoformat(),
         )
+    if period_start is not None:
+        kline_query = kline_query.where(StockKline.trade_date >= period_start.isoformat())
+    if period_end is not None:
+        kline_query = kline_query.where(StockKline.trade_date <= period_end.isoformat())
     kline_rows = list(db.scalars(kline_query.order_by(
         StockKline.trade_date.desc(), StockKline.fetched_at.desc(),
     ).limit(max(40, limit * 2))).all())
@@ -398,6 +431,22 @@ def _structured_observations(
             "payload": row.payload_json or {},
             "fact_only": True,
             "note": "F10 原始分区资料；仅在原文有明确数值时解释持股比例，不作名称推断。",
+        }, row.fetched_at)
+
+    fund_flow_rows = list(db.scalars(select(StockF10Cache).where(
+        StockF10Cache.market == market,
+        StockF10Cache.symbol == symbol,
+        StockF10Cache.section == "fund_flow",
+        StockF10Cache.fetched_at <= cutoff if cutoff is not None else StockF10Cache.id > 0,
+    ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()).limit(2)).all())
+    for row in fund_flow_rows:
+        if not _known(row.fetched_at, cutoff):
+            continue
+        add("fund_flow", row, "FUND_FLOW_OBSERVATION", f"{symbol} 资金流向", {
+            "section": row.section,
+            "payload": row.payload_json or {},
+            "fact_only": True,
+            "note": "供应商资金流估算，不代表可验证的真实账户买卖。",
         }, row.fetched_at)
 
     return {
@@ -721,7 +770,9 @@ def build_selection_context(
     knowledge_base_ids: list[int] | None = None,
     graph_ids: list[int] | None = None,
     as_of: datetime | None = None,
-    max_documents: int = 16,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    max_documents: int = 40,
     max_relations: int = 40,
     max_facts: int = 40,
     max_chunks: int = 32,
@@ -756,12 +807,20 @@ def build_selection_context(
         doc_query = doc_query.where(KnowledgeDocument.knowledge_base_id.in_(kb_ids))
     if graph_ids:
         doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
-    doc_candidates = ranked_documents(db, doc_query, per_source=max(100, max_documents * 2))
+    doc_candidates = ranked_documents(db, doc_query, per_source=max(500, max_documents * 4))
     by_source: dict[str, list[KnowledgeDocument]] = {}
+    undated_documents = 0
     for row in doc_candidates:
-        if not usable_document(row) or not _date_known(_doc_payload(row, include_content=False)["published_at"], cutoff):
+        published_at = _doc_payload(row, include_content=False)["published_at"]
+        if not usable_document(row) or not _date_known(published_at, cutoff):
+            continue
+        if not _date_in_window(published_at, period_start, period_end):
+            if published_at in (None, ""):
+                undated_documents += 1
             continue
         by_source.setdefault(row.source_table, []).append(row)
+    period_source_counts = {source: len(rows) for source, rows in by_source.items()}
+    period_document_count = sum(period_source_counts.values())
     priority = ["stock_news", "stock_notice", "stock_context_event", "research_report"]
     source_keys = sorted(by_source, key=lambda key: (priority.index(key) if key in priority else len(priority), key))
     docs: list[KnowledgeDocument] = []
@@ -854,6 +913,7 @@ def build_selection_context(
     relation_docs = {
         row.id: row for row in db.scalars(relation_doc_query).all()
         if _known(row.created_at, cutoff) and _known(row.updated_at, cutoff) and usable_document(row)
+        and _date_in_window(_doc_payload(row, include_content=False)["published_at"], period_start, period_end)
     } if relation_doc_ids else {}
     relations = [
         row for row in relations
@@ -921,7 +981,10 @@ def build_selection_context(
                 } for proof in proofs],
             })
 
-    structured = _structured_observations(db, market, symbol, cutoff, max_facts)
+    structured = _structured_observations(
+        db, market, symbol, cutoff, max_facts,
+        period_start=period_start, period_end=period_end,
+    )
     # Keep the original FoundationFact shape while adding normalized market
     # observations to the same bounded fact channel.  Consumers can use
     # ``fact_type`` to distinguish source observations from reviewed company
@@ -984,7 +1047,11 @@ def build_selection_context(
     } for row in documents[:max_documents]]
     missing = []
     if not documents:
-        missing.append("知识库文档")
+        missing.append("分析周期内缺少知识库文档")
+    if period_document_count > len(documents):
+        missing.append(f"分析周期内文档超过上下文预算（已载入 {len(documents)}/{period_document_count} 篇）")
+    if undated_documents:
+        missing.append(f"{undated_documents} 篇文档缺少可验证发布日期，未纳入周期分析")
     if not facts and not graph_paths:
         missing.append("公司关系事实/图谱关系")
     if not chunks:
@@ -1008,6 +1075,7 @@ def build_selection_context(
         "market": "结构化量价观测",
         "realtime": "实时行情观测",
         "shareholder": "股东/F10观测",
+        "fund_flow": "资金流观测",
     }
     for category, label in category_labels.items():
         if not structured["by_category"].get(category):
@@ -1016,6 +1084,10 @@ def build_selection_context(
         "context_version": CONTEXT_VERSION,
         "as_of": cutoff.isoformat(),
         "data_cutoff": cutoff.date().isoformat(),
+        "analysis_period": {
+            "start": period_start.isoformat() if period_start else None,
+            "end": period_end.isoformat() if period_end else cutoff.date().isoformat(),
+        },
         "identity": identity,
         "graph_version": graph_version,
         "lakehouse_version": lakehouse_version,
@@ -1044,6 +1116,10 @@ def build_selection_context(
             "chunks": len(chunks), "chunk_documents": chunk_coverage["documents_with_chunks"],
             "lineage": len(lineage_rows), "datasets": len(datasets),
             "structured": structured["counts"],
+            "period_documents": period_document_count,
+            "period_source_counts": period_source_counts,
+            "period_documents_included": len(documents),
+            "undated_documents_excluded": undated_documents,
         },
     }
     context["context_hash"] = _hash({key: value for key, value in context.items() if key != "context_hash"})
@@ -1056,12 +1132,17 @@ def context_for_candidate(db: Session, candidate: Any, *, as_of: datetime | None
     if run is None:
         from app.models.selection import SelectionRun
         run = db.get(SelectionRun, candidate.run_id)
+    cutoff = as_of or getattr(run, "as_of", None) or datetime.now(timezone.utc)
+    period_months = int(((getattr(run, "criteria_json", {}) or {}).get("period_months") or 3))
+    period_start, period_end = selection_period_bounds(cutoff, period_months)
     return build_selection_context(
         db,
         candidate.market,
         candidate.symbol,
         knowledge_base_ids=list(getattr(run, "knowledge_base_ids_json", []) or []),
         graph_ids=list(getattr(run, "graph_ids_json", []) or []),
-        as_of=as_of or getattr(run, "as_of", None),
+        as_of=cutoff,
+        period_start=period_start,
+        period_end=period_end,
     )
 

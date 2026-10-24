@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
+    SelectionBackfillRequest,
     SelectionCandidateRead,
     SelectionRefreshRequest,
     SelectionReviewRequest,
@@ -18,7 +21,7 @@ from app.schemas.selection import (
 )
 from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
-    refresh_tracking, review_candidate,
+    queue_selection_data_backfill, refresh_tracking, review_candidate,
 )
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.schemas.selection import SelectionScopePreview
@@ -146,10 +149,15 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
         KnowledgeGraph.enabled.is_(True), KnowledgeGraph.knowledge_base_id.in_(base_ids),
     )).all())
     graph_ids = [row.id for row in graphs]
+    from app.services.graph_rag import selection_period_bounds
+    period_start, period_end = selection_period_bounds(datetime.now(timezone.utc), payload.period_months)
+    published = func.coalesce(*(KnowledgeDocument.metadata_json[key].as_string()
+        for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date")))
     base_query = select(KnowledgeDocument.knowledge_base_id, KnowledgeDocument.symbol,
                         KnowledgeDocument.source_table, func.count(KnowledgeDocument.id)).where(
         KnowledgeDocument.market == payload.market.upper(),
         KnowledgeDocument.knowledge_base_id.in_(base_ids),
+        or_(published.is_(None), and_(published >= period_start.isoformat(), published <= period_end.isoformat() + "T23:59:59")),
     )
     if payload.symbols:
         base_query = base_query.where(KnowledgeDocument.symbol.in_(payload.symbols))
@@ -162,6 +170,7 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
         KnowledgeDocument.market == payload.market.upper(),
         KnowledgeDocument.knowledge_base_id.in_(base_ids),
         KnowledgeDocument.graph_id.in_(graph_ids),
+        or_(published.is_(None), and_(published >= period_start.isoformat(), published <= period_end.isoformat() + "T23:59:59")),
     )
     if payload.symbols:
         effective_query = effective_query.where(KnowledgeDocument.symbol.in_(payload.symbols))
@@ -311,6 +320,7 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
     if any(row not in usable_graphs for row in selected_graphs) and usable_graphs:
         warnings.append("混选了待治理图谱，模型只读取已治理图谱。")
     return {"market": payload.market.upper(), "source_counts": totals,
+            "analysis_period": {"months": payload.period_months, "start": period_start.isoformat(), "end": period_end.isoformat()},
             "covered_stocks": len(symbols), "requested_stocks": len(payload.symbols),
             "rows": stock_rows,
             "knowledge_bases": kb_rows, "graphs": graph_rows,
@@ -337,10 +347,29 @@ def get_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     return _run_read(db, run)
 
 
+@router.get("/runs/{run_id}/backfill-status")
+def backfill_status(run_id: int, db: Session = Depends(get_db)) -> dict:
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="选股任务不存在")
+    return {"selection_run_id": run.id, "status": (run.criteria_json or {}).get("backfill_progress", {}).get("status", "NOT_RUN"),
+            "progress": (run.criteria_json or {}).get("backfill_progress", {})}
+
+
 @router.post("/runs/{run_id}/retry-failed", response_model=SelectionRunRead, status_code=202)
 def retry_failed(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     try:
         return _run_read(db, queue_failed_selection_reanalysis(db, run_id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/runs/{run_id}/backfill", response_model=SelectionRunRead, status_code=202)
+def backfill_run(run_id: int, payload: SelectionBackfillRequest, db: Session = Depends(get_db)) -> SelectionRunRead:
+    try:
+        return _run_read(db, queue_selection_data_backfill(db, run_id, payload))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

@@ -123,7 +123,15 @@ export type SelectionTracking = {
 export type SelectionRunCreate = {
   universe_scope?: string;
   market: string; symbols: string[]; candidate_limit: number; min_abs_change_pct: number; min_volume_ratio: number;
+  period_months: number;
   model_instance_code: string | null; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
+};
+export type SelectionBackfillRequest = {
+  candidate_ids?: number[];
+  dimensions?: Array<"NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "GRAPH">;
+  period_months?: number;
+  force_refresh?: boolean;
+  rerun_analysis?: boolean;
 };
 export type BatchAcceptance = {
   prepared: boolean; graph_id: number | null; knowledge_base_id: number | null; graph_status: string;
@@ -134,11 +142,13 @@ export type BatchAcceptance = {
 export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?: number; stop_price?: number; target_return_pct?: number; confidence?: number; notes?: string };
 export const selectionApi = {
   candidateDocument: (candidateId: number, documentId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/documents/${documentId}`),
-  scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
+  scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
   acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
   startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
   retryRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry`, { method: "POST" }),
   retryFailed: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry-failed`, { method: "POST" }),
+  backfill: (id: number, payload: SelectionBackfillRequest) => request<SelectionRun>(`/selection/runs/${id}/backfill`, { method: "POST", body: JSON.stringify(payload) }),
+  backfillStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/backfill-status`),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
   document: (graphId: number, documentId: number) => request<SelectionRecord>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
