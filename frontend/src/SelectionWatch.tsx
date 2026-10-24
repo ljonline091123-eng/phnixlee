@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider, type StockSymbol } from "./api";
 import { SelectionAnalysis } from "./SelectionAnalysis";
@@ -9,7 +9,9 @@ const labels: Record<string, string> = {
   PENDING: "待复选",
   PENDING_REVIEW: "待人工审核",
   REVIEW: "待人工复选",
-  PARTIAL: "数据不足",
+  PARTIAL: "部分完成 · 请核对",
+  MODEL_PARTIAL: "模型部分完成",
+  QUEUED: "已排队",
   PENDING_DATA: "等待行情",
   LOCAL_EVIDENCE: "本地规则预选",
   MODEL_REQUESTED: "模型分析中",
@@ -79,6 +81,21 @@ const pct = (value: unknown) => value == null ? "—" : `${numberOf(value)}%`;
 const dateOf = (value: string | null) => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const records = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter((item): item is SelectionRecord => !!item && typeof item === "object") : [];
+const sourceLabelFallback: Record<string, string> = {
+  stock_news: "新闻", stock_notice: "公告", stock_context_event: "外部事件线索", stock_financial_report: "财务报告",
+  stock_kline: "历史量价", stock_realtime_quote: "实时行情", stock_f10_cache: "F10资料", research_report: "研究报告",
+};
+function sourceCountSummary(value: unknown, labelsValue: unknown): string {
+  if (!value || typeof value !== "object") return "暂无来源明细";
+  const sourceLabels = labelsValue && typeof labelsValue === "object" ? labelsValue as Record<string, string> : {};
+  const entries = Object.entries(value as Record<string, unknown>).filter(([, count]) => Number(count) > 0);
+  return entries.length ? entries.map(([source, count]) => `${sourceLabels[source] || sourceLabelFallback[source] || source} ${Number(count).toLocaleString()}`).join(" · ") : "暂无命中来源";
+}
+function relationCountSummary(value: unknown): string {
+  if (!value || typeof value !== "object") return "暂无直接关系";
+  const entries = Object.entries(value as Record<string, unknown>).filter(([, count]) => Number(count) > 0);
+  return entries.length ? entries.map(([type, count]) => `${nameOf(type)} ${Number(count).toLocaleString()}`).join(" · ") : "暂无直接关系";
+}
 const textOf = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "";
 const recordLabel = (record: SelectionRecord, keys: string[], fallback: string) => keys.map(key => textOf(record[key])).find(Boolean) || fallback;
 const recordDetail = (record: SelectionRecord, keys: string[]) => keys.map(key => textOf(record[key])).filter(Boolean).join(" · ");
@@ -278,7 +295,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [detail, setDetail] = useState<SelectionTracking | null>(null);
   const [detailRetrospectives, setDetailRetrospectives] = useState<SelectionRetrospective[]>([]);
   const [detailAuditError, setDetailAuditError] = useState("");
-  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, model_instance_code: "", use_model: true, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
+  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
+  const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
   async function reload() {
     const [nextRuns, nextTracking] = await Promise.all([selectionApi.listRuns(), selectionApi.listTracking()]);
@@ -292,17 +310,18 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
       if (!valid) return;
       setRuns(nextRuns); setTracking(nextTracking); setBases(nextBases); setGraphs(nextGraphs); setInstances(nextInstances); setProviders(nextProviders);
       const enabledBases = nextBases.filter(item => item.enabled);
-      const preferred = nextGraphs.find(item => item.graph_code === "FIXED20_ACCEPTANCE_20261021" && item.enabled && ["GOVERNED", "LOCKED"].includes(item.governance_status));
-      setForm(current => ({ ...current, knowledge_base_ids: preferred ? [preferred.knowledge_base_id] : enabledBases.slice(0, 1).map(item => item.id), graph_ids: preferred ? [preferred.id] : [] }));
+      const preferred = nextGraphs.find(item => item.graph_code === "FIXED20_ACCEPTANCE_20261021" && item.enabled && ["GOVERNED", "LOCKED"].includes(item.governance_status))
+        || nextGraphs.find(item => item.enabled && ["GOVERNED", "LOCKED"].includes(item.governance_status));
+      setForm(current => ({ ...current, knowledge_base_ids: preferred ? [preferred.knowledge_base_id] : enabledBases.slice(0, 1).map(item => item.id), graph_ids: preferred ? [preferred.id] : [], use_model: Boolean(preferred) }));
       if (nextRuns.length) { const first = await selectionApi.getRun(nextRuns[0].id); if (valid) setRun(first); }
     }).catch(err => { if (valid) setError(errorOf(err)); }).finally(() => { if (valid) setLoading(false); });
     return () => { valid = false; };
   }, [loadVersion]);
   useEffect(() => {
-    if (!createOpen || !stockQuery.trim()) {setStockMatches([]); return;}
+    if (!createOpen || !stockQuery.trim()) {setStockMatches([]); setSearchBusy(false); return;}
     let valid = true;
     setSearchBusy(true); setSearchError("");
-    const timer = window.setTimeout(() => { void api.searchStocks(form.market, stockQuery.trim(), 12).then(items => {if (valid) setStockMatches(items);}).catch(err => {if (valid) setSearchError(errorOf(err));}).finally(() => {if (valid) setSearchBusy(false);}); }, 250);
+    const timer = window.setTimeout(() => { void api.searchStocks(form.market, stockQuery.trim(), 50).then(items => {if (valid) setStockMatches(items);}).catch(err => {if (valid) setSearchError(errorOf(err));}).finally(() => {if (valid) setSearchBusy(false);}); }, 250);
     return () => {valid = false; clearTimeout(timer);};
   }, [createOpen, stockQuery, form.market]);
   useEffect(() => {
@@ -322,11 +341,11 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   async function create(event: FormEvent) {
     event.preventDefault(); setError(""); setNotice(""); setBusy(true);
     try {
-      if (!form.knowledge_base_ids.length || !form.graph_ids.length) throw new Error("请至少选择一个知识库和一张独立图谱作为选股依据。");
-      if(stockQuery.trim()) throw new Error("请点击搜索结果将股票加入范围，或清空搜索框后提交。");
-      if(form.use_model && (!scopePreview?.ready || scopeBusy || scopeError)) throw new Error("所选知识范围尚无可用数据或图谱未治理，请查看覆盖预检。");
-      const result = await selectionApi.startRun({ ...form, symbols: chosenStocks.map(item => item.symbol), model_instance_code: form.model_instance_code || null, data_mode: "REAL" });
-      setRun(result); await reload(); setCreateOpen(false); setNotice(`选股批次 #${result.id} 已提交后台，可查看进度。`); onCreated?.(result);
+      if (stockQuery.trim() && !chosenStocks.length) throw new Error("请勾选搜索结果中的股票，或清空搜索框后按本地市场筛选。");
+      const modelReady = Boolean(form.use_model && form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
+      const result = await selectionApi.startRun({ ...form, use_model: modelReady, symbols: chosenStocks.map(item => item.symbol), model_instance_code: form.model_instance_code || null, data_mode: "REAL" });
+      setRun(result); await reload(); setCreateOpen(false);
+      setNotice(`选股批次 #${result.id} 已提交后台${form.use_model && !modelReady ? "；所选知识库/图谱暂不可用，本次按规则生成候选，未调用模型" : ""}。`); onCreated?.(result);
     } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
   }
   function openReview(item: SelectionCandidate) {
@@ -350,6 +369,62 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   async function openTracking(id: number) { setBusy(true); setDetailRetrospectives([]); setDetailAuditError(""); setError(""); try { const [nextDetail, nextRetrospectives] = await Promise.all([selectionApi.getTracking(id), selectionApi.trackingRetrospectives(id)]); setDetail(nextDetail); setDetailRetrospectives(nextRetrospectives); } catch (err) { setDetailAuditError(errorOf(err)); try { setDetail(await selectionApi.getTracking(id)); } catch (fallbackError) { setError(errorOf(fallbackError)); } } finally { setBusy(false); } }
   const pending = run?.candidates.filter(item => !["APPROVED", "REJECTED"].includes(item.decision)).length ?? 0;
   const availableGraphs = graphs.filter(item => item.enabled && form.knowledge_base_ids.includes(item.knowledge_base_id));
+  const governedGraphs = availableGraphs.filter(item => ["GOVERNED", "LOCKED"].includes(item.governance_status));
+  const scopeKnowledgeBases = records(scopePreview?.knowledge_bases);
+  const scopeGraphs = records(scopePreview?.graphs);
+  const selectableMatches = stockMatches.filter(item => !chosenStocks.some(stock => stock.market === item.market && stock.symbol === item.symbol));
+  const allMatchesSelected = stockMatches.length > 0 && selectableMatches.length === 0;
+  const selectedMatchCount = stockMatches.length - selectableMatches.length;
+  const failedModelCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.model_output_status === "FAILED" || item.analysis_json.analysis_validation_status === "PARTIAL")) ?? [];
+  const retryProgress = (run?.criteria_json.retry_progress as SelectionRecord | undefined) ?? {};
+  const retryActive = ["QUEUED", "RUNNING"].includes(String(retryProgress.status || ""));
+  const submitBlockReason = busy ? "正在提交选股任务。" : "";
+  const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
+  const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
+  const updateChosenStocks = (next: StockSymbol[]) => {
+    setChosenStocks(next);
+    setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
+  };
+  const toggleStock = (stock: StockSymbol) => {
+    const exists = chosenStocks.some(row => row.market === stock.market && row.symbol === stock.symbol);
+    if (!exists && chosenStocks.length >= 50) { setSearchError("单次最多手选 50 只股票，请先移除部分已选股票。也可以使用本地全市场规则筛选。"); return; }
+    updateChosenStocks(exists
+      ? chosenStocks.filter(row => row.market !== stock.market || row.symbol !== stock.symbol)
+      : [...chosenStocks, stock]);
+  };
+  const toggleVisibleMatches = (checked: boolean) => {
+    if (!checked) {
+      updateChosenStocks(chosenStocks.filter(stock => !stockMatches.some(match => match.market === stock.market && match.symbol === stock.symbol)));
+      return;
+    }
+    const availableSlots = Math.max(0, 50 - chosenStocks.length);
+    const next = [...chosenStocks, ...selectableMatches.slice(0, availableSlots)];
+    updateChosenStocks(next);
+    if (selectableMatches.length > availableSlots) setSearchError("单次最多手选 50 只，已选入剩余可选名额。可移除股票后继续添加。");
+    else setSearchError("");
+  };
+  const clearChosenStocks = () => updateChosenStocks([]);
+  useEffect(() => { if (selectAllMatchesRef.current) selectAllMatchesRef.current.indeterminate = selectedMatchCount > 0 && !allMatchesSelected; }, [selectedMatchCount, allMatchesSelected]);
+  async function retryFailed() {
+    if (!run || retryActive) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      setRun(await selectionApi.retryFailed(run.id));
+      await reload();
+      setNotice(`已提交 ${failedModelCandidates.length} 只失败股票的单独重试，继续保留原有证据快照。`);
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function retryWholeRun() {
+    if (!run || run.status !== "FAILED") return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.retryRun(run.id);
+      setRun(next); await reload();
+      setNotice(`已创建新批次 #${next.id} 重新执行；原失败批次 #${run.id} 保留，可随时回看。`);
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
   return <div className="selection-workbench">
     {error && !createOpen && !candidate && <div className="form-error" role="alert">{error} <button type="button" disabled={loading} onClick={() => setLoadVersion(value => value + 1)}>重新加载</button></div>}{notice && <p className="selection-notice" role="status">{notice}</p>}
     <section className="panel">
@@ -364,8 +439,19 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
           {["QUEUED", "RUNNING"].includes(run.status) && <div className="batch-progress"><strong>{textOf((run.criteria_json.progress as SelectionRecord)?.message) || "等待后台执行"}</strong><progress aria-label="分析进度" max="100" value={Number((run.criteria_json.progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
+          {(failedModelCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
+            <div className="selection-scope-heading"><strong>引用校验通过 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
+              {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只失败或待核对股票`}</button>}
+            </div>
+            <p className="selection-help">重试只处理失败且尚未复选的股票，保留本轮证据和历史调用；整批异常则创建新批次，原记录保留。</p>
+            {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}
+            {failedModelCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedModelCandidates.length}）</summary><div className="selection-failure-list">{failedModelCandidates.map(item => <article key={item.id}>
+              <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>
+              {records(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{dateOf(textOf(attempt.at) || null)} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {textOf(attempt.reason) || "结果已返回并经过证据校验"}</small>)}
+            </article>)}</div></details>}
+          </section>}
           {run.missing_data_json.length > 0 && <details className="selection-evidence"><summary>数据与分析限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, i) => <li key={i}>{item}</li>)}</ul></details>}
-          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>结论 / 数据缺口</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><strong>{item.name || item.symbol}</strong><br /><code>{item.symbol}</code> <small>{nameOf(item.market)}</small></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}>{textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) || "查看资料后复选"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
+          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>分析状态 / 结论</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><strong>{item.name || item.symbol}</strong><br /><code>{item.symbol}</code> <small>{nameOf(item.market)}</small></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}><span className={`selection-analysis-state ${item.analysis_json.model_output_status === "FAILED" || item.analysis_json.analysis_validation_status === "PARTIAL" ? "warning" : ""}`}>{item.analysis_json.model_output_status === "SUCCESS" ? item.analysis_json.analysis_validation_status === "PARTIAL" ? "部分证据不足 · 待核对" : "模型分析已完成" : item.analysis_json.model_output_status === "FAILED" ? "模型分析失败 · 可重试" : "规则预选 · 未形成模型结论"}</span>{textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) || "查看资料后复选"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
         </> : <p className="selection-empty">新建选股，从已有数据中筛出候选，再结合知识证据进行人工复选。</p>}
       </> : <>
         <p className="selection-help">仅计算人工确认后、同一复权口径的有效交易日行情。周末、节假日或缺行情不会充当跟踪天数。后台 Scheduler 与 Worker 运行时会定期更新，也可手动更新。</p>
@@ -374,19 +460,53 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     </section>
     {createOpen && <Dialog title="新建选股" busy={busy} close={() => setCreateOpen(false)}><form className="selection-form" onSubmit={create}>
       <div className="selection-form-grid"><label>市场<select value={form.market} onChange={event => {setForm({ ...form, market: event.target.value }); setChosenStocks([]); setStockQuery("");}}>{["CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"].map(market => <option key={market} value={market}>{nameOf(market)}</option>)}</select></label><label>候选数量上限<input type="number" required min={1} max={50} value={form.candidate_limit} onChange={event => setForm({ ...form, candidate_limit: Number(event.target.value) })} /></label></div>
-      <div className="selection-stock-picker"><label>股票范围（选填）<input aria-label="选股股票搜索" role="combobox" aria-expanded={!!stockMatches.length} aria-controls="selection-stock-options" value={stockQuery} placeholder="代码、中文名称、英文名、拼音或首字母" onChange={event => setStockQuery(event.target.value)} /></label><div className="selection-stock-results" id="selection-stock-options" role="listbox">{stockMatches.filter(item => !chosenStocks.some(stock => stock.market === item.market && stock.symbol === item.symbol)).map(item => <button type="button" role="option" aria-selected={false} key={`${item.market}:${item.symbol}`} onClick={() => {setChosenStocks(current => [...current, item]); setStockQuery(""); setStockMatches([]);}}><strong>{item.name}</strong><small>{item.symbol} · {nameOf(item.market)}</small><span>加入</span></button>)}</div>{searchBusy && stockQuery && <small role="status">正在搜索…</small>}{searchError && <p role="alert">搜索失败：{searchError}</p>}{stockQuery && !searchBusy && !stockMatches.length && !searchError && <small>未找到匹配股票，请调整关键词。</small>}<div className="selection-stock-selected">{chosenStocks.map(item => <button type="button" key={`${item.market}:${item.symbol}`} aria-label={`移除${item.name}`} onClick={() => setChosenStocks(current => current.filter(row => row.symbol !== item.symbol || row.market !== item.market))}>{item.name} · {item.symbol} ×</button>)}</div><small className="selection-help">已选 {chosenStocks.length} 只；未选股票时按本地已有行情筛选。先搜索，再点击匹配项加入；切换市场将清空已选股票。</small></div>
+      <div className="selection-stock-picker">
+        <label>1. 选择股票<input aria-label="选股股票搜索" role="combobox" aria-expanded={!!stockMatches.length} aria-controls="selection-stock-options" value={stockQuery} placeholder="代码、中文名称、英文名、拼音或首字母" onChange={event => setStockQuery(event.target.value)} /></label>
+        {stockMatches.length > 0 && <div className="selection-select-all"><label><input ref={selectAllMatchesRef} type="checkbox" checked={allMatchesSelected} aria-checked={allMatchesSelected ? true : selectedMatchCount ? "mixed" : false} onChange={event => toggleVisibleMatches(event.target.checked)} />全选当前 {stockMatches.length} 条结果</label><span>本页已选 {selectedMatchCount} 只 · 搜索最多显示 50 条</span></div>}
+        <div className="selection-stock-results" id="selection-stock-options">{stockMatches.map(item => { const checked = chosenStocks.some(stock => stock.market === item.market && stock.symbol === item.symbol); return <label key={`${item.market}:${item.symbol}`}><input type="checkbox" checked={checked} onChange={() => toggleStock(item)} /><span><strong>{item.name}</strong><small>{item.symbol} · {nameOf(item.market)}</small></span></label>; })}</div>
+        {searchBusy && stockQuery && <small role="status">正在搜索…</small>}{searchError && <p role="alert">{searchError}</p>}{stockQuery && !searchBusy && !stockMatches.length && !searchError && <small>未找到匹配股票，请调整关键词。</small>}
+        <div className="selection-scope-heading"><strong>已选 {chosenStocks.length} / 50 只</strong><button type="button" disabled={!chosenStocks.length} onClick={clearChosenStocks}>清空已选</button></div>
+        <div className="selection-stock-selected">{chosenStocks.map(item => <button type="button" key={`${item.market}:${item.symbol}`} aria-label={`移除${item.name}`} onClick={() => toggleStock(item)}>{item.name} · {item.symbol} ×</button>)}</div>
+        <small className="selection-help">手选股票逐只分析，不因量价阈值被静默剔除；留空则按本地已有行情和下方阈值筛选。</small>
+      </div>
       <div className="selection-form-grid"><label>绝对涨跌幅阈值（%）<input type="number" required min={0} max={50} step="0.1" value={form.min_abs_change_pct} onChange={event => setForm({ ...form, min_abs_change_pct: Number(event.target.value) })} /></label><label>成交量比阈值<input type="number" required min={0} max={100} step="0.1" value={form.min_volume_ratio} onChange={event => setForm({ ...form, min_volume_ratio: Number(event.target.value) })} /></label></div>
-      <label>知识库 · 原文与事实来源</label><div className="selection-choices">{bases.filter(item => item.enabled).map(item => <label key={item.id}><input type="checkbox" checked={form.knowledge_base_ids.includes(item.id)} onChange={() => { const ids = form.knowledge_base_ids.includes(item.id) ? form.knowledge_base_ids.filter(id => id !== item.id) : [...form.knowledge_base_ids, item.id]; setForm({ ...form, knowledge_base_ids: ids, graph_ids: form.graph_ids.filter(id => graphs.some(graph => graph.id === id && ids.includes(graph.knowledge_base_id))) }); }} /><span className="selection-choice-name">{item.kb_name}<small>#{item.id} · {item.version} · {item.source_tables.map(nameOf).join("、")}</small></span></label>)}</div>
-      <label>独立图谱 · 只读取所选关系范围</label><div className="selection-choices">{availableGraphs.map(item => <label key={item.id}><input type="checkbox" checked={form.graph_ids.includes(item.id)} onChange={() => setForm({ ...form, graph_ids: form.graph_ids.includes(item.id) ? form.graph_ids.filter(id => id !== item.id) : [...form.graph_ids, item.id] })} /><span className="selection-choice-name">{item.graph_name}<small>#{item.id} · {item.version} · {item.governance_status === "GOVERNED" ? "已治理" : item.governance_status === "LOCKED" ? "已锁定" : "待治理"} · {item.entity_count}实体/{item.relation_count}关系</small></span></label>)}{!availableGraphs.length && <span className="selection-help">所选知识库暂无启用图谱，请先建立并治理。</span>}</div>
-      <section className="selection-scope-preview" aria-label="知识范围覆盖预检"><strong>知识范围覆盖预检</strong>{scopeBusy ? <p role="status">正在检查所选范围…</p> : scopeError ? <p role="alert">{scopeError}</p> : scopePreview && <><p>覆盖 {scopePreview.covered_stocks} 只股票{chosenStocks.length ? ` / 已选${chosenStocks.length}只` : "（当前市场）"} · 新闻 {scopePreview.source_counts?.stock_news || 0} 条 · 公告 {scopePreview.source_counts?.stock_notice || 0} 条</p>{records(scopePreview.rows).filter(item => item.status === "MISSING").length > 0 && <p>缺少所选图谱资料：{records(scopePreview.rows).filter(item => item.status === "MISSING").map(item => item.symbol).join("、")}。缺口会保留在分析结果中。</p>}<p>{scopePreview.scope_note}</p></>}</section>
+      <div className="selection-scope-heading"><strong>2. 选择证据 · 知识库</strong><button type="button" disabled={!bases.some(item => item.enabled)} onClick={() => { const ids = bases.filter(item => item.enabled).map(item => item.id); setForm(current => ({ ...current, knowledge_base_ids: ids, graph_ids: graphs.filter(graph => graph.enabled && ids.includes(graph.knowledge_base_id) && ["GOVERNED", "LOCKED"].includes(graph.governance_status)).map(graph => graph.id) })); }}>全选可用范围</button></div>
+      <p className="selection-help">知识库提供原文和事实，图谱提供公司、行业与事件关系。同名的“公告与外部事件知识库”来自不同治理批次，业务范围相同，保存的数据可能不同；请比较创建时间与本次覆盖。公告是法定披露，外部事件是政策、原材料、产业链等线索。</p>
+      <div className="selection-choices">{bases.filter(item => item.enabled).map(item => { const stats = scopeKnowledgeBases.find(row => Number(row.id) === item.id); return <label key={item.id} className={form.knowledge_base_ids.includes(item.id) ? "selected" : ""}>
+        <input type="checkbox" checked={form.knowledge_base_ids.includes(item.id)} onChange={() => { const ids = form.knowledge_base_ids.includes(item.id) ? form.knowledge_base_ids.filter(id => id !== item.id) : [...form.knowledge_base_ids, item.id]; setForm({ ...form, knowledge_base_ids: ids, graph_ids: form.graph_ids.filter(id => graphs.some(graph => graph.id === id && ids.includes(graph.knowledge_base_id))) }); }} />
+        <span className="selection-choice-name"><strong>{item.kb_name}</strong><small>#{item.id} · {item.version} · {item.source_tables.map(source => sourceLabelFallback[source] || nameOf(source)).join("、") || "未登记来源"}</small>
+          <small>创建于 {dateOf(item.created_at)}{bases.filter(other => other.enabled && other.kb_name === item.kb_name).length > 1 ? " · 同名历史批次，请按覆盖选择" : ""}</small><span className="selection-choice-count">{scopeBusy ? "正在统计覆盖…" : stats ? `${Number(stats.document_count || 0).toLocaleString()} 篇文档 · 覆盖 ${Number(stats.covered_stocks || 0)} 只${chosenStocks.length ? ` / 已选 ${chosenStocks.length} 只` : "（当前市场）"}` : "覆盖统计暂不可用"}</span>
+          <small>{sourceCountSummary(stats?.source_counts, scopePreview?.source_labels)}</small>
+          <small>{scopeBusy || !stats ? "" : !Number(stats.document_count) ? "本次无关联文档，对本轮文档分析无补充" : chosenStocks.length && Number(stats.covered_stocks) < chosenStocks.length ? "部分股票有资料，未覆盖股票将提示证据不足" : "当前范围均有资料，可提供原文依据"}</small>
+          <details onClick={event => event.stopPropagation()}><summary>范围与批次说明</summary><small>{item.description || "用于检索已归集的文档证据及其来源记录。"}</small><small>批次编码：{item.kb_code}</small>{strings(stats?.source_explanations).map((explanation, index) => <small key={index}>{explanation}</small>)}</details>
+        </span></label>; })}</div>
+      <div className="selection-scope-heading"><strong>独立图谱 · 关系证据</strong><span>已治理表示完成治理流程，不代表每条关系已人工核实</span></div>
+      <div className="selection-choices">{availableGraphs.map(item => { const stats = scopeGraphs.find(row => Number(row.id) === item.id); const eligible = ["GOVERNED", "LOCKED"].includes(item.governance_status); return <label key={item.id} className={!eligible ? "selection-choice-disabled" : form.graph_ids.includes(item.id) ? "selected" : ""}>
+        <input type="checkbox" checked={form.graph_ids.includes(item.id)} disabled={!eligible} onChange={() => setForm({ ...form, graph_ids: form.graph_ids.includes(item.id) ? form.graph_ids.filter(id => id !== item.id) : [...form.graph_ids, item.id] })} /><span className="selection-choice-name"><strong>{item.graph_name}</strong><small>#{item.id} · {item.version} · {eligible ? "已治理，可用于模型分析" : "待治理，不纳入模型证据"}</small>
+          <span className="selection-choice-count">{scopeBusy ? "正在统计覆盖…" : stats ? `交集 ${Number(stats.document_count || 0).toLocaleString()} 篇文档 · ${Number(stats.direct_relation_count || 0).toLocaleString()} 条直接关系 · 覆盖 ${Number(stats.covered_stocks || 0)} 只` : "覆盖统计暂不可用"}</span>
+          <small>{relationCountSummary(stats?.relation_type_counts)}</small><details onClick={event => event.stopPropagation()}><summary>图谱范围说明</summary><small>{item.description || "用于提供股票、公司、行业及事件间可追溯关系。"}</small><small>全图总量：{item.entity_count.toLocaleString()} 个实体 / {item.relation_count.toLocaleString()} 条关系（包含本轮以外的股票）</small></details>
+        </span></label>; })}{!availableGraphs.length && <span className="selection-help">请先勾选知识库；该知识库暂无启用图谱。</span>}</div>
+      <section className="selection-scope-preview" aria-label="知识范围覆盖预检"><strong>本轮证据预览</strong>
+        {scopeBusy ? <p role="status">正在统计交集；您仍可提交任务，后台会核验实际范围。</p> : scopeError ? <p role="alert">覆盖统计暂不可用：{scopeError}。仍可提交，后台执行时核验。</p> : scopePreview && <>
+          <p>选中图谱含 {Object.values(scopePreview.source_counts || {}).reduce<number>((sum, value) => sum + Number(value || 0), 0).toLocaleString()} 篇投影文档，覆盖 {scopePreview.covered_stocks} 只股票{chosenStocks.length ? ` / 本次选 ${chosenStocks.length} 只` : "（当前市场）"}。文档数量含图谱投影记录，不代表不重复的原文数量。</p>
+          <p>{sourceCountSummary(scopePreview.source_counts, scopePreview.source_labels)}</p>
+          {records(scopePreview.rows).length > 0 && <details className="selection-coverage-details"><summary>逐股查看资料覆盖与关系类型（{records(scopePreview.rows).length} 只）</summary><div className="selection-coverage-list">{records(scopePreview.rows).map(row => <article key={String(row.symbol)} className={row.status === "AVAILABLE" ? "coverage-ready" : "coverage-missing"}>
+            <strong>{chosenStocks.find(stock => stock.symbol === row.symbol)?.name || row.symbol} · {String(row.coverage_label || "暂无关联资料")}</strong><span>知识库 {Number(row.knowledge_document_count || 0)} 篇 · 选中图谱 {Number(row.graph_document_count || 0)} 篇 · 直接关系 {Number(row.direct_relation_count || 0)} 条</span>
+            <small>{sourceCountSummary(row.graph_source_counts, scopePreview.source_labels)}</small><small>{relationCountSummary(row.relation_type_counts)}</small>
+          </article>)}</div></details>}
+          {strings(scopePreview.warnings).map((warning, index) => <p className="selection-help" key={index}>提示：{warning}</p>)}{scopePreview.ready !== true && <p className="selection-help">{strings(scopePreview.blockers).join("；")}；当前可先生成规则候选。</p>}
+          <small>覆盖数量与关系种类可核查，但不等于语义相关度、来源可靠度或投资价值；缺少资料会标为证据不足，关联关系不直接证明因果。</small>
+        </>}
+      </section>
       <label style={{ display: "flex", flexDirection: "row", alignItems: "center" }}><input type="checkbox" checked={form.use_model} onChange={event => setForm({ ...form, use_model: event.target.checked })} />调用模型综合分析候选证据</label>
       <label>分析模型<select disabled={!form.use_model} value={form.model_instance_code} onChange={event => setForm({ ...form, model_instance_code: event.target.value })}><option value="">按选股任务自动路由</option>{instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK")).map(item => <option key={item.id} value={item.instance_code} disabled={!item.api_key_configured}>{item.model_name} · {item.instance_code}{item.api_key_configured ? "" : "（未配置密钥）"}</option>)}</select></label>
       <p className="selection-help">只向模型发送筛选后的候选和有限证据。取消模型分析时保存为规则预选，供人工核验；数据不足或模型失败会明确记录。</p>
-      {error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={busy || !!stockQuery.trim() || (form.use_model && (scopeBusy || !!scopeError || !scopePreview?.ready))}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
+      <p className="selection-submit-mode" role="status">本次将：{form.use_model && modelScopeSelected ? `生成候选池并进行多源模型分析${scopeBusy ? "（覆盖统计进行中，不影响提交）" : ""}` : "生成规则候选，不调用模型"}{form.use_model && !modelScopeSelected ? "。若需模型分析，请勾选知识库及其已治理图谱。" : ""}</p>
+      {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">{submitBlockReason}</span><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={!!submitBlockReason}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
       <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.evidence_context?.documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
-      {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
+      {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price || candidate.analysis_json.analysis_validation_status === "PARTIAL"}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
     </Dialog>}
     {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<RetrospectiveTrail rows={detailRetrospectives} error={detailAuditError} /><div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}
   </div>;

@@ -17,7 +17,7 @@ from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.pipeline import ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionTracking
 from app.schemas.selection import SelectionReviewRequest, SelectionRunCreate
-from app.services.selection import execute_selection_job, queue_selection_run, review_candidate
+from app.services.selection import execute_failed_selection_reanalysis, execute_selection_job, queue_selection_run, review_candidate
 
 
 NOW = datetime(2025, 1, 6, 10, tzinfo=timezone.utc)
@@ -130,4 +130,80 @@ def test_unprepared_acceptance_has_stable_empty_collections(isolated):
             assert result["symbols"] == [] and result["datasets"] == {}
             client.close()
         finally:
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_whole_run_retry_preserves_failed_attempt_and_queues_new_run(isolated):
+    with isolated() as db:
+        original = queue_selection_run(db, request())
+        original.status = "FAILED"
+        original.error_message = "原始失败原因"
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            response = client.post(f"/api/v1/selection/runs/{original.id}/retry")
+            assert response.status_code == 202, response.text
+            retried = response.json()
+            assert retried["id"] != original.id and retried["status"] == "QUEUED"
+            assert retried["criteria_json"]["retry_of_run_id"] == original.id
+            assert original.status == "FAILED" and original.error_message == "原始失败原因"
+            assert client.post(f"/api/v1/selection/runs/{retried['id']}/retry").status_code == 409
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicate(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL")
+        db.add(run)
+        db.flush()
+        failed = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001",
+            analysis_json={"model_output_status": "FAILED", "model_attempts": [{"status": "FAILED"}]},
+            evidence_json={"documents": [{"id": 123, "content": "原始证据"}]})
+        good = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO002",
+            analysis_json={"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"},
+            evidence_json={"documents": [{"id": 456}]})
+        db.add_all([failed, good])
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        calls = []
+
+        def analyze(_db, _run, candidates, **kwargs):
+            calls.extend(item["symbol"] for item, _score in candidates)
+            for item, _score in candidates:
+                assert item["evidence_json"] == {"documents": [{"id": 123, "content": "原始证据"}]}
+                item["analysis_json"] = {**item["analysis_json"], "model_output_status": "SUCCESS",
+                                         "analysis_validation_status": "PARTIAL"}
+
+        try:
+            response = client.post(f"/api/v1/selection/runs/{run.id}/retry-failed")
+            assert response.status_code == 202, response.text
+            assert response.json()["status"] == "RUNNING"
+            assert client.post(f"/api/v1/selection/runs/{run.id}/retry-failed").status_code == 409
+            job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed"))
+            assert job.payload_json["candidate_ids"] == [failed.id]
+            with patch("app.services.selection._apply_model_analysis", side_effect=analyze):
+                result = execute_failed_selection_reanalysis(job.payload_json)
+            assert calls == ["DEMO001"] and result["failed_count"] == 0
+            db.expire_all()
+            assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"}
+            assert good.evidence_json == {"documents": [{"id": 456}]}
+            assert failed.evidence_json == {"documents": [{"id": 123, "content": "原始证据"}]}
+            assert run.status == "PARTIAL" and run.analysis_mode == "MODEL_PARTIAL"
+            assert result["passed_count"] == 1 and result["citation_partial_count"] == 1
+            assert run.criteria_json["retry_progress"]["passed_count"] == 1
+            assert "引用校验通过 1 只、待核对 1 只、执行失败 0 只" in run.criteria_json["progress"]["message"]
+            # The worker normally marks the completed job successful. Simulate
+            # that lifecycle before retrying the remaining unverified result.
+            job.status = "SUCCESS"
+            db.commit()
+            next_response = client.post(f"/api/v1/selection/runs/{run.id}/retry-failed")
+            assert next_response.status_code == 202, next_response.text
+            retry_jobs = list(db.scalars(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed").order_by(ScheduledJob.id)))
+            assert retry_jobs[-1].payload_json["candidate_ids"] == [failed.id]
+        finally:
+            client.close()
             app.dependency_overrides.pop(get_db, None)

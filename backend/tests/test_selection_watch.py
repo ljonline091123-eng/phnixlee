@@ -142,6 +142,20 @@ def test_rejection_does_not_create_tracking_and_review_is_single_use(db):
         review_candidate(db, item.id, SelectionReviewRequest(decision="APPROVED", target_price=12))
 
 
+def test_unverified_analysis_cannot_be_confirmed_or_create_prediction(db):
+    run, item = candidate(db)
+    item.analysis_json = {**item.analysis_json, "model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL"}
+    db.commit()
+    with pytest.raises(ValueError, match="分析引用尚未通过核验"):
+        review_candidate(db, item.id, SelectionReviewRequest(decision="APPROVED", target_price=12))
+    assert item.decision == "PENDING"
+    assert run.reviewed_count == 0
+    assert db.scalar(select(SelectionTracking)) is None
+    assert db.scalar(select(PredictionLedger)) is None
+    review_candidate(db, item.id, SelectionReviewRequest(decision="REJECTED"))
+    assert item.decision == "REJECTED"
+
+
 def test_ten_session_review_excludes_earlier_adjusted_future_and_duplicate_bars(db):
     item, tracking = approve(db)
     assert item.prediction_id is not None

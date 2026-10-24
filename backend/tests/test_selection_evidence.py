@@ -162,6 +162,25 @@ def test_compact_document_whitelist_matches_visible_text_and_chunk_proofs():
     assert evidence["document_ids"] == [47, 48, 49]
 
 
+def test_source_whitelists_and_repair_feedback_distinguish_news_about_an_announcement():
+    import pytest
+    from app.services.selection import _model_candidate_context, _validate_multi_source_output
+    item = {"symbol": "DEMO001", "evidence_json": {"documents": [
+        {"id": 11, "source_table": "stock_news", "title": "公司公告回购",
+         "content_state": "TEXT_AVAILABLE", "content": "新闻报道公司计划回购股份。"},
+        {"id": 12, "source_table": "stock_notice", "content_state": "TEXT_AVAILABLE",
+         "content": "关于为子公司担保的进展公告。"},
+        {"id": 13, "source_table": "stock_notice", "content_state": "METADATA_ONLY", "title": "仅标题"}]}}
+    context = _model_candidate_context(item)
+    allowlist = context["evidence_json"]["citation_allowlist"]
+    assert allowlist["news_document_ids"] == [11]
+    assert allowlist["notice_document_ids"] == [12]
+    output = {"evidence_document_ids": [11], "dimensions": [
+        {"dimension": "NOTICE", "status": "SUPPORTED", "evidence_document_ids": [11]}], "events": []}
+    with pytest.raises(ValueError, match=r"NOTICE.*当前引用\[11\].*只能引用\[12\]"):
+        _validate_multi_source_output(output, context, required=False)
+
+
 def test_multi_source_validator_accepts_visible_graph_and_chunk_document_refs():
     from app.services.selection import _validate_multi_source_output
     evidence = {"documents": [{"id": 49, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE",
@@ -226,7 +245,7 @@ def test_selection_retries_missing_dimensions_and_only_marks_success_after_valid
         _apply_model_analysis(None, run, [(item, 1.0)])
 
     assert len(calls) == 2
-    assert calls[1]["metadata_json"]["purpose"] == "STOCK_SELECTION_CONTRACT_RETRY"
+    assert calls[1]["metadata_json"]["purpose"] == "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY"
     assert run.analysis_mode == "MODEL_COMPLETED"
     assert item["analysis_json"]["model_output_status"] == "SUCCESS"
     assert item["analysis_json"]["analysis_contract"] == "MULTI_SOURCE_V2"
@@ -261,3 +280,75 @@ def test_compact_financial_evidence_retains_revenue_and_profit_after_source_meta
     assert view["report_period"] == "2026-06-30"
     assert len(view["data"]) <= 16
     assert len(raw) == 31  # bounded view must not mutate historical evidence
+
+
+def test_twenty_stock_batch_isolates_citations_and_withdraws_unverifiable_conclusions():
+    required = ["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
+    pool = [({"symbol": f"DEMO{index:03}", "market": "CN_A", "analysis_json": {}, "evidence_json": {
+        "documents": [{"id": index + 100, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE",
+                       "excerpt": "公司披露新增订单，预计改善收入。"}],
+        "document_ids": [index + 100], "facts": [], "evidence_fact_ids": [], "chunks": [], "graph_paths": [],
+    }}, 1.0) for index in range(20)]
+    run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None,
+                          criteria_json={"analysis_contract": "MULTI_SOURCE_V2"}, data_mode="MOCK")
+    calls = []
+
+    def chat(**kwargs):
+        calls.append(kwargs)
+        text = kwargs["messages"][-1]["content"]
+        batch = json.loads(text[text.index("["):])
+        assert len(batch) <= 5
+        rows = []
+        for item in batch:
+            allowed = item["evidence_json"]["citation_allowlist"]
+            assert allowed["symbol"] == item["symbol"]
+            assert allowed["document_ids"] == item["evidence_json"]["document_ids"]
+            reference = allowed["document_ids"][0]
+            # Persistently cite a peer's evidence on one stock, even after the
+            # directed retry. Its unsupported thesis must never leak through.
+            if item["symbol"] == "DEMO000":
+                reference = 101
+            rows.append({"symbol": item["symbol"], "decision": "WATCH", "confidence": .8,
+                "reasoning": "订单增长支持关注", "target_price": 12, "stop_price": 9,
+                "horizon_sessions": 10, "evidence_document_ids": [reference],
+                "dimensions": [{"dimension": dimension,
+                    "status": "SUPPORTED" if dimension == "NEWS" else "INSUFFICIENT",
+                    "direction": "POSITIVE" if dimension == "NEWS" else "UNKNOWN",
+                    "summary": "新增订单" if dimension == "NEWS" else "本轮证据不足",
+                    "evidence_document_ids": [reference] if dimension == "NEWS" else [],
+                    "evidence_fact_ids": [], "evidence_relation_ids": []} for dimension in required],
+                "events": [], "positives": ["订单增长"], "risks": [], "watch_conditions": []})
+        return SimpleNamespace(id=len(calls), status="SUCCESS", instance_code="TEST_MODEL",
+                               response_text=json.dumps({"candidates": rows}, ensure_ascii=False))
+
+    with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat):
+        _apply_model_analysis(None, run, pool)
+
+    assert len(calls) == 5  # four batches plus one directed repair
+    assert run.analysis_mode == "MODEL_PARTIAL"
+    repaired = pool[0][0]["analysis_json"]
+    assert repaired["model_output_status"] == "SUCCESS"
+    assert repaired["analysis_validation_status"] == "PARTIAL"
+    assert repaired["model"]["evidence_document_ids"] == []
+    assert repaired["model"]["target_price"] is None
+    assert repaired["model"]["confidence"] is None
+    assert repaired["model"]["positives"] == []
+    assert repaired["model"]["dimensions"][0]["status"] == "INSUFFICIENT"
+    assert repaired["evidence_validation_warnings"]
+    assert [attempt["status"] for attempt in repaired["model_attempts"]] == ["INVALID", "SUCCESS"]
+    assert all(item["analysis_json"]["model_output_status"] == "SUCCESS" for item, _ in pool[1:])
+    assert all(item["analysis_json"]["model"]["evidence_document_ids"] == [index + 100]
+               for index, (item, _) in enumerate(pool[1:], start=1))
+
+
+def test_valid_chunk_document_reference_is_not_lost_when_stored_as_string():
+    from app.services.selection import _sanitize_model_evidence_references, _validate_multi_source_output
+    item = {"evidence_json": {"documents": [], "chunks": [{"id": "chunk-1", "document_id": "48", "text": "经营资料"}],
+                              "facts": [], "evidence_fact_ids": [], "graph_paths": []}}
+    output = {"dimensions": [{"dimension": "COMPANY", "status": "SUPPORTED", "direction": "NEUTRAL",
+                              "summary": "仅有切片线索", "evidence_document_ids": [48]}],
+              "events": [], "evidence_document_ids": [48]}
+    _sanitize_model_evidence_references(output, item)
+    _validate_multi_source_output(output, item, required=False)
+    assert output["validation_status"] == "PASSED"
+    assert output["evidence_document_ids"] == [48]

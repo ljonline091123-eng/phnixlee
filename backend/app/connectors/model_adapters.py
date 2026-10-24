@@ -97,7 +97,9 @@ class OpenAICompatAdapter(ModelAdapter):
         if (metadata.get("purpose") in {"NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS",
                                        "DOCUMENT_GOVERNANCE_PLANNING", "DOCUMENT_SPECIALIST_DRAFT",
                                        "DOCUMENT_FAILURE_DIAGNOSIS", "DOCUMENT_SPECIALIST_EVALUATION",
-                                       "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_ANALYSIS"}
+                                       "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_ANALYSIS",
+                                       "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
+                                       "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY"}
                 and metadata.get("require_real_model")
                 and instance.model_code.lower().startswith("deepseek")):
             payload["thinking"] = {"type": "disabled"}
