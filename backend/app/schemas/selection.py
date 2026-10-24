@@ -139,6 +139,7 @@ class SelectionModelRecommendation(BaseModel):
     event_timeline: list[SelectionTimelineEvent] = Field(default_factory=list, max_length=24)
     event_links: list[SelectionEventLink] = Field(default_factory=list, max_length=24)
     validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=24)
+    analyzed_document_ids: list[int] = Field(default_factory=list, max_length=100)
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
     positives: list[str] = Field(default_factory=list, max_length=4)
     risks: list[str] = Field(default_factory=list, max_length=4)

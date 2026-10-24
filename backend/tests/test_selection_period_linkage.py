@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -16,13 +17,18 @@ from app.models.foundation import (
 from app.models.market_data import DataSource, StockSymbol
 from app.services.graph_rag import build_selection_context, selection_period_bounds
 from app.services.model_hub import ModelHubService, seed_default_models
-from app.services.selection import _validate_multi_source_output
+from app.services.selection import _model_candidate_context, _validate_multi_source_output
 
 
 def test_period_uses_natural_month_boundary_and_clamps_month_end():
     start, end = selection_period_bounds(datetime(2026, 5, 31, 12, tzinfo=timezone.utc), 3)
     assert start.isoformat() == "2026-02-28"
     assert end.isoformat() == "2026-05-31"
+    local_start, local_end = selection_period_bounds(
+        datetime(2026, 10, 24, 17, tzinfo=timezone.utc), 3, "CN_A",
+    )
+    assert local_start.isoformat() == "2026-07-25"
+    assert local_end.isoformat() == "2026-10-25"
 
 
 def test_related_security_context_requires_reviewed_company_fact():
@@ -151,6 +157,32 @@ def test_related_security_impact_requires_current_related_documents_and_reviewed
     assert output["confidence_breakdown"]["cross_document_support"] < 1
     with pytest.raises(ValueError, match="已审核关系事实"):
         _validate_multi_source_output(_related_link_output(False), item, required=False)
+
+
+def test_period_document_compaction_keeps_all_mvp_disclosures_within_prompt_budget():
+    documents = [{
+        "id": index, "market": "CN_A", "symbol": "000027", "source_table": "stock_notice",
+        "published_at": f"2026-09-{(index % 28) + 1:02}", "content_state": "TEXT_AVAILABLE",
+        "title": f"第{index}份公告", "content": "公告正文" * 2_000,
+    } for index in range(1, 76)]
+    view = _model_candidate_context({"symbol": "000027", "evidence_json": {"documents": documents}})
+    compact = view["evidence_json"]
+    assert len(compact["documents"]) == 75
+    assert set(compact["citation_allowlist"]["notice_document_ids"]) == set(range(1, 76))
+    assert len(json.dumps(view, ensure_ascii=False)) < 32_000
+
+
+def test_linkage_contract_rejects_unreported_period_document_coverage():
+    item = {"evidence_json": {"documents": [
+        {"id": 1, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE", "content": "第一篇新闻正文"},
+        {"id": 2, "source_table": "stock_notice", "content_state": "TEXT_AVAILABLE", "content": "第二篇公告正文"},
+    ], "facts": [], "evidence_fact_ids": [], "chunks": [], "graph_paths": []}}
+    output = {"evidence_document_ids": [], "dimensions": [], "events": [], "event_timeline": [],
+              "event_links": [], "validation_findings": [], "analyzed_document_ids": [1]}
+    with pytest.raises(ValueError, match="周期文档覆盖不完整"):
+        _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
+    output["analyzed_document_ids"] = [1, 2]
+    _validate_multi_source_output(output, item, required=False, enforce_document_coverage=True)
 
 
 def test_model_hub_injects_ordered_skill_chain_and_records_versions():

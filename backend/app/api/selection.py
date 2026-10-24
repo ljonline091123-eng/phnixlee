@@ -150,7 +150,9 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
     )).all())
     graph_ids = [row.id for row in graphs]
     from app.services.graph_rag import selection_period_bounds
-    period_start, period_end = selection_period_bounds(datetime.now(timezone.utc), payload.period_months)
+    period_start, period_end = selection_period_bounds(
+        datetime.now(timezone.utc), payload.period_months, payload.market,
+    )
     published = func.coalesce(*(KnowledgeDocument.metadata_json[key].as_string()
         for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date")))
     base_query = select(KnowledgeDocument.knowledge_base_id, KnowledgeDocument.symbol,

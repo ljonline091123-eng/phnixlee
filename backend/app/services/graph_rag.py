@@ -15,6 +15,7 @@ import ast
 import calendar
 from datetime import date, datetime, timezone
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -87,10 +88,17 @@ def _date_known(value: Any, cutoff: datetime | None) -> bool:
     return observed <= cutoff.date()
 
 
-def selection_period_bounds(as_of: datetime, period_months: int) -> tuple[date, date]:
+def selection_period_bounds(as_of: datetime, period_months: int, market: str | None = None) -> tuple[date, date]:
     """Return a rolling calendar-month window while preserving month ends."""
     months = max(1, min(int(period_months), 60))
-    end = _aware(as_of).date() if _aware(as_of) else as_of.date()
+    aware_as_of = _aware(as_of)
+    market_zones = {
+        "CN_A": "Asia/Shanghai", "NEEQ": "Asia/Shanghai", "NEEQ_INNOVATION": "Asia/Shanghai",
+        "HK": "Asia/Hong_Kong", "HKEX": "Asia/Hong_Kong",
+    }
+    zone_name = market_zones.get(str(market or "").upper())
+    localized = aware_as_of.astimezone(ZoneInfo(zone_name)) if aware_as_of and zone_name else aware_as_of
+    end = localized.date() if localized else as_of.date()
     month_index = end.year * 12 + end.month - 1 - months
     year, zero_based_month = divmod(month_index, 12)
     month = zero_based_month + 1
@@ -934,9 +942,17 @@ def build_selection_context(
         by_source.setdefault(row.source_table, []).append(row)
     period_source_counts = {source: len(rows) for source, rows in by_source.items()}
     period_document_count = sum(period_source_counts.values())
+    period_disclosure_count = sum(period_source_counts.get(source, 0)
+                                  for source in ("stock_news", "stock_notice"))
     priority = ["stock_news", "stock_notice", "stock_context_event", "research_report"]
     source_keys = sorted(by_source, key=lambda key: (priority.index(key) if key in priority else len(priority), key))
     docs: list[KnowledgeDocument] = []
+    for source in ("stock_news", "stock_notice"):
+        for row in by_source.get(source, []):
+            if len(docs) >= max_documents:
+                break
+            docs.append(row)
+    source_keys = [source for source in source_keys if source not in {"stock_news", "stock_notice"}]
     offset = 0
     while len(docs) < max_documents and source_keys:
         added = False
@@ -1264,6 +1280,11 @@ def build_selection_context(
             "lineage": len(lineage_rows), "datasets": len(datasets),
             "structured": structured["counts"],
             "period_documents": period_document_count,
+            "period_disclosures": period_disclosure_count,
+            "period_disclosures_included": sum(
+                row.get("source_table") in {"stock_news", "stock_notice"} for row in documents
+                if row.get("relation_scope") != "RELATED_SECURITY"
+            ),
             "period_source_counts": period_source_counts,
             "period_documents_included": len(documents),
             "undated_documents_excluded": undated_documents,
@@ -1283,7 +1304,7 @@ def context_for_candidate(db: Session, candidate: Any, *, as_of: datetime | None
         run = db.get(SelectionRun, candidate.run_id)
     cutoff = as_of or getattr(run, "as_of", None) or datetime.now(timezone.utc)
     period_months = int(((getattr(run, "criteria_json", {}) or {}).get("period_months") or 3))
-    period_start, period_end = selection_period_bounds(cutoff, period_months)
+    period_start, period_end = selection_period_bounds(cutoff, period_months, candidate.market)
     return build_selection_context(
         db,
         candidate.market,
@@ -1293,5 +1314,6 @@ def context_for_candidate(db: Session, candidate: Any, *, as_of: datetime | None
         as_of=cutoff,
         period_start=period_start,
         period_end=period_end,
+        max_documents=80,
     )
 

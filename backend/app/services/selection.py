@@ -311,7 +311,7 @@ def _evidence(
         context = build_selection_context(
             db, market, symbol, knowledge_base_ids=kb_ids, graph_ids=graph_ids,
             as_of=cutoff, period_start=period_start, period_end=period_end,
-            max_documents=40, max_relations=40, max_facts=40, max_chunks=24,
+            max_documents=80, max_relations=40, max_facts=40, max_chunks=24,
         )
         for key in ("facts", "chunks", "chunk_coverage", "structured_observations", "graph_paths", "evidence_span", "lineage", "lakehouse_datasets",
                     "graph_version", "lakehouse_version", "document_version", "context_version", "context_hash",
@@ -442,7 +442,7 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
     model_requested = bool(payload.use_model and (payload.data_mode == "MOCK" or governed_context))
     as_of = _now()
     from app.services.graph_rag import selection_period_bounds
-    period_start, period_end = selection_period_bounds(as_of, payload.period_months)
+    period_start, period_end = selection_period_bounds(as_of, payload.period_months, market)
     run = SelectionRun(
         market=market,
         universe_scope=payload.universe_scope,
@@ -1053,7 +1053,7 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
         raise ValueError(f"手选的 {len(candidates)} 只股票超过候选上限 {run.candidate_limit}，请提高上限后重新执行")
     candidates = candidates[:run.candidate_limit]
     from app.services.graph_rag import selection_period_bounds
-    period_start, period_end = selection_period_bounds(run.as_of, payload.period_months)
+    period_start, period_end = selection_period_bounds(run.as_of, payload.period_months, market)
     for position, (item, _score) in enumerate(candidates):
         evidence = _evidence(
             db, market, item["symbol"], payload.knowledge_base_ids, analysis_graph_ids,
@@ -1269,17 +1269,21 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     priorities = {"stock_news": 0, "stock_notice": 1, "stock_context_event": 2, "research_report": 3}
     ordered = sorted(documents.values(), key=lambda row: str(row.get("published_at") or ""), reverse=True)
     ordered.sort(key=lambda row: priorities.get(row.get("source_table"), 4))
+    disclosure_count = sum(row.get("source_table") in {"stock_news", "stock_notice"} for row in ordered)
+    disclosure_excerpt_limit = max(120, min(800, 9_000 // max(1, disclosure_count)))
     selected_docs, source_counts = [], {}
     for doc in ordered:
         source = doc.get("source_table", "OTHER")
-        cap = 20 if source in {"stock_news", "stock_notice"} else 4 if source in priorities else 2
+        cap = 80 if source in {"stock_news", "stock_notice"} else 4 if source in priorities else 2
         if source_counts.get(source, 0) >= cap:
             continue
         source_counts[source] = source_counts.get(source, 0) + 1
-        selected_docs.append({field: clip(doc[field], 1600 if field in {"content", "excerpt"} and source in priorities else 360)
-            for field in ("id", "title", "source_table", "source_record_id", "market", "symbol", "published_at", "url", "source_name", "content_state", "content_truncated", "content", "excerpt", "knowledge_base_id", "graph_id", "relation_scope", "related_security", "related_via_fact_ids")
+        selected_docs.append({field: clip(doc[field], disclosure_excerpt_limit
+            if field in {"content", "excerpt"} and source in {"stock_news", "stock_notice"}
+            else 480 if field in {"content", "excerpt"} and source in priorities else 360)
+            for field in ("id", "title", "source_table", "market", "symbol", "published_at", "url", "source_name", "content_state", "content", "excerpt", "relation_scope", "related_security", "related_via_fact_ids")
             if doc.get(field) is not None and (field != "excerpt" or not doc.get("content"))})
-        if len(selected_docs) >= 40:
+        if len(selected_docs) >= 92:
             break
     compact_evidence = {
         "data_mode": evidence.get("data_mode"), "data_cutoff": evidence.get("data_cutoff"),
@@ -1471,7 +1475,10 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         output["validation_status"] = "PASSED"
 
 
-def _validate_multi_source_output(output: dict[str, Any], item: dict[str, Any], *, required: bool) -> None:
+def _validate_multi_source_output(
+    output: dict[str, Any], item: dict[str, Any], *, required: bool,
+    enforce_document_coverage: bool = False,
+) -> None:
     """Fail closed on fabricated citations, quotes and silently omitted sources."""
     evidence = item["evidence_json"]
     documents = {
@@ -1626,6 +1633,22 @@ def _validate_multi_source_output(output: dict[str, Any], item: dict[str, Any], 
             finding_documents or finding.get("supporting_fact_ids")
         ):
             raise ValueError("兑现或冲突结论必须引用后续文档或结构化事实")
+    expected_analyzed_ids = {
+        document_id for document_id, document in documents.items()
+        if document.get("source_table") in {"stock_news", "stock_notice"}
+        and document.get("content_state") != "METADATA_ONLY"
+        and (document.get("content") or document.get("excerpt"))
+    }
+    analyzed_ids = {
+        value for raw in output.get("analyzed_document_ids") or []
+        if (value := _normalize_document_reference(raw)) is not None
+    }
+    if enforce_document_coverage and analyzed_ids != expected_analyzed_ids:
+        missing_ids = sorted(expected_analyzed_ids - analyzed_ids)
+        unexpected_ids = sorted(analyzed_ids - expected_analyzed_ids)
+        raise ValueError(
+            f"周期文档覆盖不完整：漏分析{missing_ids[:20]}，越界引用{unexpected_ids[:20]}"
+        )
     if required and len(documents) >= 2 and not output.get("event_timeline"):
         raise ValueError("分析周期内存在多篇新闻公告正文，但模型未返回事件时间线")
     _calculate_linkage_confidence(output, documents)
@@ -1775,6 +1798,7 @@ def _build_local_multi_source_analysis(item: dict[str, Any]) -> dict[str, Any]:
             "decision": "WATCH", "confidence": None, "target_price": None, "stop_price": None,
             "dimensions": dimensions, "events": [], "event_timeline": [], "event_links": [],
             "validation_findings": [], "confidence_breakdown": None,
+            "analyzed_document_ids": [],
             "evidence_document_ids": sorted({value for row in dimensions for value in row["evidence_document_ids"]}),
             "positives": [], "risks": ["本次模型服务未返回有效结果，不能把本地证据汇总视为投资结论。"],
             "watch_conditions": ["模型服务恢复后重新执行七维语义研判。"],
@@ -1887,7 +1911,10 @@ def _apply_model_analysis(
         cited_chunks = {str(value) for value in (output.get("evidence_chunk_ids") or [])}
         if not cited_chunks.issubset(allowed_chunks):
             raise ValueError(f"模型引用了本股证据白名单之外的切片 ID：{sorted(cited_chunks - allowed_chunks)}")
-        _validate_multi_source_output(output, item, required=required)
+        _validate_multi_source_output(
+            output, item, required=required,
+            enforce_document_coverage=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_LINKAGE_V3",
+        )
 
     def citation_allowlist(item: dict[str, Any]) -> str:
         evidence = item["evidence_json"]
@@ -1904,7 +1931,7 @@ def _apply_model_analysis(
                   f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已完成 {len(predictions)}/{len(selected)} 只")
         context = json.dumps(batch, ensure_ascii=False, separators=(",", ":"))
         system_prompt = "本次为选股盯盘工作流。沿用 SOP 的证据边界，输出采用本次 JSON Schema：" + json.dumps(schema, ensure_ascii=False)
-        contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；缺资金流须明示。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"
+        contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、analyzed_document_ids、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，并把每个已阅读正文ID完整列入analyzed_document_ids；先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；缺资金流须明示。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"
         batch_allowlists = {str(row["symbol"]): row["evidence_json"]["citation_allowlist"] for row in batch}
         contract_prompt += "本批各股白名单（键为股票代码，严禁跨股票引用）：" + json.dumps(batch_allowlists, ensure_ascii=False, separators=(",", ":"))
         contract_prompt += "事件quote请复制正文中连续的15至80个字符；禁止拼接不同句子、改写、添加省略号或将标题当正文。找不到连续原句时不生成该事件。仅有标题/链接的公告应为INSUFFICIENT，禁止引用新闻ID作为公告证据。"
@@ -2061,6 +2088,8 @@ def _apply_model_analysis(
                 "analysis_period": visible.get("analysis_period"),
                 "period_documents": (visible.get("counts") or {}).get("period_documents"),
                 "period_documents_included": len(visible["documents"]),
+                "period_disclosures": (visible.get("counts") or {}).get("period_disclosures"),
+                "period_disclosures_included": (visible.get("counts") or {}).get("period_disclosures_included"),
                 "related_securities": len(visible.get("related_securities") or []),
                 "related_security_documents": len((visible.get("citation_allowlist") or {}).get("related_security_document_ids") or []),
             }
