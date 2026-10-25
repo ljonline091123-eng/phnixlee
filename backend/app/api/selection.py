@@ -45,6 +45,15 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
         detail = classify_model_error(analysis_json.get("model_failure_reason"))
         analysis_json["model_failure_detail"] = detail
         analysis_json["model_failure_reason"] = detail["summary"]
+    elif analysis_json.get("model_output_status") == "FAILED" and isinstance(analysis_json.get("model_failure_detail"), dict):
+        # Backfill the actionable recovery contract for failures persisted by
+        # older versions, without changing the original raw error or status.
+        detail = dict(analysis_json["model_failure_detail"])
+        current = classify_model_error(detail.get("raw_error") or detail.get("summary") or analysis_json.get("model_failure_reason"))
+        for key in ("category", "title", "summary", "suggestion", "retryable", "recovery_actions"):
+            if not detail.get(key) and current.get(key) is not None:
+                detail[key] = current[key]
+        analysis_json["model_failure_detail"] = detail
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
@@ -559,7 +568,12 @@ def retry_failed_with_model(
     except ValueError as exc:
         # A failed probe is intentionally returned before a job is created.
         db.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        detail = classify_model_error(str(exc))
+        actions = "；".join(str(item) for item in detail["recovery_actions"])
+        raise HTTPException(
+            status_code=422,
+            detail=f"{detail['title']}：{detail['summary']} 建议：{detail['suggestion']} 处理步骤：{actions}",
+        ) from exc
 
 
 @router.post("/runs/{run_id}/backfill", response_model=SelectionRunRead, status_code=202)

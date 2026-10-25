@@ -547,8 +547,16 @@ def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message:
     if db is None or not isinstance(run, SelectionRun):
         return
     previous = dict((run.criteria_json or {}).get("progress") or {})
+    now = _now().isoformat()
+    # Keep a short, auditable activity trail for the UI.  This is a record of
+    # completed backend stages, not model chain-of-thought.  Heartbeats update
+    # the current activity separately and do not create noisy history rows.
+    steps = [item for item in (previous.get("process_steps") or []) if isinstance(item, dict)]
+    if not steps or steps[-1].get("stage") != stage or steps[-1].get("message") != message:
+        steps.append({"at": now, "stage": stage, "percent": int(percent), "message": message})
+    steps = steps[-20:]
     previous.update({"stage": stage, "percent": percent, "message": message,
-        "updated_at": _now().isoformat(), **details})
+        "updated_at": now, "process_steps": steps, **details})
     run.criteria_json = {**(run.criteria_json or {}), "progress": previous}
     db.commit()
 
@@ -565,7 +573,9 @@ def queue_selection_run(
     run.status = "QUEUED"
     run.criteria_json = {**run.criteria_json, "request": payload.model_dump(),
         **({"retry_of_run_id": retry_of_run_id} if retry_of_run_id is not None else {}),
-        "progress": {"stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行"}}
+        "progress": {"stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行",
+                      "process_steps": [{"at": _now().isoformat(), "stage": "QUEUED",
+                                         "percent": 0, "message": "已排队，等待后台执行"}]}}
     pipeline = PipelineRun(pipeline_type="selection_analysis", trigger_type="API", status="PENDING",
         idempotency_key=f"selection:{run.id}", input_json={"selection_run_id": run.id})
     db.add(pipeline)

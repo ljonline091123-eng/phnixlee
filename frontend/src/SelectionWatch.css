@@ -79,6 +79,16 @@
 .batch-progress.stale { background: #fff8e9; border: 1px solid #efd9a7; }
 .batch-progress-warning { display: block; color: #986b24; font-size: 12px; line-height: 1.6; }
 .batch-progress-activity { flex: 1 1 100%; color: #173f31; font-weight: 700; font-size: 14px; }
+.batch-process-steps { margin-top: 12px; padding-top: 10px; border-top: 1px solid #dce8df; }
+.batch-process-steps > strong { display: block; margin-bottom: 6px; color: #315d48; font-size: 12px; }
+.batch-process-steps ol { display: grid; gap: 5px; margin: 0; padding-left: 20px; color: #4f6b5b; font-size: 12px; }
+.batch-process-steps li { padding-left: 3px; line-height: 1.45; }
+.batch-process-steps li span { display: block; color: #315544; }
+.batch-process-steps li small { margin-top: 2px; color: #819286; font-size: 11px; }
+.batch-recovery-actions { margin: 8px 0; padding: 9px 11px; border-left: 3px solid #d29942; background: #fff8e9; color: #735727; font-size: 12px; }
+.batch-recovery-actions strong { display: block; margin-bottom: 4px; }
+.batch-recovery-actions ol { margin: 0; padding-left: 19px; line-height: 1.6; }
+.batch-model-picker-hint { display: block; margin-top: 4px; color: #708278; font-size: 11px; }
 .batch-model-picker { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #4f675a; font-size: 13px; }
 .batch-model-picker select { min-width: 250px; padding: 7px 9px; border: 1px solid #cbdacf; border-radius: 7px; background: #fff; color: #173f31; }
 .batch-model-status { display: flex; flex-direction: column; gap: 3px; margin-top: 9px; color: #1d5a42; }

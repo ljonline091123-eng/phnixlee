@@ -494,7 +494,10 @@ def seed_default_models(db: Session) -> None:
         if instance.instance_code == "DEEPSEEK_CHAT" and instance.model_code in {"deepseek-chat", "deepseek-reasoner"}:
             instance.model_code = str(instance_config["model_code"])
             instance.model_name = str(instance_config["model_name"])
-        for field_name in ("api_base_url", "api_path", "fallback_instance_code", "description"):
+        # Repair historical records that were persisted while a console used
+        # the wrong encoding (for example ``???? Plus``).  Keep user-edited
+        # values intact unless they are clearly damaged or empty.
+        for field_name in ("api_base_url", "api_path", "fallback_instance_code", "description", "model_name"):
             if getattr(instance, field_name) in (None, "") or _damaged_text(getattr(instance, field_name)):
                 setattr(instance, field_name, instance_config.get(field_name))
         instance.purpose = instance.purpose or str(instance_config.get("purpose") or "GENERAL")

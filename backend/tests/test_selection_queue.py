@@ -21,6 +21,7 @@ from app.models.selection import SelectionCandidate, SelectionRun, SelectionTrac
 from app.schemas.selection import SelectionReviewRequest, SelectionRunCreate
 from app.services.selection import (
     _SelectionProgressHeartbeat,
+    _progress,
     _sanitize_model_evidence_references,
     execute_failed_selection_reanalysis,
     execute_selection_job,
@@ -91,6 +92,19 @@ def test_model_request_heartbeat_persists_activity_and_elapsed_time(isolated):
         assert progress["model_instance_code"] == "ZHIPU_FLASH"
         assert progress["heartbeat_at"]
         assert progress["elapsed_seconds"] >= 0
+
+
+def test_progress_keeps_compact_backend_activity_history(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="RUNNING", criteria_json={})
+        db.add(run)
+        db.commit()
+        _progress(db, run, "EVIDENCE", 25, "已加载新闻公告证据", activity="读取证据")
+        _progress(db, run, "MODEL", 40, "等待模型返回", activity="调用模型")
+        db.expire_all()
+        steps = (db.get(SelectionRun, run.id).criteria_json or {}).get("progress", {}).get("process_steps")
+        assert [item["stage"] for item in steps] == ["EVIDENCE", "MODEL"]
+        assert steps[-1]["message"] == "等待模型返回"
 
 
 def test_run_read_exposes_active_model_call_when_heartbeat_is_delayed(isolated):

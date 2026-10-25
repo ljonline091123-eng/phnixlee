@@ -58,6 +58,16 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(route.preferred_instance_code, "DEEPSEEK_V4_FLASH")
         self.assertEqual(route.fallback_chain_json, ["GEMINI_FLASH", "MOCK_GENERAL"])
 
+    def test_seed_repairs_damaged_qwen_display_name_without_resetting_model_config(self) -> None:
+        qwen = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "QWEN_PLUS"))
+        assert qwen is not None
+        qwen.model_name = "???? Plus"
+        qwen.model_code = "operator-custom-qwen"
+        self.db.commit()
+        seed_default_models(self.db)
+        self.assertEqual(qwen.model_name, "通义千问 Plus")
+        self.assertEqual(qwen.model_code, "operator-custom-qwen")
+
     def test_legacy_route_upgrades_without_overwriting_custom_route(self) -> None:
         with TemporaryDirectory() as folder:
             engine = create_engine(f"sqlite:///{Path(folder) / 'routes.db'}")

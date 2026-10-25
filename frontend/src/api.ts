@@ -1003,7 +1003,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    let body: { detail?: string | { message?: string } } = {};
+    let body: { detail?: string | { message?: string; recovery_actions?: unknown[]; suggestion?: string; summary?: string } } = {};
     if (text) {
       try {
         body = JSON.parse(text);
@@ -1011,8 +1011,16 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
         body = { detail: text };
       }
     }
-    const detail = typeof body.detail === "string" ? body.detail : body.detail?.message;
-    throw new Error(detail || `请求失败 (${response.status})`);
+    const detail = body.detail;
+    if (typeof detail === "string") throw new Error(detail || `请求失败 (${response.status})`);
+    if (detail && typeof detail === "object") {
+      const primary = detail.message || detail.summary || detail.suggestion || `请求失败 (${response.status})`;
+      const actions = Array.isArray(detail.recovery_actions)
+        ? detail.recovery_actions.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).slice(0, 5)
+        : [];
+      throw new Error(actions.length ? `${primary}\n处理建议：${actions.join("；")}` : primary);
+    }
+    throw new Error(`请求失败 (${response.status})`);
   }
   if (response.status === 204) {
     return undefined as T;

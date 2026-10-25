@@ -131,6 +131,12 @@ const jsonPreview = (value: unknown, limit = 1200) => {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 };
 const errorOf = (error: unknown) => error instanceof Error ? error.message : "请求失败，请重试";
+const modelStatusLabel = (item: ModelInstance) => item.availability_label || ({
+  AVAILABLE: "可用", BILLING: "欠费/额度不足", UNAVAILABLE: "不可用", NOT_CONFIGURED: "未配置",
+  DISABLED: "已停用", CHECKING: "检查中", UNKNOWN: "未检查",
+} as Record<string, string>)[item.availability_status || "UNKNOWN"] || "未检查";
+const modelIsSelectable = (item: ModelInstance) => item.enabled && item.api_key_configured
+  && ["AVAILABLE", "UNKNOWN", "CHECKING"].includes(item.availability_status || "UNKNOWN");
 function Badge({ value }: { value: string }) { return <span className={`selection-badge ${["PENDING_REVIEW", "WAITING_DATA", "FAILED", "MOCK", "RULES_ONLY"].includes(value) ? "warning" : ""}`}>{nameOf(value)}</span>; }
 
 function Dialog({ title, close, children, busy = false }: { title: string; close: () => void; children: ReactNode; busy?: boolean }) {
@@ -449,7 +455,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const submitBlockReason = busy ? "正在提交选股任务。" : "";
   const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
   const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
-  const availableSwitchModels = instances.filter(item => item.instance_code !== run?.model_instance_code && item.enabled && item.api_key_configured && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
+  const modelPickerOptions = instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
+  const availableSwitchModels = modelPickerOptions.filter(item => item.instance_code !== run?.model_instance_code && modelIsSelectable(item));
   const updateChosenStocks = (next: StockSymbol[]) => {
     setChosenStocks(next);
     setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
@@ -535,7 +542,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
         <div className="selection-toolbar"><label>历史选股批次 <select aria-label="选股批次" value={run?.id ?? ""} disabled={busy} onChange={event => void selectRun(Number(event.target.value))}><option value="" disabled>暂无选股批次</option>{runs.map(item => <option key={item.id} value={item.id}>#{item.id} · {nameOf(item.market)} · {dateOf(item.created_at)} · {item.candidate_count} 只</option>)}</select></label>{run && <div><Badge value={run.analysis_mode} /> <Badge value={run.status} /></div>}</div>
         {run ? <>
           <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 3)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
-          {["QUEUED", "RUNNING"].includes(run.status) && (() => { const progress = (run.criteria_json.progress || {}) as SelectionRecord; const heartbeat = textOf(progress.heartbeat_at || progress.updated_at); const age = heartbeatAge(progress.heartbeat_at); const stale = age != null && age > 15; return <div className={`batch-progress${stale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{textOf(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{textOf(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsed(progress, activityTick))}</span><span>实际模型：{textOf(progress.model_instance_code) || run.model_instance_code || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span><span>最近心跳：{heartbeat ? `${age ?? 0} 秒前` : "尚未记录"}</span></div>{stale && <strong className="batch-progress-warning">最近 {age} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>进度百分比表示阶段；系统会持续写入后台活动和心跳。</small></div>; })()}
+          {["QUEUED", "RUNNING"].includes(run.status) && (() => { const progress = (run.criteria_json.progress || {}) as SelectionRecord; const heartbeat = textOf(progress.heartbeat_at || progress.updated_at); const age = heartbeatAge(progress.heartbeat_at); const stale = age != null && age > 15; return <div className={`batch-progress${stale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{textOf(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{textOf(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsed(progress, activityTick))}</span><span>实际模型：{textOf(progress.model_instance_code) || run.model_instance_code || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span><span>最近心跳：{heartbeat ? `${age ?? 0} 秒前` : "尚未记录"}</span></div>{stale && <strong className="batch-progress-warning">最近 {age} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>进度百分比表示阶段；系统会持续写入后台活动和心跳。</small>{records(progress.process_steps).length > 0 && <div className="batch-process-steps"><strong>后台处理记录</strong><ol>{records(progress.process_steps).slice(-8).reverse().map((step, index) => <li key={`${textOf(step.at)}-${index}`}><span>{textOf(step.message) || "处理中"}</span><small>{textOf(step.stage)} · {Number(step.percent || 0)}% · {textOf(step.at) ? dateOf(textOf(step.at)) : "刚刚"}</small></li>)}</ol></div>}</div>; })()}
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
@@ -547,9 +554,11 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
               <label>更换模型
                 <select value={switchModelCode} disabled={busy || retryActive || !availableSwitchModels.length} onChange={event => setSwitchModelCode(event.target.value)}>
                   {!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}
-                  {availableSwitchModels.map(item => {
+                  {modelPickerOptions.map(item => {
                     const provider = providers.find(row => row.id === item.provider_id);
-                    return <option key={item.instance_code} value={item.instance_code}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"}</option>;
+                    const current = item.instance_code === run?.model_instance_code;
+                    const selectable = availableSwitchModels.some(candidate => candidate.instance_code === item.instance_code);
+                    return <option key={item.instance_code} value={item.instance_code} disabled={!selectable}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}{current ? "（当前模型）" : item.availability_reason ? `（${item.availability_reason}）` : ""}</option>;
                   })}
                 </select>
               </label>
@@ -561,7 +570,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
             <p className="selection-help">重试只处理失败且尚未复选的股票，保留本轮证据和历史调用；整批异常则创建新批次，原记录保留。</p>
             {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}
             {failedModelCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedModelCandidates.length}）</summary><div className="selection-failure-list">{failedModelCandidates.map(item => <article key={item.id}>
-              <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>
+              <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).length > 0 && <div className="batch-recovery-actions"><strong>针对性处理步骤</strong><ol>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).map((action, index) => <li key={index}>{textOf(action)}</li>)}</ol></div>}
               {attemptsNewestFirst(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{dateOf(textOf(attempt.at) || null)} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {textOf(attempt.reason) || "结果已返回并经过证据校验"}</small>)}
             </article>)}</div></details>}
           </section>}

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.models.ai_hub import ModelInstance
-from app.services.model_errors import describe_model_error
+from app.services.model_errors import classify_model_error, describe_model_error
 from app.services.model_hub import ModelHubService, seed_default_models
 
 
@@ -71,6 +71,13 @@ def test_local_failures_and_timeouts_remain_safe():
     assert "网络" in describe_model_error(httpx.ConnectError("connect failed"))
     assert describe_model_error(ValueError("invalid private/key"), "private/key") == "invalid ***"
     assert "private%2Fkey" not in describe_model_error(ValueError("invalid private%2Fkey"), "private/key")
+
+
+def test_classified_failure_contains_targeted_recovery_actions():
+    detail = classify_model_error("HTTP 402: insufficient_quota")
+    assert detail["category"] == "MODEL_BILLING"
+    assert len(detail["recovery_actions"]) >= 2
+    assert any("预检" in action for action in detail["recovery_actions"])
 
 
 def test_failure_log_keeps_upstream_reason_and_new_default_preserves_custom_model():
