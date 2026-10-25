@@ -21,7 +21,7 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
     category = "MODEL_UNKNOWN"
     title = "模型调用失败"
     summary = "模型没有返回可用的分析结果。"
-    suggestion = "请查看技术详情，或更换一个已配置且可用的模型后重试。"
+    suggestion = "请查看技术详情，或更换模型后重试。优先选择已配置 API Key 且已通过连通性检查的模型。"
     retryable = True
     if any(token in lowered for token in ("余额不足", "欠费", "insufficient_quota", "quota", "billing", "payment required", "http 402")):
         category, title = "MODEL_BILLING", "模型额度或账单不可用"
@@ -42,6 +42,10 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
         if match:
             summary = f"模型返回了不支持的字段取值：{match.group(1)}。"
         suggestion = "系统已保留原始调用记录；可更换模型或重新分析该股票。"
+    elif any(token in lowered for token in ("空响应", "empty response", "未返回可用正文", "空的模型响应", "未返回可用结果")):
+        category, title = "MODEL_EMPTY_RESPONSE", "模型未返回有效内容"
+        summary = "模型返回了空响应，无法生成选股分析结果。"
+        suggestion = "请稍后重试，或更换一个可用的模型。"
     elif any(token in lowered for token in ("证据", "引用", "白名单", "evidence", "citation")):
         category, title = "MODEL_EVIDENCE", "模型引用的证据未通过校验"
         summary = "模型引用了本次分析范围之外的文档、事实或切片。"
@@ -93,7 +97,11 @@ def describe_model_error(exc: Exception, api_key: str | None = None) -> str:
         # jsonschema/pydantic exceptions are useful in logs but too verbose
         # and English-heavy for the main product message.
         classified = classify_model_error(exc)
-        message = f"{classified['title']}：{classified['summary']} 建议：{classified['suggestion']}"
+        message = (
+            f"{classified['title']}：{classified['summary']} 建议：{classified['suggestion']}"
+            if classified["category"] != "MODEL_UNKNOWN"
+            else str(exc)
+        )
     if api_key:
         for secret in (api_key, quote(api_key, safe=""), quote_plus(api_key)):
             message = message.replace(secret, "***")

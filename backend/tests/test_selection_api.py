@@ -127,3 +127,49 @@ def test_scope_catalog_compares_unselected_options_without_contaminating_selecte
             client.close()
             app.dependency_overrides.pop(get_db, None)
     engine.dispose()
+
+
+def test_selection_preflight_is_read_only_and_reports_data_gate():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        source = DataSource(source_code="PREFLIGHT_DEMO", source_name="预检演示源", adapter_type="MOCK")
+        db.add(source)
+        db.flush()
+        base = KnowledgeBase(kb_code="PREFLIGHT", kb_name="预检知识库", source_tables=["stock_notice"])
+        db.add(base)
+        db.flush()
+        graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="PREFLIGHT", graph_name="预检图谱", governance_status="GOVERNED")
+        db.add(graph)
+        db.flush()
+        db.add(StockSymbol(market="CN_A", symbol="PREF001", name="预检股票", exchange="DEMO", source_id=source.id))
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            response = client.post("/api/v1/selection/preflight", json={
+                "market": "CN_A", "symbols": ["PREF001"],
+                "knowledge_base_ids": [base.id], "graph_ids": [graph.id],
+                "period_months": 3, "use_model": False, "data_mode": "REAL",
+            })
+            assert response.status_code == 200, response.text
+            result = response.json()
+            assert result["model"]["status"] == "SKIPPED"
+            assert result["data_ready"] is False
+            assert result["data"]["missing_symbols"] == ["PREF001"]
+            assert db.query(SelectionCandidate).count() == 0
+            unavailable = client.post("/api/v1/selection/preflight", json={
+                "market": "CN_A", "symbols": ["PREF001"],
+                "knowledge_base_ids": [base.id], "graph_ids": [graph.id],
+                "model_instance_code": "DOES_NOT_EXIST", "use_model": True, "data_mode": "REAL",
+            })
+            assert unavailable.status_code == 200, unavailable.text
+            failed_model = unavailable.json()
+            assert failed_model["model_ready"] is False
+            assert failed_model["model"]["category"] == "MODEL_UNKNOWN"
+            assert "更换模型" in failed_model["model"]["suggestion"]
+            assert db.query(SelectionCandidate).count() == 0
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+    engine.dispose()

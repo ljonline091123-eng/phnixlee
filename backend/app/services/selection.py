@@ -108,6 +108,8 @@ class _SelectionProgressHeartbeat:
                 progress.update({
                     "heartbeat_at": now.isoformat(),
                     "updated_at": now.isoformat(),
+                    "last_activity_at": now.isoformat(),
+                    "activity_started_at": progress.get("activity_started_at") or self.started_at.isoformat(),
                     "elapsed_seconds": max(0, int((now - self.started_at).total_seconds())),
                     "activity": self.activity,
                     "model_instance_code": self.model_instance_code,

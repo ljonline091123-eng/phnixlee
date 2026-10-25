@@ -134,10 +134,6 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
         if (!valid) return;
         setAcceptance(data); setRuns(nextRuns); setTracking(nextTracking);
         setModelInstances(nextInstances); setModelProviders(nextProviders);
-        if (!analysisModelCode) {
-          const preferred = nextInstances.find(item => item.enabled && item.api_key_configured && nextProviders.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
-          if (preferred) setAnalysisModelCode(preferred.instance_code);
-        }
         const latest = nextRuns[0];
         if (latest) { const full = await selectionApi.getRun(latest.id); if (valid) setRun(full); }
       }).catch(err => { if (valid) setError(message(err)); }).finally(() => { if (valid) setLoading(false); });
@@ -170,7 +166,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
           setNotice(`缺失数据补齐完成，已自动进入新分析批次 #${rerunId}；原批次 #${next.id} 保留。`);
           return;
         }
-        if (isRunning(next) || ["QUEUED", "RUNNING"].includes(text(nextRetry.status)) || ["QUEUED", "RUNNING"].includes(text(nextBackfill.status))) timer = setTimeout(() => void poll(), 2000);
+        if (isRunning(next) || ["QUEUED", "RUNNING"].includes(text(nextRetry.status)) || ["QUEUED", "RUNNING"].includes(text(nextBackfill.status))) timer = setTimeout(() => void poll(), 1000);
         else { setRuns(await selectionApi.listRuns()); setNotice(next.analysis_mode === "MODEL_COMPLETED" ? `真实模型已完成${next.candidate_count}只股票的分析，请核对证据。` : next.analysis_mode === "RULE_ONLY" ? "候选池已生成，可查看规则与证据。" : "执行已结束，失败项与待核对项请查看下方明细。"); }
       } catch (err) { if (valid) { setError(`进度读取失败，将重试：${message(err)}`); timer = setTimeout(() => void poll(), 4000); } }
     };

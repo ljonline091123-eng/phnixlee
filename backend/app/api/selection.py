@@ -97,14 +97,14 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             stage_start = 40 + round(50 * max(0, batch_index - 1) / batch_total)
             stage_end = 40 + round(50 * batch_index / batch_total) - 1
             progress.update({
-                "activity": progress.get("activity") or f"正在调用 {log.provider_code or '模型服务'} 的 {log.instance_code or '自动路由'}",
+                "activity": progress.get("activity") or f"模型调用中：{log.provider_code or '模型服务'}/{log.instance_code or '自动路由'} · 正在等待模型返回",
                 "model_instance_code": log.instance_code or progress.get("model_instance_code") or run.model_instance_code,
                 "active_model_call_id": log.id,
                 "provider_code": log.provider_code,
                 "model_code": log.model_code,
                 "purpose": metadata.get("purpose") or progress.get("purpose") or "STOCK_SELECTION_ANALYSIS",
                 "elapsed_seconds": max(int(progress.get("elapsed_seconds") or 0), elapsed_seconds),
-                "activity_started_at": progress.get("activity_started_at") or started_at.isoformat() if started_at else progress.get("activity_started_at"),
+                "activity_started_at": (progress.get("activity_started_at") or started_at.isoformat()) if started_at else progress.get("activity_started_at"),
                 "last_activity_at": datetime.now(timezone.utc).isoformat(),
                 "heartbeat_at": datetime.now(timezone.utc).isoformat(),
                 "percent": min(stage_end, max(int(progress.get("percent") or stage_start), stage_start + elapsed_seconds // 5)),
