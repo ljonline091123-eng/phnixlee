@@ -23,6 +23,7 @@ from app.models.ai_hub import (
     KnowledgeGraph,
     KnowledgeEntity,
     KnowledgeRelation,
+    ModelCallLog,
     ModelInstance,
     ModelSkill,
     PredictionLedger,
@@ -55,6 +56,38 @@ _MARKET_ZONES = {
     "HKEX": ZoneInfo("Asia/Hong_Kong"),
 }
 _MARKET_CLOSE = {"CN_A": time(15, 5), "NEEQ": time(15, 5), "HK": time(16, 15), "HKEX": time(16, 15)}
+
+
+class SelectionCancelled(RuntimeError):
+    """Cooperative cancellation; the worker records the run as CANCELLED."""
+
+
+def _progress_snapshot(run: SelectionRun) -> dict[str, Any]:
+    return dict((run.criteria_json or {}).get("progress") or {})
+
+
+def _parse_progress_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _date_window_filter(column: Any, start: date | None, end: date | None) -> Any:
+    if start is None and end is None:
+        return True
+    predicates = []
+    if start is not None and end is not None:
+        predicates.append(and_(column >= start.isoformat(), column < (end + timedelta(days=1)).isoformat()))
+        predicates.append(and_(column >= start.strftime("%Y%m%d"), column <= end.strftime("%Y%m%d")))
+    elif start is not None:
+        predicates.extend((column >= start.isoformat(), column >= start.strftime("%Y%m%d")))
+    elif end is not None:
+        predicates.extend((column < (end + timedelta(days=1)).isoformat(), column <= end.strftime("%Y%m%d")))
+    return or_(*predicates)
 
 
 def _market_zone(market: str) -> ZoneInfo:
@@ -249,9 +282,11 @@ def _evidence(
     ), KnowledgeRelation.id.desc()).limit(30)).all()) if entities else []
     news_query = select(StockNews).where(
         StockNews.market == market, StockNews.symbol == symbol, StockNews.fetched_at <= cutoff,
+        _date_window_filter(StockNews.news_time, period_start, period_end),
     )
     notice_query = select(StockNotice).where(
         StockNotice.market == market, StockNotice.symbol == symbol, StockNotice.fetched_at <= cutoff,
+        _date_window_filter(StockNotice.notice_date, period_start, period_end),
     )
     news_rows = [row for row in db.scalars(news_query).all()
                  if _date_in_window(row.news_time, period_start, period_end)]
@@ -464,12 +499,293 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
     return run
 
 
-def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message: str) -> None:
+def _progress(
+    db: Session,
+    run: SelectionRun,
+    stage: str,
+    percent: int,
+    message: str,
+    *,
+    operation: str | None = None,
+    counts: dict[str, Any] | None = None,
+) -> None:
     if db is None or not isinstance(run, SelectionRun):
         return
-    run.criteria_json = {**run.criteria_json, "progress": {"stage": stage, "percent": percent, "message": message,
-        "updated_at": _now().isoformat()}}
+    now = _now()
+    previous = _progress_snapshot(run)
+    started_at = _parse_progress_time(previous.get("started_at")) or now
+    elapsed_seconds = max(0, int((now - started_at).total_seconds()))
+    run.criteria_json = {**(run.criteria_json or {}), "progress": {
+        **previous,
+        "stage": stage,
+        "percent": max(0, min(100, int(percent))),
+        "message": message,
+        "operation": operation or previous.get("operation") or message,
+        "started_at": started_at.isoformat(),
+        "updated_at": now.isoformat(),
+        "heartbeat_at": now.isoformat(),
+        "elapsed_seconds": elapsed_seconds,
+        **({"counts": counts} if counts is not None else {}),
+    }}
     db.commit()
+
+
+def _raise_if_selection_cancelled(db: Session, run: SelectionRun) -> None:
+    status = db.scalar(select(SelectionRun.status).where(SelectionRun.id == run.id))
+    if status not in {"CANCEL_REQUESTED", "CANCELLED"}:
+        return
+    now = _now()
+    current = db.scalar(select(SelectionRun).where(SelectionRun.id == run.id)
+                        .execution_options(populate_existing=True))
+    if current is None:
+        raise SelectionCancelled("selection run no longer exists")
+    current.status = "CANCELLED"
+    current.completed_at = current.completed_at or now
+    current.error_message = "任务已由用户取消；在途模型调用返回后未保存其结果。"
+    current.criteria_json = {**(current.criteria_json or {}), "cancelled_at": now.isoformat()}
+    backfill = dict((current.criteria_json or {}).get("backfill_progress") or {})
+    if backfill.get("status") in {"QUEUED", "RUNNING", "CANCEL_REQUESTED"}:
+        backfill.update({"status": "CANCELLED", "message": "数据补齐已取消，已完成的数据和历史证据均予保留。",
+                         "operation": "数据补齐已停止", "updated_at": now.isoformat(), "heartbeat_at": now.isoformat()})
+        current.criteria_json = {**(current.criteria_json or {}), "backfill_progress": backfill}
+    retry = dict((current.criteria_json or {}).get("retry_progress") or {})
+    if retry.get("status") in {"QUEUED", "RUNNING", "CANCEL_REQUESTED"}:
+        retry.update({"status": "CANCELLED", "message": "失败项重试已取消，已完成的分析和原始证据均予保留。",
+                      "operation": "失败项重试已停止", "updated_at": now.isoformat(), "heartbeat_at": now.isoformat()})
+        current.criteria_json = {**(current.criteria_json or {}), "retry_progress": retry}
+    _progress(db, current, "CANCELLED", int((_progress_snapshot(current).get("percent") or 0)),
+              "任务已取消，未完成的本次分析结果不会提交；已有历史数据和批次保持不变。", operation="CANCELLED")
+    raise SelectionCancelled("selection run cancelled")
+
+
+def cancel_selection_run(db: Session, run_id: int) -> SelectionRun:
+    """Request cancellation without deleting jobs, evidence or history."""
+    from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
+
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise LookupError("selection run not found")
+    jobs = list(db.scalars(select(ScheduledJob).where(
+        ScheduledJob.task_type.in_(("selection_analysis", "selection_retry_failed", "selection_data_backfill")),
+        ScheduledJob.status.in_(("PENDING", "RETRY", "RUNNING")),
+    )).all())
+    jobs = [job for job in jobs if int((job.payload_json or {}).get("selection_run_id", -1)) == run.id]
+    if run.status in {"COMPLETED", "REVIEW", "PARTIAL", "FAILED", "CANCELLED"} and not jobs:
+        return run
+    now = _now()
+    was_running = run.status in {"RUNNING", "CANCEL_REQUESTED"} or any(job.status == "RUNNING" for job in jobs)
+    run.status = "CANCEL_REQUESTED" if was_running else "CANCELLED"
+    if not was_running:
+        run.completed_at = now
+    run.criteria_json = {**(run.criteria_json or {}), "cancel_requested_at": now.isoformat()}
+    for job in jobs:
+        if job.task_type == "selection_data_backfill":
+            backfill = dict((run.criteria_json or {}).get("backfill_progress") or {})
+            backfill.update({
+                "status": "CANCEL_REQUESTED" if was_running else "CANCELLED",
+                "message": "已收到取消请求，当前数据请求返回后停止。" if was_running else "数据补齐已取消，未开始执行。",
+                "operation": "等待当前数据请求结束" if was_running else "数据补齐已停止",
+                "updated_at": now.isoformat(),
+                "heartbeat_at": now.isoformat(),
+            })
+            run.criteria_json = {**(run.criteria_json or {}), "backfill_progress": backfill}
+        elif job.task_type == "selection_retry_failed":
+            retry = dict((run.criteria_json or {}).get("retry_progress") or {})
+            retry.update({
+                "status": "CANCEL_REQUESTED" if was_running else "CANCELLED",
+                "message": "已收到取消请求，当前模型请求返回后停止。" if was_running else "失败项重试已取消，未开始执行。",
+                "operation": "等待当前模型请求结束" if was_running else "失败项重试已停止",
+                "updated_at": now.isoformat(),
+                "heartbeat_at": now.isoformat(),
+            })
+            run.criteria_json = {**(run.criteria_json or {}), "retry_progress": retry}
+        if job.status in {"PENDING", "RETRY"}:
+            job.status = "CANCELLED"
+            job.completed_at = now
+            job.error_message = "用户取消"
+            pipeline = db.get(PipelineRun, job.pipeline_run_id)
+            if pipeline and pipeline.status in {"PENDING", "RETRY"}:
+                pipeline.status = "CANCELLED"
+                pipeline.completed_at = now
+                pipeline.error_message = "用户取消"
+            stage = db.scalar(select(PipelineStageRun).where(
+                PipelineStageRun.pipeline_run_id == job.pipeline_run_id,
+                PipelineStageRun.stage_code == job.task_type,
+            ))
+            if stage and stage.status in {"PENDING", "RETRY"}:
+                stage.status = "CANCELLED"
+                stage.completed_at = now
+                stage.lease_until = None
+                stage.error_message = "用户取消"
+    db.commit()
+    if run.status == "CANCELLED":
+        _progress(db, run, "CANCELLED", 0, "任务已取消，未开始分析。", operation="CANCELLED")
+    else:
+        _progress(db, run, "CANCEL_REQUESTED", int((_progress_snapshot(run).get("percent") or 0)),
+                  "已收到取消请求，正在等待当前不可中断的模型请求返回。", operation="CANCEL_REQUESTED")
+    from app.jobs.governance_runner import wake_governance_runner
+    wake_governance_runner()
+    return run
+
+
+def selection_preflight(db: Session, payload: SelectionRunCreate, *, probe_model: bool = False) -> dict[str, Any]:
+    """Fast, read-only gate before queueing any expensive analysis."""
+    market = payload.market.upper()
+    symbols = [str(item).strip() for item in payload.symbols if str(item).strip()]
+    blockers: list[str] = []
+    warnings: list[str] = []
+    stock_statement = select(StockSymbol).where(
+        StockSymbol.market == market,
+        StockSymbol.symbol.in_(symbols) if symbols else StockSymbol.status.in_(("LISTED", "IPO")),
+    ).limit(payload.candidate_limit if not symbols else max(payload.candidate_limit, len(symbols)))
+    stocks = list(db.scalars(stock_statement).all())
+    stock_map = {row.symbol: row for row in stocks}
+    missing_symbols = [symbol for symbol in symbols if symbol not in stock_map]
+    if missing_symbols:
+        blockers.append(f"股票主数据不存在：{', '.join(missing_symbols[:12])}")
+    if symbols and len(symbols) > payload.candidate_limit:
+        blockers.append(f"已选 {len(symbols)} 只股票超过本次候选上限 {payload.candidate_limit}，请提高上限后再执行")
+    if not stocks:
+        blockers.append("没有可分析的股票主数据")
+
+    bases = list(db.scalars(select(KnowledgeBase).where(KnowledgeBase.id.in_(payload.knowledge_base_ids))).all())
+    graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
+    if len(bases) != len(set(payload.knowledge_base_ids)) or any(not row.enabled for row in bases):
+        blockers.append("所选知识库不存在、未启用或未完成治理")
+    if len(graphs) != len(set(payload.graph_ids)) or any(
+        not row.enabled or row.knowledge_base_id not in payload.knowledge_base_ids for row in graphs
+    ):
+        blockers.append("所选图谱不存在、未启用或不属于所选知识库")
+    governed = any(row.governance_status in {"GOVERNED", "LOCKED"} for row in graphs)
+    if payload.use_model and payload.data_mode == "REAL" and not governed:
+        blockers.append("真实模型分析必须选择已治理的知识图谱")
+
+    selected_symbols = symbols or list(stock_map)
+    quote_symbols = set(db.scalars(select(StockRealtimeQuote.symbol).where(
+        StockRealtimeQuote.market == market, StockRealtimeQuote.symbol.in_(selected_symbols),
+    ).group_by(StockRealtimeQuote.symbol)).all()) if selected_symbols else set()
+    bar_symbols = set(db.scalars(select(StockKline.symbol).where(
+        StockKline.market == market, StockKline.symbol.in_(selected_symbols),
+        StockKline.close_price.is_not(None),
+    ).group_by(StockKline.symbol)).all()) if selected_symbols else set()
+    quote_count = len(quote_symbols)
+    price_count = len(quote_symbols | bar_symbols)
+    if symbols and quote_count < len(symbols):
+        warnings.append(f"{len(symbols) - quote_count} 只股票缺少实时行情，将无法形成当天价格基准")
+    if symbols and price_count < len(symbols):
+        no_price = [symbol for symbol in symbols if symbol not in quote_symbols and symbol not in bar_symbols]
+        blockers.append(f"这些股票没有可用的行情快照或日线收盘价：{', '.join(no_price[:12])}")
+    if not symbols and quote_count == 0:
+        warnings.append("当前股票池没有实时行情快照，将退回日线行情")
+
+    model_status = "NOT_REQUIRED"
+    model_instance = payload.model_instance_code or "自动路由"
+    if payload.use_model and payload.data_mode == "REAL":
+        from app.services.model_hub import ModelHubService
+        try:
+            routes = ModelHubService(db).list_route_options("stock_screening", payload.model_instance_code)
+        except Exception as exc:
+            routes = []
+            blockers.append(f"模型路由不可用：{str(exc)[:180]}")
+        real_routes = [row for row in routes if row.provider.provider_type != "MOCK" and row.instance.api_key]
+        if not real_routes:
+            blockers.append("没有配置可用的真实模型 API Key；为避免无效等待，已阻止分析")
+            model_status = "BLOCKED"
+        else:
+            latest_success = db.scalar(select(ModelCallLog).where(
+                ModelCallLog.task_type.in_(("stock_screening", "model_preflight")),
+                ModelCallLog.status == "SUCCESS",
+            ).order_by(ModelCallLog.completed_at.desc()).limit(1))
+            latest_failure = db.scalar(select(ModelCallLog).where(
+                ModelCallLog.task_type.in_(("stock_screening", "model_preflight")),
+                ModelCallLog.status == "FAILED",
+            ).order_by(ModelCallLog.completed_at.desc()).limit(1))
+            model_status = "READY" if latest_success else "UNKNOWN"
+            if latest_failure and not latest_success:
+                reason = (latest_failure.error_message or "最近一次模型调用失败").replace("\n", " ")[:220]
+                warnings.append(f"最近一次模型调用未成功：{reason}")
+            if not latest_success and not probe_model:
+                warnings.append("尚无近期成功调用记录；建议先执行模型连通性测试，账户余额需在模型服务商控制台确认")
+            if real_routes:
+                model_instance = real_routes[0].instance.instance_code
+    document_count = 0
+    document_sources: dict[str, int] = {}
+    from app.services.graph_rag import selection_period_bounds
+    period_start, period_end = selection_period_bounds(_now(), payload.period_months, market)
+    if selected_symbols and payload.knowledge_base_ids:
+        published = func.coalesce(*(KnowledgeDocument.metadata_json[key].as_string()
+            for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date")))
+        filters = [
+            KnowledgeDocument.market == market,
+            KnowledgeDocument.symbol.in_(selected_symbols),
+            KnowledgeDocument.knowledge_base_id.in_(payload.knowledge_base_ids),
+            or_(published.is_(None), and_(published >= period_start.isoformat(),
+                published <= period_end.isoformat() + "T23:59:59")),
+        ]
+        document_sources = {str(source): int(count) for source, count in db.execute(
+            select(KnowledgeDocument.source_table, func.count(KnowledgeDocument.id))
+            .where(*filters).group_by(KnowledgeDocument.source_table)
+        ).all()}
+        document_count = sum(document_sources.values())
+    if payload.use_model and document_count == 0:
+        warnings.append("所选周期没有新闻、公告或其他证据文档；模型将只能使用结构化观测")
+    if payload.use_model and document_sources:
+        missing_sources = [label for source, label in (("stock_news", "新闻"), ("stock_notice", "公告"))
+                          if not document_sources.get(source)]
+        if missing_sources:
+            warnings.append(f"所选周期缺少{ '、'.join(missing_sources) }文档；对应语义维度会标记证据不足")
+    if probe_model and payload.use_model and payload.data_mode == "REAL" and not blockers:
+        from app.services.model_hub import ModelHubService
+        recent_probe = db.scalar(select(ModelCallLog).where(
+            ModelCallLog.task_type == "stock_screening", ModelCallLog.status == "SUCCESS",
+        ).order_by(ModelCallLog.completed_at.desc()).limit(1))
+        probe_cached = False
+        if recent_probe and recent_probe.instance_code == model_instance and recent_probe.completed_at:
+            completed_at = recent_probe.completed_at
+            if completed_at.tzinfo is None:
+                completed_at = completed_at.replace(tzinfo=timezone.utc)
+            probe_cached = (_now() - completed_at).total_seconds() <= 180 and bool(
+                (recent_probe.request_json or {}).get("metadata_json", {}).get("purpose") == "SELECTION_PREFLIGHT"
+            )
+        if probe_cached:
+            model_status = "READY_CACHED"
+        else:
+            try:
+                probe = ModelHubService(db).chat(
+                    task_type="stock_screening",
+                    instance_code=payload.model_instance_code,
+                    messages=[{"role": "user", "content": "只回复：可用"}],
+                    max_tokens=16,
+                    metadata_json={"purpose": "SELECTION_PREFLIGHT", "preflight_only": True,
+                        "request_timeout_seconds": 12, "require_real_model": True,
+                        "selection_run_id": None},
+                )
+                if probe.status != "SUCCESS":
+                    model_status = "BLOCKED"
+                    blockers.append(f"模型预检失败，未启动分析：{(probe.error_message or '服务未返回成功响应')[:220]}")
+                else:
+                    model_status = "READY"
+                    model_instance = probe.instance_code or model_instance
+            except Exception as exc:
+                model_status = "BLOCKED"
+                blockers.append(f"模型预检失败，未启动分析：{str(exc)[:220]}")
+    return {
+        "ready": not blockers,
+        "blockers": blockers,
+        "warnings": warnings,
+        "market": market,
+        "symbols": symbols,
+        "stock_count": len(stock_map),
+        "quote_count": quote_count,
+        "price_count": price_count,
+        "document_count": document_count,
+        "document_sources": document_sources,
+        "period_months": payload.period_months,
+        "model_calls_estimate": ((len(symbols) if symbols else min(len(stock_map), payload.candidate_limit)) + 4) // 5 if payload.use_model else 0,
+        "model_status": model_status,
+        "model_instance": model_instance,
+        "model_probe_note": "预检只验证小请求当前可调用，不读取供应商账户余额，也不保证完整分析所需额度充足。",
+    }
 
 
 def queue_selection_run(
@@ -483,8 +799,13 @@ def queue_selection_run(
     run = _new_selection_run(db, payload)
     run.status = "QUEUED"
     run.criteria_json = {**run.criteria_json, "request": payload.model_dump(),
-        **({"retry_of_run_id": retry_of_run_id} if retry_of_run_id is not None else {}),
-        "progress": {"stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行"}}
+        **({"retry_of_run_id": retry_of_run_id} if retry_of_run_id is not None else {})}
+    queued_at = _now().isoformat()
+    run.criteria_json = {**(run.criteria_json or {}), "progress": {
+        "stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行",
+        "operation": "等待后台执行", "started_at": queued_at,
+        "updated_at": queued_at, "heartbeat_at": queued_at, "elapsed_seconds": 0,
+    }}
     pipeline = PipelineRun(pipeline_type="selection_analysis", trigger_type="API", status="PENDING",
         idempotency_key=f"selection:{run.id}", input_json={"selection_run_id": run.id})
     db.add(pipeline)
@@ -547,12 +868,15 @@ def queue_failed_selection_reanalysis(db: Session, run_id: int) -> SelectionRun:
         task_type="selection_retry_failed", status="PENDING", idempotency_key=key,
         pipeline_run_id=pipeline.id, payload_json=payload, max_attempts=3,
     ))
+    retry_started_at = _now().isoformat()
     run.criteria_json = {**(run.criteria_json or {}), "retry_progress": {
         "status": "QUEUED", "attempt": attempt, "candidate_count": len(failed_ids),
         "completed_count": 0, "failed_count": len(failed_ids), "message": f"已排队重新分析 {len(failed_ids)} 只失败或待核对股票",
-        "updated_at": _now().isoformat(),
+        "started_at": retry_started_at, "updated_at": retry_started_at,
     }, "progress": {"stage": "RETRY_QUEUED", "percent": 0,
-        "message": f"已排队重试 {len(failed_ids)} 只失败股票", "updated_at": _now().isoformat()}}
+        "message": f"已排队重试 {len(failed_ids)} 只失败股票", "operation": "等待后台执行失败项重试",
+        "started_at": retry_started_at, "updated_at": retry_started_at,
+        "heartbeat_at": retry_started_at, "elapsed_seconds": 0}}
     run.status = "RUNNING"
     run.completed_at = None
     run.error_message = None
@@ -641,12 +965,15 @@ def queue_selection_data_backfill(db: Session, run_id: int, payload: SelectionBa
         task_type="selection_data_backfill", status="PENDING", idempotency_key=key,
         pipeline_run_id=pipeline.id, payload_json=task_payload, max_attempts=3,
     ))
+    backfill_started_at = _now().isoformat()
     run.criteria_json = {**(run.criteria_json or {}), "backfill_progress": {
         "status": "QUEUED", "attempt": attempt, "percent": 0,
         "candidate_count": len(candidates), "completed_count": 0,
         "message": f"已排队补齐 {len(candidates)} 只股票的数据缺口",
+        "operation": "等待后台工作线程开始补齐",
         "dimensions_by_candidate": dimensions_by_candidate,
-        "updated_at": _now().isoformat(),
+        "started_at": backfill_started_at,
+        "updated_at": backfill_started_at,
     }}
     db.commit()
     from app.jobs.governance_runner import wake_governance_runner
@@ -715,6 +1042,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                     for row in batch:
                         company_results[(row[1], row[2])] = {"status": "FAILED", "error": error}
             for row in company_candidates:
+                _raise_if_selection_cancelled(db, run)
                 if row.market not in {"CN_A", "HK"}:
                     company_results[(row.market, row.symbol)] = {
                         "status": "UNSUPPORTED", "error": "公司治理数据源当前仅支持 A 股和港股",
@@ -722,6 +1050,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             db.expire_all()
         total_steps = max(1, len(candidates))
         for index, candidate in enumerate(candidates):
+            _raise_if_selection_cancelled(db, run)
             dimensions = set(dimensions_by_candidate.get(str(candidate.id)) or [])
             operations: dict[str, Any] = {}
             if "COMPANY" in dimensions:
@@ -759,11 +1088,13 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                             "symbol": candidate.symbol, "dimensions": sorted(dimensions),
                             "status": status, "operations": operations})
             current = (run.criteria_json or {}).get("backfill_progress", {})
+            progress_updated_at = _now().isoformat()
             run.criteria_json = {**(run.criteria_json or {}), "backfill_progress": {
                 **current, "status": "RUNNING", "percent": round(70 * (index + 1) / total_steps),
                 "completed_count": index + 1, "results": results,
                 "message": f"已完成 {index + 1}/{len(candidates)} 只股票的数据源补齐",
-                "updated_at": _now().isoformat(),
+                "operation": f"已完成 {candidate.symbol} 的数据源补齐，准备处理下一只股票",
+                "heartbeat_at": progress_updated_at, "updated_at": progress_updated_at,
             }}
             db.commit()
 
@@ -774,6 +1105,15 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             for row in candidates
         )
         if needs_documents and run.graph_ids_json:
+            progress_updated_at = _now().isoformat()
+            current = (run.criteria_json or {}).get("backfill_progress", {})
+            run.criteria_json = {**(run.criteria_json or {}), "backfill_progress": {
+                **current, "status": "RUNNING", "percent": 72,
+                "message": "正在更新知识库文档、切片与图谱投影",
+                "operation": "将补齐后的新闻、公告和公司资料写入知识流程",
+                "heartbeat_at": progress_updated_at, "updated_at": progress_updated_at,
+            }}
+            db.commit()
             try:
                 from app.services.knowledge_pipeline import run_stock_pipeline
                 pipeline_result = run_stock_pipeline(
@@ -806,6 +1146,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                 projection_error = f"{type(exc).__name__}: {str(exc)[:400]}"
 
         rerun_id = None
+        rerun_blocker = None
         if payload.get("rerun_analysis"):
             request_data = dict((run.criteria_json or {}).get("request") or {
                 "market": run.market, "universe_scope": run.universe_scope,
@@ -823,8 +1164,14 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             request_data["period_months"] = months
             if projection_id:
                 request_data["graph_ids"] = [projection_id]
-            rerun = queue_selection_run(db, SelectionRunCreate.model_validate(request_data), retry_of_run_id=run.id)
-            rerun_id = rerun.id
+            rerun_payload = SelectionRunCreate.model_validate(request_data)
+            preflight = selection_preflight(db, rerun_payload,
+                probe_model=rerun_payload.use_model and rerun_payload.data_mode == "REAL")
+            if preflight["ready"]:
+                rerun = queue_selection_run(db, rerun_payload, retry_of_run_id=run.id)
+                rerun_id = rerun.id
+            else:
+                rerun_blocker = "；".join(preflight.get("blockers") or [])
 
         success_count = sum(row["status"] == "SUCCESS" for row in results)
         failed_count = sum(row["status"] == "FAILED" for row in results)
@@ -835,6 +1182,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             "completed_count": len(results), "success_count": success_count,
             "failed_count": failed_count, "projection_graph_id": projection_id,
             "projection_error": projection_error, "rerun_id": rerun_id,
+            "rerun_blocker": rerun_blocker,
             "message": (f"数据补齐完成，已创建重新分析批次 #{rerun_id}" if rerun_id
                         else "数据补齐完成；旧分析证据快照保持不变"),
             "updated_at": _now().isoformat(),
@@ -934,6 +1282,9 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             return {"selection_run_id": run.id, "candidate_count": len(candidates),
                     "completed_count": success, "failed_count": failed,
                     "passed_count": passed, "citation_partial_count": citation_partial}
+        except SelectionCancelled:
+            db.rollback()
+            return {"selection_run_id": run_id, "status": "CANCELLED", "cancelled": True}
         except Exception as exc:
             db.rollback()
             run = db.get(SelectionRun, run_id)
@@ -958,6 +1309,9 @@ def execute_selection_job(payload: dict[str, Any]) -> dict[str, Any]:
         request = SelectionRunCreate.model_validate(run.criteria_json["request"])
         try:
             run = create_selection_run(db, request, run_id=run.id)
+        except SelectionCancelled:
+            run = db.get(SelectionRun, int(payload["selection_run_id"]))
+            return {"selection_run_id": run.id, "status": "CANCELLED", "cancelled": True}
         except Exception as exc:
             db.rollback()
             run = db.get(SelectionRun, int(payload["selection_run_id"]))
@@ -989,12 +1343,17 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
             raise ValueError("排队期间图谱治理状态已变化，请完成治理后重新分析")
     run.status = "RUNNING"
     run.error_message = None
+    initial_progress = _progress_snapshot(run)
+    initial_progress.setdefault("started_at", _now().isoformat())
+    run.criteria_json = {**(run.criteria_json or {}), "progress": initial_progress}
+    db.commit()
+    _raise_if_selection_cancelled(db, run)
     market = run.market
     symbols = list(run.criteria_json.get("symbols") or [])
     graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
     model_requested = run.analysis_mode == "MODEL_REQUESTED"
     analysis_graph_ids = [row.id for row in graphs if row.governance_status in {"GOVERNED", "LOCKED"}] if model_requested else payload.graph_ids
-    _progress(db, run, "SCREENING", 5, "读取本地行情并筛选固定样本")
+    _progress(db, run, "SCREENING", 5, "读取本地行情并筛选股票", operation="读取行情与股票主数据")
     quotes = _latest_quotes(db, market, symbols, run.as_of)
     # SQL/Python scans the locally available universe. Only the final <=50
     # candidates are enriched with documents and sent to the model.
@@ -1055,6 +1414,7 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     from app.services.graph_rag import selection_period_bounds
     period_start, period_end = selection_period_bounds(run.as_of, payload.period_months, market)
     for position, (item, _score) in enumerate(candidates):
+        _raise_if_selection_cancelled(db, run)
         evidence = _evidence(
             db, market, item["symbol"], payload.knowledge_base_ids, analysis_graph_ids,
             as_of=run.as_of, period_start=period_start, period_end=period_end,
@@ -1066,13 +1426,16 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
         item["evidence_json"] = evidence
         item["analysis_json"]["evidence"] = evidence["evidence_text"]
         _progress(db, run, "EVIDENCE", 10 + round(30 * (position + 1) / len(candidates)),
-                  f"已加载 {position + 1}/{len(candidates)} 只股票的图谱证据")
+                  f"已加载 {position + 1}/{len(candidates)} 只股票的图谱证据",
+                  operation=f"正在整理 {item['symbol']} 的新闻、公告、事实和图谱关系",
+                  counts={"completed_stocks": position + 1, "total_stocks": len(candidates)})
     priced_symbols = {row.symbol for row in quotes}
     missing.extend(f"{market}:{symbol}:quote" for symbol in stock_map if symbol not in priced_symbols)
     if payload.use_model and not model_requested:
         missing.append("缺少已治理知识库/图谱，已降级为本地规则分析")
     if model_requested and candidates:
         _apply_model_analysis(db, run, candidates)
+    _raise_if_selection_cancelled(db, run)
     # Make the Skill/model boundary explicit in the persisted evidence.  The
     # immutable audit row below repeats these values so a later Skill edit
     # cannot change the interpretation of this run.
@@ -1927,8 +2290,12 @@ def _apply_model_analysis(
         }, ensure_ascii=False, separators=(",", ":"))
 
     for batch_index, batch in enumerate(batches):
+        _raise_if_selection_cancelled(db, run)
         _progress(db, run, "MODEL", 40 + round(50 * batch_index / len(batches)),
-                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已完成 {len(predictions)}/{len(selected)} 只")
+                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已完成 {len(predictions)}/{len(selected)} 只",
+                  operation=f"正在调用模型分析第 {batch_index + 1}/{len(batches)} 批（每批最多 {max_batch_candidates} 只）",
+                  counts={"completed_stocks": len(predictions), "total_stocks": len(selected),
+                          "completed_batches": batch_index, "total_batches": len(batches)})
         context = json.dumps(batch, ensure_ascii=False, separators=(",", ":"))
         system_prompt = "本次为选股盯盘工作流。沿用 SOP 的证据边界，输出采用本次 JSON Schema：" + json.dumps(schema, ensure_ascii=False)
         contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、analyzed_document_ids、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，并把每个已阅读正文ID完整列入analyzed_document_ids；先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；缺资金流须明示。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"
@@ -1953,14 +2320,21 @@ def _apply_model_analysis(
                     "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                     "require_skills": True,
                     "purpose": "STOCK_SELECTION_ANALYSIS",
+                    "selection_run_id": run.id,
+                    "strict_instance": bool(run.model_instance_code),
+                    "no_transient_retry": True,
+                    "request_timeout_seconds": 60,
                     "json_schema_output": schema, "native_structured_output": False,
                     "require_real_model": real_model},
             )
+            _raise_if_selection_cancelled(db, run)
             if log.status != "SUCCESS":
                 raise ValueError(f"模型服务未返回成功结果（调用记录 #{log.id}）")
             expected = {str(row["symbol"]) for row in batch}
             by_symbol, row_errors = _parse_model_recommendations(log.response_text or "{}", expected)
         except Exception as exc:
+            if isinstance(exc, SelectionCancelled):
+                raise
             detail = str(exc)[:240]
             # A malformed batch response should not make every included stock
             # fail together. Isolate the candidates only when the provider did
@@ -1968,6 +2342,7 @@ def _apply_model_analysis(
             # and are retried by the explicit per-stock retry action.
             if log is not None and getattr(log, "status", None) == "SUCCESS" and len(batch) > 1:
                 for item in batch:
+                    _raise_if_selection_cancelled(db, run)
                     symbol = str(item["symbol"])
                     isolated_log = None
                     try:
@@ -1982,9 +2357,14 @@ def _apply_model_analysis(
                                 "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                                 "require_skills": True,
                                 "purpose": "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
+                                "selection_run_id": run.id,
+                                "strict_instance": bool(run.model_instance_code),
+                                "no_transient_retry": True,
+                                "request_timeout_seconds": 60,
                                 "json_schema_output": schema, "native_structured_output": False,
                                 "require_real_model": real_model},
                         )
+                        _raise_if_selection_cancelled(db, run)
                         if isolated_log.status != "SUCCESS":
                             raise ValueError(f"单股模型恢复未成功（调用记录 #{isolated_log.id}）")
                         isolated_rows, isolated_errors = _parse_model_recommendations(
@@ -1999,6 +2379,8 @@ def _apply_model_analysis(
                         failures.pop(symbol, None)
                         record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", log=isolated_log)
                     except Exception as isolated_exc:
+                        if isinstance(isolated_exc, SelectionCancelled):
+                            raise
                         reason = f"批次响应异常：{detail}；单股恢复失败：{str(isolated_exc)[:160]}"
                         failures[symbol] = reason
                         record_attempt(symbol, "FAILED", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", reason, isolated_log or log)
@@ -2011,6 +2393,7 @@ def _apply_model_analysis(
 
         invalid_items: list[tuple[dict[str, Any], str]] = []
         for item in batch:
+            _raise_if_selection_cancelled(db, run)
             symbol = str(item["symbol"])
             output = by_symbol.get(symbol)
             try:
@@ -2028,6 +2411,7 @@ def _apply_model_analysis(
             continue
 
         for item, original_reason in invalid_items:
+            _raise_if_selection_cancelled(db, run)
             symbol = str(item["symbol"])
             retry_log = None
             try:
@@ -2044,9 +2428,14 @@ def _apply_model_analysis(
                         "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                         "require_skills": True,
                         "purpose": "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
+                        "selection_run_id": run.id,
+                        "strict_instance": bool(run.model_instance_code),
+                        "no_transient_retry": True,
+                        "request_timeout_seconds": 60,
                         "json_schema_output": schema, "native_structured_output": False,
                         "require_real_model": real_model},
                 )
+                _raise_if_selection_cancelled(db, run)
                 if retry_log.status != "SUCCESS":
                     raise ValueError(f"单股定向重试未成功（调用记录 #{retry_log.id}）")
                 retry_by_symbol, retry_errors = _parse_model_recommendations(retry_log.response_text or "{}", {symbol})
@@ -2059,10 +2448,16 @@ def _apply_model_analysis(
                 failures.pop(symbol, None)
                 record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", log=retry_log)
             except Exception as exc:
+                if isinstance(exc, SelectionCancelled):
+                    raise
                 reason = f"首次校验失败：{original_reason}；单股定向重试失败：{str(exc)[:160]}"
                 failures[symbol] = reason
                 record_attempt(symbol, "FAILED", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", reason, retry_log)
 
+    _progress(db, run, "MODEL", 92, "模型调用完成，正在汇总逐股结果并校验引用",
+              operation="正在汇总模型结果、引用和缺失项",
+              counts={"completed_stocks": len(predictions), "total_stocks": len(selected),
+                      "completed_batches": len(batches), "total_batches": len(batches)})
     instances = set()
     for item, _score in candidates:
         symbol = str(item["symbol"])

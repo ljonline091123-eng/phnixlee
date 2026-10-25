@@ -74,6 +74,15 @@
 .batch-progress > div { display: flex; justify-content: space-between; gap: 14px; }
 .batch-progress progress { width: 100%; height: 14px; accent-color: #1b5141; margin: 10px 0; }
 .batch-progress small, .batch-fact small { display: block; color: #718278; }
+.batch-workbench-note { margin: -8px 0 0; color: #65796e; font-size: 13px; line-height: 1.65; }
+.batch-runtime, .selection-live-status { display: grid; gap: 8px; margin: 12px 0; padding: 14px 16px; border-left: 4px solid #44735c; background: #f1f6f2; color: #294639; }
+.batch-runtime > div, .selection-live-status > div { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.batch-runtime small, .selection-live-status small { color: #61756d; line-height: 1.55; overflow-wrap: anywhere; }
+.selection-live-status button, .batch-runtime button { justify-self: end; }
+.selection-preflight { display: grid; gap: 7px; padding: 12px 14px; border: 1px solid #dbe5dd; border-radius: 8px; background: #f7faf7; font-size: 13px; line-height: 1.55; }
+.selection-preflight strong { color: #28553e; }
+.selection-preflight small { color: #63776c; }
+.selection-preflight .preflight-blocker { color: #a23c31; }
 .batch-tabs { display: flex; gap: 6px; padding: 14px 0; flex-wrap: wrap; }
 .batch-tabs button.active { background: #e5f0e7; border-color: #4a7c5f; }
 .batch-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

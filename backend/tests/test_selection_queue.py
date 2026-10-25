@@ -1,5 +1,6 @@
 """Durable selection tasks: HTTP acknowledgement, recovery and decision gates."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +18,11 @@ from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.pipeline import ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionTracking
 from app.schemas.selection import SelectionReviewRequest, SelectionRunCreate
-from app.services.selection import execute_failed_selection_reanalysis, execute_selection_job, queue_selection_run, review_candidate
+from app.services.selection import (
+    SelectionCancelled, _apply_model_analysis, _date_window_filter, _raise_if_selection_cancelled, cancel_selection_run,
+    execute_failed_selection_reanalysis, execute_selection_job, queue_selection_run,
+    review_candidate, selection_preflight,
+)
 
 
 NOW = datetime(2025, 1, 6, 10, tzinfo=timezone.utc)
@@ -130,6 +135,170 @@ def test_unprepared_acceptance_has_stable_empty_collections(isolated):
             assert result["symbols"] == [] and result["datasets"] == {}
             client.close()
         finally:
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_preflight_reports_missing_security_without_creating_a_job(isolated):
+    with isolated() as db:
+        result = selection_preflight(db, SelectionRunCreate(
+            symbols=["DOES_NOT_EXIST"], use_model=False, data_mode="MOCK",
+        ))
+        assert result["ready"] is False
+        assert any("DOES_NOT_EXIST" in item for item in result["blockers"])
+        assert db.scalar(select(func.count(SelectionRun.id))) == 0
+        assert db.scalar(select(func.count(ScheduledJob.id))) == 0
+
+
+def test_real_model_preflight_uses_a_short_probe_before_queueing(isolated):
+    with isolated() as db:
+        base = KnowledgeBase(kb_code="PREFLIGHT_KB", kb_name="預檢知識庫")
+        db.add(base)
+        db.flush()
+        graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="PREFLIGHT_GRAPH",
+            graph_name="預檢圖譜", governance_status="GOVERNED")
+        db.add(graph)
+        db.commit()
+        route = SimpleNamespace(
+            provider=SimpleNamespace(provider_type="OPENAI"),
+            instance=SimpleNamespace(api_key="test-key", instance_code="test-model"),
+        )
+        with patch("app.services.model_hub.ModelHubService.list_route_options", return_value=[route]), \
+             patch("app.services.model_hub.ModelHubService.chat", return_value=SimpleNamespace(
+                 status="SUCCESS", instance_code="test-model")) as chat:
+            result = selection_preflight(db, SelectionRunCreate(
+                symbols=["DEMO001"], use_model=True, model_instance_code="test-model",
+                knowledge_base_ids=[base.id], graph_ids=[graph.id], data_mode="REAL",
+            ), probe_model=True)
+        assert result["ready"] is True
+        assert result["model_status"] == "READY"
+        assert result["model_calls_estimate"] == 1
+        assert chat.call_args.kwargs["max_tokens"] == 16
+        assert chat.call_args.kwargs["metadata_json"]["preflight_only"] is True
+
+
+def test_failed_real_model_preflight_blocks_analysis_without_creating_a_run(isolated):
+    with isolated() as db:
+        base = KnowledgeBase(kb_code="PREFLIGHT_FAIL_KB", kb_name="預檢失敗知識庫")
+        db.add(base)
+        db.flush()
+        graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="PREFLIGHT_FAIL_GRAPH",
+            graph_name="預檢失敗圖譜", governance_status="GOVERNED")
+        db.add(graph)
+        db.commit()
+        route = SimpleNamespace(
+            provider=SimpleNamespace(provider_type="OPENAI"),
+            instance=SimpleNamespace(api_key="test-key", instance_code="test-model"),
+        )
+        with patch("app.services.model_hub.ModelHubService.list_route_options", return_value=[route]), \
+             patch("app.services.model_hub.ModelHubService.chat", return_value=SimpleNamespace(
+                 status="FAILED", error_message="service quota exhausted")):
+            result = selection_preflight(db, SelectionRunCreate(
+                symbols=["DEMO001"], use_model=True, model_instance_code="test-model",
+                knowledge_base_ids=[base.id], graph_ids=[graph.id], data_mode="REAL",
+            ), probe_model=True)
+        assert result["ready"] is False
+        assert result["model_status"] == "BLOCKED"
+        assert any("service quota exhausted" in item for item in result["blockers"])
+        assert db.scalar(select(func.count(SelectionRun.id))) == 0
+        assert db.scalar(select(func.count(ScheduledJob.id))) == 0
+
+
+def test_date_window_filter_keeps_iso_and_compact_dates_but_excludes_out_of_period_rows(isolated):
+    with isolated() as db:
+        source_id = db.scalar(select(DataSource.id).where(DataSource.source_code == "QUEUE_TEST"))
+        db.add_all([
+            StockSymbol(market="CN_A", symbol="DATE001", name="2025-01-05T09:30:00", exchange="DEMO", source_id=source_id),
+            StockSymbol(market="CN_A", symbol="DATE002", name="20250106", exchange="DEMO", source_id=source_id),
+            StockSymbol(market="CN_A", symbol="DATE003", name="2025-01-07", exchange="DEMO", source_id=source_id),
+        ])
+        db.commit()
+        observed = set(db.scalars(select(StockSymbol.name).where(
+            _date_window_filter(StockSymbol.name, date(2025, 1, 5), date(2025, 1, 6)),
+        )).all())
+        assert observed == {"2025-01-05T09:30:00", "20250106"}
+
+
+def test_queued_selection_can_be_cancelled_without_removing_history(isolated):
+    with isolated() as db:
+        run = queue_selection_run(db, request())
+        job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_analysis"))
+        cancelled = cancel_selection_run(db, run.id)
+        assert cancelled.status == "CANCELLED"
+        assert job.status == "CANCELLED"
+        assert db.get(SelectionRun, run.id) is not None
+        assert "cancel_requested_at" in cancelled.criteria_json
+
+
+def test_running_selection_cancellation_is_observed_by_stale_worker_session(isolated):
+    worker_factory = isolated
+    with worker_factory() as worker_db:
+        run = SelectionRun(market="CN_A", status="RUNNING", criteria_json={
+            "progress": {"percent": 40},
+            "backfill_progress": {"status": "RUNNING", "percent": 25},
+            "retry_progress": {"status": "RUNNING", "percent": 50},
+        })
+        worker_db.add(run)
+        worker_db.commit()
+        run_id = run.id
+        with worker_factory() as api_db:
+            cancel_selection_run(api_db, run_id)
+        with pytest.raises(SelectionCancelled):
+            _raise_if_selection_cancelled(worker_db, run)
+        worker_db.expire_all()
+        cancelled = worker_db.get(SelectionRun, run_id)
+        assert cancelled.status == "CANCELLED"
+        assert cancelled.criteria_json["backfill_progress"]["status"] == "CANCELLED"
+        assert cancelled.criteria_json["retry_progress"]["status"] == "CANCELLED"
+
+
+def test_cancel_after_model_response_does_not_start_single_stock_recovery_calls(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="RUNNING", analysis_mode="MODEL_REQUESTED",
+            data_mode="REAL", model_instance_code="test-model", criteria_json={})
+        db.add(run)
+        db.commit()
+
+        def candidate(symbol):
+            return ({"market": "CN_A", "symbol": symbol, "name": symbol,
+                "entry_price": 10.0, "entry_date": "2025-01-06", "hard_score": 1.0,
+                "hard_rules_json": {}, "evidence_json": {"documents": [], "facts": [],
+                    "chunks": [], "graph_paths": [], "relations": [], "missing_data": []},
+                "analysis_json": {}}, 1.0)
+
+        with patch("app.services.selection._raise_if_selection_cancelled",
+                   side_effect=[None, SelectionCancelled("cancelled")]), \
+             patch("app.services.model_hub.ModelHubService.chat", return_value=SimpleNamespace(
+                 status="SUCCESS", response_text="{}", id=1, instance_code="test-model")) as chat:
+            with pytest.raises(SelectionCancelled):
+                _apply_model_analysis(db, run, [candidate("DEMO001"), candidate("DEMO002")])
+        chat.assert_called_once()
+
+
+def test_batch_acceptance_is_scoped_to_current_runs_candidates(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_COMPLETED")
+        db.add(run)
+        db.flush()
+        first = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001", name="Demo",
+            entry_price=11, entry_date="2025-01-06",
+            evidence_json={"documents": [{"id": 1}], "facts": [{"id": "F1"}], "chunks": [],
+                           "graph_paths": [{"id": 3}], "lineage": [{"id": 4}]},
+            analysis_json={"model_output_status": "SUCCESS", "analysis_validation_status": "PASSED"})
+        second = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO002", name="Demo 2",
+            evidence_json={"documents": [], "facts": []},
+            analysis_json={"model_output_status": "FAILED"})
+        db.add_all([first, second])
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            result = client.get(f"/api/v1/selection/runs/{run.id}/acceptance").json()
+            assert result["candidate_count"] == 2
+            assert result["accepted_count"] == 1
+            assert result["needs_attention_count"] == 1
+            assert {row["symbol"] for row in result["rows"]} == {"DEMO001", "DEMO002"}
+        finally:
+            client.close()
             app.dependency_overrides.pop(get_db, None)
 
 

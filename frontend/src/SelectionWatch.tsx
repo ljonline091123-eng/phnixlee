@@ -12,6 +12,16 @@ const labels: Record<string, string> = {
   PARTIAL: "部分完成 · 请核对",
   MODEL_PARTIAL: "模型部分完成",
   QUEUED: "已排队",
+  CANCEL_REQUESTED: "正在停止",
+  CANCELLED: "已取消",
+  SCREENING: "筛选股票与行情",
+  EVIDENCE: "整理知识证据",
+  MODEL: "模型分析与校验",
+  DATA_BACKFILL: "补齐数据并更新知识图谱",
+  RETRY_QUEUED: "失败项重新分析",
+  selection_analysis: "选股分析任务",
+  selection_retry_failed: "失败项重试任务",
+  selection_data_backfill: "数据补齐任务",
   PENDING_DATA: "等待行情",
   LOCAL_EVIDENCE: "本地规则预选",
   MODEL_REQUESTED: "模型分析中",
@@ -36,7 +46,6 @@ const labels: Record<string, string> = {
   REAL: "真实数据",
   MOCK: "模拟数据",
   RULES_ONLY: "规则预选",
-  MODEL: "模型综合分析",
   LLM: "模型综合分析",
   CN_A: "A 股",
   HK: "港股",
@@ -285,6 +294,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [scopePreview, setScopePreview] = useState<SelectionRecord | null>(null);
+  const [preflight, setPreflight] = useState<SelectionRecord | null>(null);
+  const [preflightPhase, setPreflightPhase] = useState("");
   const [scopeBusy, setScopeBusy] = useState(false);
   const [scopeError, setScopeError] = useState("");
   const [proofDocument, setProofDocument] = useState<SelectionRecord | null>(null);
@@ -298,6 +309,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
+  const [clock, setClock] = useState(Date.now());
   async function reload() {
     const [nextRuns, nextTracking] = await Promise.all([selectionApi.listRuns(), selectionApi.listTracking()]);
     setRuns(nextRuns); setTracking(nextTracking);
@@ -333,7 +345,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   }, [createOpen, form.market, form.knowledge_base_ids, form.graph_ids, form.period_months, chosenStocks]);
   useEffect(() => {
     const backfillStatus = String(((run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status) || "");
-    if (!run || (!["QUEUED", "RUNNING"].includes(run.status) && !["QUEUED", "RUNNING"].includes(backfillStatus))) return;
+    if (!run || (!["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(run.status) && !["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(backfillStatus))) return;
     let valid = true;
     const timer = window.setInterval(() => {void selectionApi.getRun(run.id).then(async next => {
       if (!valid) return;
@@ -357,10 +369,18 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     try {
       if (stockQuery.trim() && !chosenStocks.length) throw new Error("请勾选搜索结果中的股票，或清空搜索框后按本地市场筛选。");
       const modelReady = Boolean(form.use_model && form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
-      const result = await selectionApi.startRun({ ...form, use_model: modelReady, symbols: chosenStocks.map(item => item.symbol), model_instance_code: form.model_instance_code || null, data_mode: "REAL" });
+      if (form.use_model && !modelReady) throw new Error("Model analysis requires a selected governed knowledge base and graph.");
+      const request = { ...form, use_model: modelReady, symbols: chosenStocks.map(item => item.symbol), model_instance_code: form.model_instance_code || null, data_mode: "REAL" as const };
+      setPreflight(null);
+      setPreflightPhase("正在核对股票主数据、行情、所选周期证据和模型当前可用性…");
+      const check = await selectionApi.preflight(request);
+      setPreflight(check as unknown as SelectionRecord);
+      if (!check.ready) throw new Error([...check.blockers, ...check.warnings].join("；") || "启动前检查未通过");
+      setPreflightPhase("检查通过，正在创建后台分析任务…");
+      const result = await selectionApi.startRun(request);
       setRun(result); await reload(); setCreateOpen(false);
       setNotice(`选股批次 #${result.id} 已提交后台${form.use_model && !modelReady ? "；所选知识库/图谱暂不可用，本次按规则生成候选，未调用模型" : ""}。`); onCreated?.(result);
-    } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
+    } catch (err) { setError(errorOf(err)); } finally { setBusy(false); setPreflightPhase(""); }
   }
   function openReview(item: SelectionCandidate) {
     setCandidate(item); setCandidateAudit(null); setAuditError(""); setError("");
@@ -392,9 +412,24 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const failedModelCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.model_output_status === "FAILED" || item.analysis_json.analysis_validation_status === "PARTIAL")) ?? [];
   const retryProgress = (run?.criteria_json.retry_progress as SelectionRecord | undefined) ?? {};
   const retryActive = ["QUEUED", "RUNNING"].includes(String(retryProgress.status || ""));
+  const backfillProgress = (run?.criteria_json.backfill_progress as SelectionRecord | undefined) ?? {};
+  const backfillActive = ["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(String(backfillProgress.status || ""));
+  const activeRun = !!run && ["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(run.status);
+  const activeTask = activeRun || backfillActive;
+  useEffect(() => {
+    if (!activeTask) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [activeTask]);
   const submitBlockReason = busy ? "正在提交选股任务。" : "";
   const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
   const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
+  const progress = (run?.criteria_json.progress || {}) as SelectionRecord;
+  const modelCall = (progress.model_call || {}) as SelectionRecord;
+  const backend = (progress.backend || {}) as SelectionRecord;
+  const runtimeProgress = backfillActive ? backfillProgress : progress;
+  const progressStartedAt = Date.parse(textOf(runtimeProgress.started_at) || "");
+  const elapsedSeconds = Math.max(Number(runtimeProgress.elapsed_seconds || 0), Number.isFinite(progressStartedAt) ? Math.floor((clock - progressStartedAt) / 1000) : 0);
   const updateChosenStocks = (next: StockSymbol[]) => {
     setChosenStocks(next);
     setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
@@ -423,6 +458,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     if (!run || retryActive) return;
     setBusy(true); setError(""); setNotice("");
     try {
+      setNotice("正在检查模型连通性与小请求可用性；系统无法读取服务商账户余额。检查通过后才会提交失败项重试…");
       setRun(await selectionApi.retryFailed(run.id));
       await reload();
       setNotice(`已提交 ${failedModelCandidates.length} 只失败股票的单独重试，继续保留原有证据快照。`);
@@ -433,10 +469,20 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     if (!run || run.status !== "FAILED") return;
     setBusy(true); setError(""); setNotice("");
     try {
+      setNotice("正在检查模型连通性与小请求可用性；系统无法读取服务商账户余额。检查通过后才会创建重试批次…");
       const next = await selectionApi.retryRun(run.id);
       setRun(next); await reload();
       setNotice(`已创建新批次 #${next.id} 重新执行；原失败批次 #${run.id} 保留，可随时回看。`);
     } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function cancelRun() {
+    const backfillStatus = String(((run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status) || "");
+    if (!run || (!["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(run.status)
+      && !["QUEUED", "RUNNING", "CANCEL_REQUESTED"].includes(backfillStatus))) return;
+    setBusy(true); setError("");
+    try { setRun(await selectionApi.cancelRun(run.id)); setNotice("已请求取消；正在进行的模型网络请求会在返回后停止，不会保存这次结果，也不会继续重试。"); }
+    catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
   }
   async function backfill(candidateIds: number[] = [], dimensions: AnalysisDimension[] = []) {
@@ -463,6 +509,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
           {["QUEUED", "RUNNING"].includes(run.status) && <div className="batch-progress"><strong>{textOf((run.criteria_json.progress as SelectionRecord)?.message) || "等待后台执行"}</strong><progress aria-label="分析进度" max="100" value={Number((run.criteria_json.progress as SelectionRecord)?.percent || 0)} /></div>}
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
+          {activeTask && <section className="selection-live-status" aria-live="polite"><div><strong>{textOf(runtimeProgress.operation || runtimeProgress.message) || "后台正在处理"}</strong><span>{Math.floor(elapsedSeconds / 60)} 分 {elapsedSeconds % 60} 秒</span></div><small>阶段：{nameOf(backfillActive ? "DATA_BACKFILL" : textOf(progress.stage) || "QUEUED")} · 后台任务：{backend.status ? `${nameOf(textOf(backend.status))} / 第 ${Number(backend.attempt || 1)} 次执行` : "等待工作线程"}{backend.heartbeat_age_seconds != null ? ` · ${Number(backend.heartbeat_age_seconds) > 90 ? "心跳已超过90秒，可能停滞" : `最近心跳 ${Number(backend.heartbeat_age_seconds)} 秒前`}` : ""}</small>{backfillActive && <small>已补齐 {Number(backfillProgress.completed_count || 0)} / {Number(backfillProgress.candidate_count || 0)} 只股票</small>}{!backfillActive && progress.counts && <small>已处理 {Number(progress.counts.completed_stocks || 0)} / {Number(progress.counts.total_stocks || 0)} 只股票{progress.counts.total_batches ? ` · 模型批次 ${Number(progress.counts.completed_batches || 0)} / ${Number(progress.counts.total_batches)} 完成` : ""}</small>}{!backfillActive && modelCall.call_log_id && <small>模型：{textOf(modelCall.instance_code)} · 调用 #{Number(modelCall.call_log_id)} · 已等待 {Number(modelCall.elapsed_seconds || 0)} 秒</small>}<button type="button" disabled={busy || run.status === "CANCEL_REQUESTED"} onClick={() => void cancelRun()}>{run.status === "CANCEL_REQUESTED" ? "正在停止…" : "取消本次任务"}</button></section>}
           {run.error_message && <p className="form-error">{run.error_message}</p>}
           {(failedModelCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
             <div className="selection-scope-heading"><strong>引用校验通过 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
@@ -528,6 +575,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
       <p className="selection-help">只向模型发送筛选后的候选和有限证据。取消模型分析时保存为规则预选，供人工核验；数据不足或模型失败会明确记录。</p>
       <p className="selection-submit-mode" role="status">本次将：{form.use_model && modelScopeSelected ? `生成候选池并进行多源模型分析${scopeBusy ? "（覆盖统计进行中，不影响提交）" : ""}` : "生成规则候选，不调用模型"}{form.use_model && !modelScopeSelected ? "。若需模型分析，请勾选知识库及其已治理图谱。" : ""}</p>
       {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">{submitBlockReason}</span><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={!!submitBlockReason}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
+      {preflightPhase && <p className="selection-notice" role="status">{preflightPhase}</p>}
+      {preflight && <section className="selection-preflight" aria-label="启动前检查"><strong>{preflight.ready ? "启动前检查通过" : "启动条件不足"}</strong><span>模型：{textOf(preflight.model_instance)} · 周期证据：{Number(preflight.document_count || 0)} 篇 · 行情快照：{Number(preflight.quote_count || 0)} 只 · 基础调用约 {Number(preflight.model_calls_estimate || 0)} 次起（长文拆批或失败修复会增加）</span>{strings(preflight.blockers).map((item, index) => <small className="preflight-blocker" key={`b${index}`}>{item}</small>)}{strings(preflight.warnings).map((item, index) => <small key={`w${index}`}>{item}</small>)}<small>{textOf(preflight.model_probe_note)}</small></section>}
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
       <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>

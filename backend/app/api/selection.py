@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.ai_hub import ModelCallLog
+from app.models.pipeline import ScheduledJob
 from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
     SelectionBackfillRequest,
@@ -20,8 +22,8 @@ from app.schemas.selection import (
     SelectionTrackingRead,
 )
 from app.services.selection import (
-    create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
-    queue_selection_data_backfill, refresh_tracking, review_candidate,
+    cancel_selection_run, create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
+    queue_selection_data_backfill, refresh_tracking, review_candidate, selection_preflight,
 )
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.schemas.selection import SelectionScopePreview
@@ -44,12 +46,70 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
 
 
 def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -> SelectionRunRead:
+    criteria = dict(run.criteria_json or {})
+    progress = dict(criteria.get("progress") or {})
+    tasks = ("selection_analysis", "selection_retry_failed", "selection_data_backfill")
+    jobs = list(db.scalars(select(ScheduledJob).where(
+        ScheduledJob.task_type.in_(tasks),
+        or_(ScheduledJob.idempotency_key == f"selection:{run.id}",
+            ScheduledJob.idempotency_key.like(f"selection-retry:{run.id}:%"),
+            ScheduledJob.idempotency_key.like(f"selection-backfill:{run.id}:%")),
+    ).order_by(ScheduledJob.created_at.desc()).limit(5)).all())
+    active_job = next((job for job in jobs if job.status in {"PENDING", "RETRY", "RUNNING"}), None)
+    if active_job:
+        lease_until = active_job.lease_until.isoformat() if active_job.lease_until else None
+        job_heartbeat = active_job.updated_at
+        if job_heartbeat and job_heartbeat.tzinfo is None:
+            job_heartbeat = job_heartbeat.replace(tzinfo=timezone.utc)
+        if job_heartbeat:
+            progress["heartbeat_at"] = job_heartbeat.isoformat()
+        progress["backend"] = {
+            "status": active_job.status,
+            "task_type": active_job.task_type,
+            "attempt": active_job.attempts,
+            "started_at": active_job.started_at.isoformat() if active_job.started_at else None,
+            "lease_until": lease_until,
+            "worker_active": bool(active_job.status == "RUNNING" and active_job.lease_until
+                and active_job.lease_until.replace(tzinfo=active_job.lease_until.tzinfo or timezone.utc) > datetime.now(timezone.utc)),
+            "heartbeat_at": job_heartbeat.isoformat() if job_heartbeat else None,
+            "heartbeat_age_seconds": max(0, int((datetime.now(timezone.utc) - job_heartbeat).total_seconds())) if job_heartbeat else None,
+        }
+    model_logs = list(db.scalars(select(ModelCallLog).where(
+        ModelCallLog.task_type == "stock_screening", ModelCallLog.status == "RUNNING",
+    ).order_by(ModelCallLog.started_at.desc()).limit(12)).all())
+    for model_log in model_logs:
+        metadata = (model_log.request_json or {}).get("metadata_json") or {}
+        if int(metadata.get("selection_run_id") or -1) != run.id:
+            continue
+        started = model_log.started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        progress["model_call"] = {
+            "status": model_log.status,
+            "call_log_id": model_log.id,
+            "instance_code": model_log.instance_code,
+            "elapsed_seconds": max(0, int((datetime.now(timezone.utc) - started).total_seconds())),
+            "purpose": metadata.get("purpose"),
+        }
+        progress["operation"] = f"正在等待 {model_log.instance_code or '模型'} 返回分析结果"
+        break
+    updated = progress.get("started_at")
+    if updated:
+        try:
+            started = datetime.fromisoformat(str(updated).replace("Z", "+00:00"))
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            progress["elapsed_seconds"] = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+        except ValueError:
+            pass
+    criteria["progress"] = progress
     payload = {key: getattr(run, key) for key in (
         "id", "market", "universe_scope", "candidate_limit", "criteria_json", "model_instance_code",
         "knowledge_base_ids_json", "graph_ids_json", "data_mode", "analysis_mode", "status", "candidate_count",
         "reviewed_count", "tracking_count", "missing_data_json", "error_message", "as_of", "completed_at",
         "created_at", "updated_at",
     )}
+    payload["criteria_json"] = criteria
     if include_candidates:
         candidates = list(db.scalars(
             select(SelectionCandidate).where(SelectionCandidate.run_id == run.id).order_by(SelectionCandidate.hard_score.desc())
@@ -82,6 +142,9 @@ def _tracking_read(db: Session, row: SelectionTracking, include_snapshots: bool 
 @router.post("/runs", response_model=SelectionRunRead, status_code=201)
 def create_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> SelectionRunRead:
     try:
+        check = selection_preflight(db, payload, probe_model=payload.use_model and payload.data_mode == "REAL")
+        if not check["ready"]:
+            raise HTTPException(status_code=409, detail={"message": "分析前检查未通过", "preflight": check})
         return _run_read(db, create_selection_run(db, payload))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -90,9 +153,17 @@ def create_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> Se
 @router.post("/runs/start", response_model=SelectionRunRead, status_code=202)
 def start_run(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> SelectionRunRead:
     try:
+        check = selection_preflight(db, payload, probe_model=payload.use_model and payload.data_mode == "REAL")
+        if not check["ready"]:
+            raise HTTPException(status_code=409, detail={"message": "分析前检查未通过，尚未创建任务", "preflight": check})
         return _run_read(db, queue_selection_run(db, payload))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/preflight")
+def preflight(payload: SelectionRunCreate, db: Session = Depends(get_db)) -> dict:
+    return selection_preflight(db, payload, probe_model=payload.use_model and payload.data_mode == "REAL")
 
 
 @router.post("/runs/{run_id}/retry", response_model=SelectionRunRead, status_code=202)
@@ -108,6 +179,9 @@ def retry_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
         raise HTTPException(status_code=409, detail="原任务没有可复用的请求快照，无法安全重试")
     try:
         payload = SelectionRunCreate.model_validate(request_data)
+        check = selection_preflight(db, payload, probe_model=payload.use_model and payload.data_mode == "REAL")
+        if not check["ready"]:
+            raise HTTPException(status_code=409, detail={"message": "重新执行前检查未通过", "preflight": check})
         return _run_read(db, queue_selection_run(db, payload, retry_of_run_id=original.id))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -349,6 +423,59 @@ def get_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     return _run_read(db, run)
 
 
+@router.post("/runs/{run_id}/cancel", response_model=SelectionRunRead)
+def cancel_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
+    try:
+        return _run_read(db, cancel_selection_run(db, run_id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/acceptance")
+def run_acceptance(run_id: int, db: Session = Depends(get_db)) -> dict:
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="selection run not found")
+    candidates = list(db.scalars(select(SelectionCandidate).where(
+        SelectionCandidate.run_id == run.id,
+    ).order_by(SelectionCandidate.symbol)).all())
+    rows = []
+    for candidate in candidates:
+        evidence = candidate.evidence_json or {}
+        analysis = candidate.analysis_json or {}
+        documents = evidence.get("documents") or []
+        facts = evidence.get("facts") or []
+        facts += [fact for group in (evidence.get("structured_observations") or {}).values()
+                  for fact in (group if isinstance(group, list) else [])]
+        chunks = evidence.get("chunks") or []
+        relations = evidence.get("graph_paths") or evidence.get("relations") or []
+        lineage = evidence.get("lineage") or []
+        has_price = bool(candidate.entry_price and candidate.entry_date)
+        has_evidence = bool(documents or facts or relations)
+        model_passed = analysis.get("model_output_status") == "SUCCESS" and analysis.get("analysis_validation_status") != "PARTIAL"
+        if not str(run.analysis_mode or "").startswith("MODEL"):
+            model_passed = True
+        missing = list(evidence.get("missing_data") or [])
+        rows.append({
+            "candidate_id": candidate.id, "symbol": candidate.symbol, "name": candidate.name,
+            "has_market_baseline": has_price, "documents": len(documents), "chunks": len(chunks),
+            "facts": len(facts), "graph_relations": len(relations), "lineage": len(lineage),
+            "model_status": analysis.get("model_output_status", "NOT_CALLED"),
+            "citation_status": analysis.get("analysis_validation_status", "NOT_RUN"),
+            "data_gaps": missing[:20],
+            "passed": has_price and has_evidence and model_passed,
+        })
+    accepted = sum(bool(row["passed"]) for row in rows)
+    return {
+        "run_id": run.id, "batch_scope": run.universe_scope, "status": run.status,
+        "candidate_count": len(rows), "accepted_count": accepted,
+        "needs_attention_count": len(rows) - accepted,
+        "rows": rows,
+        "scope_note": "本验收针对当前批次全部已生成候选，检查行情基准、证据、来源引用与模型状态；不代表投资结论已被未来收益验证。",
+    }
+
+
+
 @router.get("/runs/{run_id}/backfill-status")
 def backfill_status(run_id: int, db: Session = Depends(get_db)) -> dict:
     run = db.get(SelectionRun, run_id)
@@ -361,6 +488,15 @@ def backfill_status(run_id: int, db: Session = Depends(get_db)) -> dict:
 @router.post("/runs/{run_id}/retry-failed", response_model=SelectionRunRead, status_code=202)
 def retry_failed(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     try:
+        original = db.get(SelectionRun, run_id)
+        if original is None:
+            raise LookupError("selection run not found")
+        request_data = (original.criteria_json or {}).get("request")
+        if isinstance(request_data, dict):
+            payload = SelectionRunCreate.model_validate(request_data)
+            check = selection_preflight(db, payload, probe_model=payload.use_model and payload.data_mode == "REAL")
+            if not check["ready"]:
+                raise HTTPException(status_code=409, detail={"message": "重新分析前检查未通过", "preflight": check})
         return _run_read(db, queue_failed_selection_reanalysis(db, run_id))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

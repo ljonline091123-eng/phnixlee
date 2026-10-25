@@ -139,11 +139,28 @@ export type BatchAcceptance = {
     documents: number; selected_chunks: number; facts: number; relations: number; lineage: number; passed: boolean; missing_data: string[]}>;
   scope_notes: string[]; prepared_at: string | null; datasets: Record<string, SelectionRecord>;
 };
+export type SelectionBatchAcceptance = {
+  run_id: number; batch_scope: string; status: string; candidate_count: number;
+  accepted_count: number; needs_attention_count: number;
+  rows: Array<{candidate_id: number; symbol: string; name?: string | null; has_market_baseline: boolean;
+    documents: number; chunks: number; facts: number; graph_relations: number; lineage: number;
+    model_status: string; citation_status: string; data_gaps: string[]; passed: boolean}>;
+  scope_note: string;
+};
+export type SelectionPreflight = {
+  ready: boolean; blockers: string[]; warnings: string[]; market: string; symbols: string[];
+  stock_count: number; quote_count: number; document_count: number; document_sources: Record<string, number>;
+  period_months: number; model_calls_estimate?: number | null; model_status: string;
+  model_instance: string; model_probe_note: string;
+};
 export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?: number; stop_price?: number; target_return_pct?: number; confidence?: number; notes?: string };
 export const selectionApi = {
   candidateDocument: (candidateId: number, documentId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/documents/${documentId}`),
   scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
   acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
+  preflight: (payload: SelectionRunCreate) => request<SelectionPreflight>("/selection/preflight", {method: "POST", body: JSON.stringify(payload)}),
+  batchAcceptance: (id: number) => request<SelectionBatchAcceptance>(`/selection/runs/${id}/acceptance`),
+  cancelRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}/cancel`, {method: "POST"}),
   startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
   retryRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry`, { method: "POST" }),
   retryFailed: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry-failed`, { method: "POST" }),

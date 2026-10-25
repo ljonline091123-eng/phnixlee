@@ -119,7 +119,8 @@ class JobWorker:
                     renewed = db.execute(update(ScheduledJob).where(
                         ScheduledJob.id == job_id, ScheduledJob.status == "RUNNING",
                         ScheduledJob.worker_id == self.worker_id,
-                    ).values(lease_until=utc_now() + timedelta(seconds=self.lease_seconds)))
+                    ).values(lease_until=utc_now() + timedelta(seconds=self.lease_seconds),
+                             updated_at=utc_now()))
                     db.commit()
                     if not renewed.rowcount:
                         return
@@ -206,6 +207,28 @@ class JobWorker:
             job = db.get(ScheduledJob, job_id)
             if job is None or job.worker_id != self.worker_id or job.status != "RUNNING":
                 return
+            selection_run_id = (job.payload_json or {}).get("selection_run_id")
+            if selection_run_id is not None:
+                from app.models.selection import SelectionRun
+                selection_run = db.get(SelectionRun, int(selection_run_id))
+                if selection_run is not None and selection_run.status in {"CANCEL_REQUESTED", "CANCELLED"}:
+                    job.status = "CANCELLED"
+                    job.lease_until = None
+                    job.completed_at = now
+                    job.error_message = "用户取消；结果未提交。"
+                    pipeline = db.get(PipelineRun, job.pipeline_run_id)
+                    stage = self._stage(db, job)
+                    if pipeline:
+                        pipeline.status = "CANCELLED"
+                        pipeline.completed_at = now
+                        pipeline.error_message = job.error_message
+                    if stage:
+                        stage.status = "CANCELLED"
+                        stage.completed_at = now
+                        stage.lease_until = None
+                        stage.error_message = job.error_message
+                    db.commit()
+                    return
             job.status = "COMPLETED"
             job.lease_until = None
             job.completed_at = now
@@ -232,6 +255,28 @@ class JobWorker:
             job = db.get(ScheduledJob, job_id)
             if job is None or job.worker_id != self.worker_id or job.status != "RUNNING":
                 return
+            selection_run_id = (job.payload_json or {}).get("selection_run_id")
+            if selection_run_id is not None:
+                from app.models.selection import SelectionRun
+                selection_run = db.get(SelectionRun, int(selection_run_id))
+                if selection_run is not None and selection_run.status in {"CANCEL_REQUESTED", "CANCELLED"}:
+                    job.status = "CANCELLED"
+                    job.lease_until = None
+                    job.completed_at = now
+                    job.error_message = "用户取消；当前处理已停止，不再重试。"
+                    pipeline = db.get(PipelineRun, job.pipeline_run_id)
+                    stage = self._stage(db, job)
+                    if pipeline:
+                        pipeline.status = "CANCELLED"
+                        pipeline.completed_at = now
+                        pipeline.error_message = job.error_message
+                    if stage:
+                        stage.status = "CANCELLED"
+                        stage.completed_at = now
+                        stage.lease_until = None
+                        stage.error_message = job.error_message
+                    db.commit()
+                    return
             retry = isinstance(exc, DurableRetryError) or job.attempts < job.max_attempts
             job.status = "RETRY" if retry else "FAILED"
             job.run_after = now + timedelta(seconds=min(300, 2 ** min(job.attempts, 6) * 5))

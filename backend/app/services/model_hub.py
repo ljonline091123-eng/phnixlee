@@ -788,6 +788,10 @@ class ModelHubService:
             if sum(len(item.get("content", "")) for item in messages) > 60_000:
                 raise ValueError("Soft-analysis input exceeds 60,000 characters after skill instructions; run Python/SQL filtering first")
         candidates = self.list_route_options(task_type=task_type, requested_instance_code=instance_code)
+        if instance_code and metadata.get("strict_instance"):
+            candidates = candidates[:1]
+        if metadata.get("preflight_only"):
+            candidates = candidates[:1]
         if metadata.get("require_real_model"):
             candidates = [
                 candidate for candidate in candidates
@@ -988,7 +992,9 @@ class ModelHubService:
         """
         attempts: list[dict[str, Any]] = []
         adapter = get_model_adapter(provider_type)
-        for attempt in range(1, self._MAX_TRANSIENT_ATTEMPTS + 1):
+        max_attempts = 1 if ((metadata_json or {}).get("preflight_only")
+                             or (metadata_json or {}).get("no_transient_retry")) else self._MAX_TRANSIENT_ATTEMPTS
+        for attempt in range(1, max_attempts + 1):
             try:
                 result = adapter.chat(
                     instance=instance,
@@ -1009,7 +1015,7 @@ class ModelHubService:
                                  "model": instance.model_code, "status": "FAILED",
                                  "error": describe_model_error(exc, instance.api_key),
                                  "retryable": retryable})
-                if not retryable or attempt >= self._MAX_TRANSIENT_ATTEMPTS:
+                if not retryable or attempt >= max_attempts:
                     # Exception objects are mutable; attaching the trace keeps
                     # the outer audit path independent of provider exception
                     # classes and avoids losing the first 503 attempt.

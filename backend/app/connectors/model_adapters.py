@@ -15,6 +15,14 @@ from app.models.ai_hub import ModelInstance
 MODEL_HTTP_TIMEOUT = httpx.Timeout(connect=8.0, read=90.0, write=30.0, pool=8.0)
 
 
+def _request_timeout(metadata_json: dict[str, Any] | None) -> httpx.Timeout:
+    seconds = (metadata_json or {}).get("request_timeout_seconds")
+    if seconds is None:
+        return MODEL_HTTP_TIMEOUT
+    bounded = max(3.0, min(60.0, float(seconds)))
+    return httpx.Timeout(connect=min(5.0, bounded), read=bounded, write=bounded, pool=min(5.0, bounded))
+
+
 @dataclass(frozen=True)
 class ModelExecutionResult:
     response_text: str
@@ -130,7 +138,7 @@ class OpenAICompatAdapter(ModelAdapter):
             "Authorization": f"Bearer {instance.api_key}",
             "Content-Type": "application/json",
         }
-        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
+        with httpx.Client(timeout=_request_timeout(metadata_json)) as client:
             response = client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             response_json = response.json()
@@ -193,7 +201,7 @@ class AnthropicMessagesAdapter(ModelAdapter):
         workspace_id = (instance.config_json or {}).get("workspace_id")
         if workspace_id:
             headers["anthropic-workspace-id"] = str(workspace_id)
-        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
+        with httpx.Client(timeout=_request_timeout(metadata_json)) as client:
             response = client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             response_json = response.json()
@@ -252,7 +260,7 @@ class GeminiRestAdapter(ModelAdapter):
             generation_config["responseJsonSchema"] = output_schema
         payload.update(extra_body)
         payload["generationConfig"] = generation_config
-        with httpx.Client(timeout=MODEL_HTTP_TIMEOUT) as client:
+        with httpx.Client(timeout=_request_timeout(metadata_json)) as client:
             response = client.post(url, json=payload, headers={"x-goog-api-key": instance.api_key})
             response.raise_for_status()
             response_json = response.json()
