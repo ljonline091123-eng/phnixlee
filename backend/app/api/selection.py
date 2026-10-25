@@ -25,7 +25,10 @@ from app.services.selection import (
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
     probe_selection_model, refresh_tracking, review_candidate,
 )
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
+from app.models.ai_hub import (
+    KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
+    KnowledgeRelation, ModelCallLog,
+)
 from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.selection_audit import retrospective_read, snapshot_read
@@ -46,12 +49,73 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
 
 
 def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -> SelectionRunRead:
+    criteria_json = dict(run.criteria_json or {})
+    # The worker writes a durable model-call log before it sends the request.
+    # Use that log as a read-side fallback when a separate heartbeat thread is
+    # delayed or SQLite briefly rejects its write. This keeps the UI honest
+    # about the active provider and current purpose instead of leaving it at a
+    # static 40% stage.
+    if run.status in {"QUEUED", "RUNNING"}:
+        progress = dict(criteria_json.get("progress") or {})
+        logs = list(db.scalars(
+            select(ModelCallLog).where(
+                ModelCallLog.task_type == "stock_screening",
+                ModelCallLog.completed_at.is_(None),
+            ).order_by(ModelCallLog.started_at.desc()).limit(20)
+        ).all())
+        active = None
+        for log in logs:
+            request = log.request_json if isinstance(log.request_json, dict) else {}
+            metadata = request.get("metadata_json") if isinstance(request.get("metadata_json"), dict) else {}
+            if str(metadata.get("selection_run_id") or "") == str(run.id):
+                active = (log, metadata)
+                break
+            # Calls created before the run id was included are only eligible
+            # when they started after this run and use the selected instance.
+            started_at = log.started_at
+            created_at = run.created_at
+            if started_at and created_at:
+                if started_at.tzinfo is None and created_at.tzinfo is not None:
+                    started_at = started_at.replace(tzinfo=created_at.tzinfo)
+                elif started_at.tzinfo is not None and created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=started_at.tzinfo)
+            if started_at and created_at and started_at >= created_at and (
+                not run.model_instance_code or log.instance_code == run.model_instance_code
+            ):
+                active = (log, metadata)
+                break
+        if active:
+            log, metadata = active
+            started_at = log.started_at
+            if started_at and started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            elapsed_seconds = max(0, int((datetime.now(timezone.utc) - started_at).total_seconds())) if started_at else 0
+            batch_index = int(progress.get("batch_index") or metadata.get("batch_index") or 1)
+            batch_total = max(1, int(progress.get("batch_total") or 1))
+            stage_start = 40 + round(50 * max(0, batch_index - 1) / batch_total)
+            stage_end = 40 + round(50 * batch_index / batch_total) - 1
+            progress.update({
+                "activity": progress.get("activity") or f"模型调用中：{log.provider_code or '模型服务'}/{log.instance_code or '自动路由'}",
+                "model_instance_code": log.instance_code or progress.get("model_instance_code") or run.model_instance_code,
+                "active_model_call_id": log.id,
+                "provider_code": log.provider_code,
+                "model_code": log.model_code,
+                "purpose": metadata.get("purpose") or progress.get("purpose") or "STOCK_SELECTION_ANALYSIS",
+                "elapsed_seconds": max(int(progress.get("elapsed_seconds") or 0), elapsed_seconds),
+                "percent": min(stage_end, max(int(progress.get("percent") or stage_start), stage_start + elapsed_seconds // 5)),
+                "batch_index": batch_index,
+                "batch_total": batch_total,
+                "candidate_symbols": progress.get("candidate_symbols") or metadata.get("candidate_symbols") or [],
+                "updated_at": progress.get("updated_at") or started_at.isoformat() if started_at else progress.get("updated_at"),
+            })
+            criteria_json["progress"] = progress
     payload = {key: getattr(run, key) for key in (
         "id", "market", "universe_scope", "candidate_limit", "criteria_json", "model_instance_code",
         "knowledge_base_ids_json", "graph_ids_json", "data_mode", "analysis_mode", "status", "candidate_count",
         "reviewed_count", "tracking_count", "missing_data_json", "error_message", "as_of", "completed_at",
         "created_at", "updated_at",
     )}
+    payload["criteria_json"] = criteria_json
     if include_candidates:
         candidates = list(db.scalars(
             select(SelectionCandidate).where(SelectionCandidate.run_id == run.id).order_by(SelectionCandidate.hard_score.desc())

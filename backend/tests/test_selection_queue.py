@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelInstance, ModelProvider
+from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelCallLog, ModelInstance, ModelProvider
 from app.models.decision_review import SelectionDecisionSnapshot
 from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.pipeline import ScheduledJob
@@ -91,6 +91,36 @@ def test_model_request_heartbeat_persists_activity_and_elapsed_time(isolated):
         assert progress["model_instance_code"] == "ZHIPU_FLASH"
         assert progress["heartbeat_at"]
         assert progress["elapsed_seconds"] >= 0
+
+
+def test_run_read_exposes_active_model_call_when_heartbeat_is_delayed(isolated):
+    with isolated() as db:
+        run = SelectionRun(
+            market="CN_A", status="RUNNING", model_instance_code="ZHIPU_FLASH",
+            criteria_json={"progress": {"stage": "MODEL", "percent": 40}},
+        )
+        db.add(run)
+        db.flush()
+        db.add(ModelCallLog(
+            task_type="stock_screening", provider_code="ZHIPU", instance_code="ZHIPU_FLASH",
+            model_code="glm-4-flash", status="RUNNING",
+            request_json={"metadata_json": {"selection_run_id": run.id,
+                                             "purpose": "STOCK_SELECTION_ANALYSIS",
+                                             "candidate_symbols": ["DEMO001"]}},
+        ))
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            client = TestClient(app)
+            response = client.get(f"/api/v1/selection/runs/{run.id}")
+            assert response.status_code == 200, response.text
+            progress = response.json()["criteria_json"]["progress"]
+            assert progress["activity"].startswith("模型调用中")
+            assert progress["active_model_call_id"]
+            assert progress["model_instance_code"] == "ZHIPU_FLASH"
+            assert progress["candidate_symbols"] == ["DEMO001"]
+        finally:
+            app.dependency_overrides.pop(get_db, None)
 
 
 def test_start_acknowledges_before_execution_and_completed_job_is_idempotent(isolated):

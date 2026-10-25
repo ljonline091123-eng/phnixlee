@@ -903,7 +903,11 @@ class ModelHubService:
                 if output_schema and not metadata.get("defer_schema_validation"):
                     parsed_response = json.loads(response_text)
                     repairs: list[str] = []
-                    if metadata.get("bounded_schema_repair"):
+                    # Selection analysis always uses bounded arrays. Keep this
+                    # guard active even for legacy retry callers that predate
+                    # the explicit metadata flag; a provider must not turn a
+                    # harmless extra explanation item into a failed stock.
+                    if metadata.get("bounded_schema_repair") or task_type == "stock_screening":
                         parsed_response, repairs = _normalize_bounded_json(
                             parsed_response, output_schema, output_schema
                         )

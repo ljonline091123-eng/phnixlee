@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.core.config import get_settings
 from app.connectors.model_adapters import ModelExecutionResult
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
+from app.schemas.selection import SelectionModelOutput
 from app.services.model_hub import ModelHubService, _normalize_bounded_json, seed_default_models
 
 
@@ -126,6 +127,32 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(log.status, "SUCCESS")
         self.assertEqual(json.loads(log.response_text or "{}"), {"items": ["a"], "label": "keep"})
         self.assertEqual(log.response_json["schema_repairs"], ["$.items: truncated 2 items to maxItems=1"])
+
+    def test_stock_screening_repairs_bounded_arrays_without_legacy_flag(self) -> None:
+        """Legacy retry callers must not fail on an extra provider explanation."""
+        service = ModelHubService(self.db)
+        adapter = Mock()
+        adapter.chat.return_value = ModelExecutionResult(
+            response_text=json.dumps({"candidates": [{
+                "symbol": "000001", "decision": "WATCH", "confidence": 0.5,
+                "reasoning": "evidence", "target_price": None, "stop_price": None,
+                "horizon_sessions": 10, "evidence_document_ids": [],
+                "positives": ["a", "b", "c", "d", "e"],
+            }]}),
+            response_json={"provider": "test"},
+        )
+        with patch("app.services.model_hub.get_model_adapter", return_value=adapter):
+            log = service.chat(
+                task_type="stock_screening", instance_code="MOCK_GENERAL",
+                messages=[{"role": "user", "content": "test"}],
+                metadata_json={"json_schema_output": SelectionModelOutput.model_json_schema(),
+                               "strict_instance": True},
+            )
+        self.assertEqual(log.status, "SUCCESS")
+        output = json.loads(log.response_text or "{}")
+        self.assertEqual(output["candidates"][0]["positives"], ["a", "b", "c", "d"])
+        self.assertIn("$.candidates[0].positives: truncated 5 items to maxItems=4",
+                      log.response_json["schema_repairs"])
 
     def test_soft_analysis_limit_includes_skill_instructions(self) -> None:
         self.db.add(ModelSkill(

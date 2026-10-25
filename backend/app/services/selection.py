@@ -94,6 +94,16 @@ class _SelectionProgressHeartbeat:
                     return
                 criteria = dict(run.criteria_json or {})
                 progress = dict(criteria.get("progress") or {})
+                # Provider latency is not a deterministic percentage. Move
+                # the model stage slowly while waiting so the UI visibly
+                # reflects a live request without claiming a real completion
+                # ratio. The final response still writes the exact stage.
+                stage_start = 40 + round(50 * self.batch_index / max(self.batch_total, 1))
+                stage_end = 40 + round(50 * (self.batch_index + 1) / max(self.batch_total, 1)) - 1
+                estimated_percent = min(
+                    stage_end,
+                    stage_start + max(0, int((now - self.started_at).total_seconds()) // 5),
+                )
                 progress.update({
                     "heartbeat_at": now.isoformat(),
                     "updated_at": now.isoformat(),
@@ -103,7 +113,7 @@ class _SelectionProgressHeartbeat:
                     "batch_index": self.batch_index,
                     "batch_total": self.batch_total,
                     "candidate_symbols": self.candidate_symbols,
-                    "percent": self.percent,
+                    "percent": max(self.percent, estimated_percent),
                     "purpose": self.purpose,
                 })
                 run.criteria_json = {**criteria, "progress": progress}
@@ -1736,6 +1746,31 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         output["validation_status"] = "PASSED"
 
 
+def _complete_missing_selection_dimensions(output: dict[str, Any]) -> None:
+    """Represent omitted dimensions as insufficient instead of inventing them."""
+    required = ("NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH")
+    dimensions = output.setdefault("dimensions", [])
+    present = {row.get("dimension") for row in dimensions if isinstance(row, dict)}
+    missing = [dimension for dimension in required if dimension not in present]
+    if not missing:
+        return
+    for dimension in missing:
+        dimensions.append({
+            "dimension": dimension, "status": "INSUFFICIENT", "direction": "UNKNOWN",
+            "summary": "模型未返回该维度的有效结果，暂不形成方向判断",
+            "evidence_document_ids": [], "evidence_fact_ids": [], "evidence_relation_ids": [],
+        })
+    warnings = list(output.get("evidence_validation_warnings") or [])
+    warnings.append(f"模型未返回 {', '.join(missing)} 维度，系统已标记为证据不足")
+    output["evidence_validation_warnings"] = list(dict.fromkeys(warnings))
+    output["validation_status"] = "PARTIAL"
+    output["decision"] = "WATCH"
+    output["confidence"] = None
+    output["target_price"] = None
+    output["stop_price"] = None
+    output["positives"] = []
+
+
 def _validate_multi_source_output(
     output: dict[str, Any], item: dict[str, Any], *, required: bool,
     enforce_document_coverage: bool = False,
@@ -2252,7 +2287,12 @@ def _apply_model_analysis(
             return ModelHubService(db).chat(
                 task_type="stock_screening", instance_code=run.model_instance_code,
                 messages=messages, max_tokens=max_tokens,
-                metadata_json={**metadata_json, "bounded_schema_repair": True},
+                metadata_json={
+                    **metadata_json,
+                    "bounded_schema_repair": True,
+                    "selection_run_id": getattr(run, "id", None),
+                    "candidate_symbols": candidate_symbols,
+                },
             )
         finally:
             if heartbeat is not None:
@@ -2352,7 +2392,7 @@ def _apply_model_analysis(
                 record_attempt(symbol, "FAILED", "STOCK_SELECTION_ANALYSIS", detail, log)
             continue
 
-        invalid_items: list[tuple[dict[str, Any], str]] = []
+        invalid_items: list[tuple[dict[str, Any], str, dict[str, Any], Any]] = []
         for item in batch:
             symbol = str(item["symbol"])
             output = by_symbol.get(symbol)
@@ -2365,12 +2405,12 @@ def _apply_model_analysis(
             except Exception as exc:
                 reason = str(exc)[:200]
                 failures[symbol] = reason
-                invalid_items.append((item, reason))
+                invalid_items.append((item, reason, output, log))
                 record_attempt(symbol, "INVALID", "STOCK_SELECTION_ANALYSIS", reason, log)
         if not invalid_items:
             continue
 
-        for item, original_reason in invalid_items:
+        for item, original_reason, original_output, original_log in invalid_items:
             symbol = str(item["symbol"])
             retry_log = None
             try:
@@ -2405,6 +2445,27 @@ def _apply_model_analysis(
                 failures.pop(symbol, None)
                 record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", log=retry_log)
             except Exception as exc:
+                # A malformed repair response must not erase a usable first
+                # response. Keep only verifiable evidence, fill omitted
+                # dimensions as INSUFFICIENT, and leave the stock reviewable.
+                fallback = deepcopy(original_output)
+                try:
+                    _sanitize_model_evidence_references(fallback, item)
+                    _complete_missing_selection_dimensions(fallback)
+                    check_prediction(fallback, item, sanitize=False)
+                    predictions[symbol] = (
+                        fallback, getattr(original_log, "id", None),
+                        getattr(original_log, "instance_code", None),
+                    )
+                    failures.pop(symbol, None)
+                    record_attempt(
+                        symbol, "PARTIAL", "STOCK_SELECTION_EVIDENCE_FALLBACK",
+                        f"定向修复响应不完整，已保留首轮结果并标记证据不足：{str(exc)[:120]}",
+                        retry_log or original_log,
+                    )
+                    continue
+                except Exception:
+                    pass
                 reason = f"首次校验失败：{original_reason}；单股定向重试失败：{str(exc)[:160]}"
                 failures[symbol] = reason
                 record_attempt(symbol, "FAILED", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", reason, retry_log)
