@@ -281,3 +281,20 @@ class SelectionBackfillRequest(BaseModel):
         self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
         self.dimensions = list(dict.fromkeys(self.dimensions))
         return self
+
+
+class SelectionModelSwitchRequest(BaseModel):
+    """Explicitly select another model for unresolved candidates.
+
+    A model switch is intentionally separate from the normal retry endpoint so
+    the selected provider is auditable and can never be chosen implicitly by a
+    route fallback after a billing or quota failure.
+    """
+
+    model_instance_code: str = Field(min_length=2, max_length=64)
+    candidate_ids: list[int] = Field(default_factory=list, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_candidate_ids(self) -> "SelectionModelSwitchRequest":
+        self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
+        return self

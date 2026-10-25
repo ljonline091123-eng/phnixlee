@@ -79,6 +79,15 @@ const nameOf = (value: string) => labels[value] || value;
 const numberOf = (value: unknown, digits = 2) => typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 const pct = (value: unknown) => value == null ? "—" : `${numberOf(value)}%`;
 const dateOf = (value: string | null) => value ? new Date(value).toLocaleString("zh-CN") : "—";
+const elapsed = (value: unknown) => {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+};
+const heartbeatAge = (value: unknown) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)) : null;
+};
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const records = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter((item): item is SelectionRecord => !!item && typeof item === "object") : [];
 const sourceLabelFallback: Record<string, string> = {
@@ -295,6 +304,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [detail, setDetail] = useState<SelectionTracking | null>(null);
   const [detailRetrospectives, setDetailRetrospectives] = useState<SelectionRetrospective[]>([]);
   const [detailAuditError, setDetailAuditError] = useState("");
+  const [switchModelCode, setSwitchModelCode] = useState("");
   const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
@@ -395,6 +405,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const submitBlockReason = busy ? "正在提交选股任务。" : "";
   const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
   const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
+  const availableSwitchModels = instances.filter(item => item.instance_code !== run?.model_instance_code && item.enabled && item.api_key_configured && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const updateChosenStocks = (next: StockSymbol[]) => {
     setChosenStocks(next);
     setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
@@ -419,6 +430,11 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   };
   const clearChosenStocks = () => updateChosenStocks([]);
   useEffect(() => { if (selectAllMatchesRef.current) selectAllMatchesRef.current.indeterminate = selectedMatchCount > 0 && !allMatchesSelected; }, [selectedMatchCount, allMatchesSelected]);
+  useEffect(() => {
+    if (!availableSwitchModels.some(item => item.instance_code === switchModelCode)) {
+      setSwitchModelCode(availableSwitchModels[0]?.instance_code || "");
+    }
+  }, [run?.id, availableSwitchModels.map(item => item.instance_code).join(",")]);
   async function retryFailed() {
     if (!run || retryActive) return;
     setBusy(true); setError(""); setNotice("");
@@ -426,6 +442,21 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
       setRun(await selectionApi.retryFailed(run.id));
       await reload();
       setNotice(`已提交 ${failedModelCandidates.length} 只失败股票的单独重试，继续保留原有证据快照。`);
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function retryFailedWithModel() {
+    if (!run || retryActive || !switchModelCode || !failedModelCandidates.length) return;
+    const sourceRunId = run.id;
+    const selectedModel = availableSwitchModels.find(item => item.instance_code === switchModelCode);
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.retryFailedWithModel(sourceRunId, {
+        model_instance_code: switchModelCode,
+        candidate_ids: failedModelCandidates.map(item => item.id),
+      });
+      setRun(next); await reload();
+      setNotice(`已通过${selectedModel?.model_name || switchModelCode}预检，创建新批次 #${next.id} 重试 ${failedModelCandidates.length} 只失败股票；原批次 #${sourceRunId} 保留。`);
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
   }
@@ -460,7 +491,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
         <div className="selection-toolbar"><label>历史选股批次 <select aria-label="选股批次" value={run?.id ?? ""} disabled={busy} onChange={event => void selectRun(Number(event.target.value))}><option value="" disabled>暂无选股批次</option>{runs.map(item => <option key={item.id} value={item.id}>#{item.id} · {nameOf(item.market)} · {dateOf(item.created_at)} · {item.candidate_count} 只</option>)}</select></label>{run && <div><Badge value={run.analysis_mode} /> <Badge value={run.status} /></div>}</div>
         {run ? <>
           <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 3)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
-          {["QUEUED", "RUNNING"].includes(run.status) && <div className="batch-progress"><strong>{textOf((run.criteria_json.progress as SelectionRecord)?.message) || "等待后台执行"}</strong><progress aria-label="分析进度" max="100" value={Number((run.criteria_json.progress as SelectionRecord)?.percent || 0)} /></div>}
+          {["QUEUED", "RUNNING"].includes(run.status) && (() => { const progress = (run.criteria_json.progress || {}) as SelectionRecord; const heartbeat = textOf(progress.heartbeat_at || progress.updated_at); const age = heartbeatAge(progress.heartbeat_at); const stale = age != null && age > 15; return <div className={`batch-progress${stale ? " stale" : ""}`} role="status"><div><strong>{textOf(progress.message) || "等待后台执行"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span>后台活动：{textOf(progress.activity) || "等待工作线程启动"}</span><span>已运行：{elapsed(progress.elapsed_seconds)}</span><span>模型：{textOf(progress.model_instance_code) || run.model_instance_code || "自动路由"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span><span>最近心跳：{heartbeat ? dateOf(heartbeat) : "尚未记录"}</span></div>{stale && <strong className="batch-progress-warning">最近 {age} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>进度百分比表示阶段；系统会持续写入后台活动和心跳。</small></div>; })()}
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
@@ -468,6 +499,21 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
             <div className="selection-scope-heading"><strong>引用校验通过 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
               {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只失败或待核对股票`}</button>}
             </div>
+            {failedModelCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试">
+              <label>更换模型
+                <select value={switchModelCode} disabled={busy || retryActive || !availableSwitchModels.length} onChange={event => setSwitchModelCode(event.target.value)}>
+                  {!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}
+                  {availableSwitchModels.map(item => {
+                    const provider = providers.find(row => row.id === item.provider_id);
+                    return <option key={item.instance_code} value={item.instance_code}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"}</option>;
+                  })}
+                </select>
+              </label>
+              <button type="button" disabled={busy || retryActive || !switchModelCode || !availableSwitchModels.length} onClick={() => void retryFailedWithModel()}>
+                {busy ? "正在检查模型…" : "更换模型并重试"}
+              </button>
+              <small>系统会先发送一个最小探测请求；探测失败不会创建任务，原批次和原模型调用记录保持不变。</small>
+            </div>}
             <p className="selection-help">重试只处理失败且尚未复选的股票，保留本轮证据和历史调用；整批异常则创建新批次，原记录保留。</p>
             {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}
             {failedModelCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedModelCandidates.length}）</summary><div className="selection-failure-list">{failedModelCandidates.map(item => <article key={item.id}>

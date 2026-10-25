@@ -22,6 +22,59 @@ from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 from app.services.model_errors import describe_model_error
 
 
+def _normalize_bounded_json(value: Any, schema: dict[str, Any], root: dict[str, Any], path: str = "$") -> tuple[Any, list[str]]:
+    """Apply only declared JSON-schema array bounds before strict validation.
+
+    Some OpenAI-compatible providers return one extra item in a bounded list.
+    Trimming that extra item is deterministic and auditable; it never invents
+    fields or citations, and the repair paths are persisted with the call log.
+    """
+    if not isinstance(schema, dict):
+        return value, []
+    if "$ref" in schema:
+        reference = str(schema["$ref"])
+        if reference.startswith("#/$defs/"):
+            schema = (root.get("$defs") or {}).get(reference.rsplit("/", 1)[-1], {})
+    alternatives = schema.get("anyOf") or schema.get("oneOf")
+    if alternatives:
+        for alternative in alternatives:
+            if alternative.get("type") == "null" and value is None:
+                return value, []
+            if alternative.get("type") == "object" and isinstance(value, dict):
+                return _normalize_bounded_json(value, alternative, root, path)
+            if alternative.get("type") == "array" and isinstance(value, list):
+                return _normalize_bounded_json(value, alternative, root, path)
+        return value, []
+    if schema.get("type") == "object" and isinstance(value, dict):
+        repairs: list[str] = []
+        properties = schema.get("properties") or {}
+        normalized = dict(value)
+        for key, child in properties.items():
+            if key in normalized:
+                normalized[key], child_repairs = _normalize_bounded_json(
+                    normalized[key], child, root, f"{path}.{key}"
+                )
+                repairs.extend(child_repairs)
+        return normalized, repairs
+    if schema.get("type") == "array" and isinstance(value, list):
+        repairs: list[str] = []
+        values = value
+        maximum = schema.get("maxItems")
+        if isinstance(maximum, int) and len(values) > maximum:
+            values = values[:maximum]
+            repairs.append(f"{path}: truncated {len(value)} items to maxItems={maximum}")
+        item_schema = schema.get("items") or {}
+        normalized_items: list[Any] = []
+        for index, item in enumerate(values):
+            normalized_item, child_repairs = _normalize_bounded_json(
+                item, item_schema, root, f"{path}[{index}]"
+            )
+            normalized_items.append(normalized_item)
+            repairs.extend(child_repairs)
+        return normalized_items, repairs
+    return value, []
+
+
 @dataclass(frozen=True)
 class RoutedModel:
     provider: ModelProvider
@@ -721,11 +774,23 @@ class ModelHubService:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_route_options(self, task_type: str, requested_instance_code: str | None = None) -> list[RoutedModel]:
+    def list_route_options(
+        self,
+        task_type: str,
+        requested_instance_code: str | None = None,
+        *,
+        strict_instance: bool = False,
+    ) -> list[RoutedModel]:
         statement = select(ModelRouteRule).where(ModelRouteRule.task_type == task_type, ModelRouteRule.enabled.is_(True))
         route = self.db.scalar(statement)
         if requested_instance_code:
-            self._get_instance_by_code(requested_instance_code)
+            requested = self._get_instance_by_code(requested_instance_code)
+            # An explicitly selected model is a user decision.  It must not
+            # silently fall through to the task route after an expired key,
+            # billing suspension, or exhausted quota.  The caller can choose
+            # another instance through the model-switch workflow instead.
+            if strict_instance:
+                return [self._to_routed_model(requested)]
         if requested_instance_code and not route:
             return [self._to_routed_model(self._get_instance_by_code(requested_instance_code))]
         if not route and not requested_instance_code:
@@ -787,7 +852,11 @@ class ModelHubService:
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
             if sum(len(item.get("content", "")) for item in messages) > 60_000:
                 raise ValueError("Soft-analysis input exceeds 60,000 characters after skill instructions; run Python/SQL filtering first")
-        candidates = self.list_route_options(task_type=task_type, requested_instance_code=instance_code)
+        candidates = self.list_route_options(
+            task_type=task_type,
+            requested_instance_code=instance_code,
+            strict_instance=bool(metadata.get("strict_instance")),
+        )
         if metadata.get("require_real_model"):
             candidates = [
                 candidate for candidate in candidates
@@ -829,11 +898,25 @@ class ModelHubService:
                 if metadata.get("require_real_model") and not str(result.response_text or "").strip():
                     raise ValueError("模型未返回可用正文，不能将空响应视为治理成功")
                 output_schema = metadata.get("json_schema_output")
+                response_json = result.response_json
+                response_text = result.response_text
                 if output_schema and not metadata.get("defer_schema_validation"):
-                    Draft202012Validator(output_schema).validate(json.loads(result.response_text))
+                    parsed_response = json.loads(response_text)
+                    repairs: list[str] = []
+                    if metadata.get("bounded_schema_repair"):
+                        parsed_response, repairs = _normalize_bounded_json(
+                            parsed_response, output_schema, output_schema
+                        )
+                        if repairs:
+                            response_text = json.dumps(parsed_response, ensure_ascii=False)
+                            response_json = {
+                                **(response_json if isinstance(response_json, dict) else {}),
+                                "schema_repairs": repairs,
+                            }
+                    Draft202012Validator(output_schema).validate(parsed_response)
                 log.status = "SUCCESS"
-                log.response_text = result.response_text
-                log.response_json = result.response_json
+                log.response_text = response_text
+                log.response_json = response_json
                 attempted_models.extend({**item, "call_log_id": log.id} for item in retry_trace)
                 log.request_json = {**(log.request_json or {}), "attempted_models": attempted_models}
                 log.completed_at = datetime.now(timezone.utc)

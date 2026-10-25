@@ -1,4 +1,5 @@
 import unittest
+import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,7 +13,7 @@ from app.db.session import get_db
 from app.core.config import get_settings
 from app.connectors.model_adapters import ModelExecutionResult
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
-from app.services.model_hub import ModelHubService, seed_default_models
+from app.services.model_hub import ModelHubService, _normalize_bounded_json, seed_default_models
 
 
 class ModelHubFoundationTest(unittest.TestCase):
@@ -89,6 +90,42 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(log.status, "SUCCESS")
         self.assertIn("已收到", log.response_text)
         self.assertIsNotNone(self.db.scalar(select(ModelCallLog).where(ModelCallLog.id == log.id)))
+
+    def test_bounded_schema_repair_is_audited_and_does_not_change_other_fields(self) -> None:
+        value, repairs = _normalize_bounded_json(
+            {"items": ["a", "b"], "label": "keep"},
+            {"type": "object", "properties": {
+                "items": {"type": "array", "maxItems": 1, "items": {"type": "string"}},
+                "label": {"type": "string"},
+            }},
+            {"type": "object", "properties": {
+                "items": {"type": "array", "maxItems": 1, "items": {"type": "string"}},
+                "label": {"type": "string"},
+            }},
+        )
+        self.assertEqual(value, {"items": ["a"], "label": "keep"})
+        self.assertEqual(repairs, ["$.items: truncated 2 items to maxItems=1"])
+
+    def test_bounded_schema_repair_keeps_provider_call_successful(self) -> None:
+        service = ModelHubService(self.db)
+        adapter = Mock()
+        adapter.chat.return_value = ModelExecutionResult(
+            response_text='{"items":["a","b"],"label":"keep"}', response_json={"provider": "test"}
+        )
+        schema = {"type": "object", "additionalProperties": False,
+                  "properties": {"items": {"type": "array", "maxItems": 1, "items": {"type": "string"}},
+                                  "label": {"type": "string"}},
+                  "required": ["items", "label"]}
+        with patch("app.services.model_hub.get_model_adapter", return_value=adapter):
+            log = service.chat(
+                task_type="general_chat", instance_code="MOCK_GENERAL",
+                messages=[{"role": "user", "content": "test"}],
+                metadata_json={"json_schema_output": schema, "bounded_schema_repair": True,
+                               "strict_instance": True},
+            )
+        self.assertEqual(log.status, "SUCCESS")
+        self.assertEqual(json.loads(log.response_text or "{}"), {"items": ["a"], "label": "keep"})
+        self.assertEqual(log.response_json["schema_repairs"], ["$.items: truncated 2 items to maxItems=1"])
 
     def test_soft_analysis_limit_includes_skill_instructions(self) -> None:
         self.db.add(ModelSkill(
@@ -177,6 +214,30 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(failed.status, "FAILED")
         self.assertIn("空响应", failed.error_message)
         self.assertEqual(adapter.chat.call_count, 2)
+
+    def test_strict_requested_instance_never_uses_route_fallback(self) -> None:
+        service = ModelHubService(self.db)
+        requested = service._to_routed_model(self.db.scalar(select(ModelInstance).where(
+            ModelInstance.instance_code == "DEEPSEEK_CHAT")))
+        fallback = service._to_routed_model(self.db.scalar(select(ModelInstance).where(
+            ModelInstance.instance_code == "MOCK_GENERAL")))
+        adapter = Mock()
+        adapter.chat.side_effect = RuntimeError("requested model billing failure")
+        with patch.object(service, "list_route_options", return_value=[requested]) as options, patch(
+                "app.services.model_hub.get_model_adapter", return_value=adapter):
+            log = service.chat(
+                task_type="stock_screening",
+                instance_code="DEEPSEEK_CHAT",
+                messages=[{"role": "user", "content": "strict"}],
+                metadata_json={"strict_instance": True},
+            )
+        self.assertEqual(log.status, "FAILED")
+        self.assertEqual(log.instance_code, "DEEPSEEK_CHAT")
+        self.assertEqual(adapter.chat.call_count, 1)
+        options.assert_called_once_with(
+            task_type="stock_screening", requested_instance_code="DEEPSEEK_CHAT", strict_instance=True,
+        )
+        self.assertNotEqual(log.instance_code, fallback.instance.instance_code)
 
     def test_route_crud_api(self) -> None:
         from fastapi.testclient import TestClient

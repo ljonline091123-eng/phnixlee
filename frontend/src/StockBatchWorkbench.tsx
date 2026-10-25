@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SelectionWorkbench as AdvancedWorkbench } from "./SelectionWatch";
+import { api, type ModelInstance, type ModelProvider } from "./api";
 import { selectionApi, type BatchAcceptance, type SelectionCandidate, type SelectionRecord, type SelectionRun, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 import { SelectionAnalysis, type AnalysisDimension } from "./SelectionAnalysis";
@@ -9,6 +10,16 @@ const number = (value: number | null | undefined) => value == null ? "—" : val
 const text = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "";
 const rows = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter(item => item && typeof item === "object") : [];
 const timestamp = (value: string) => new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+const elapsed = (value: unknown) => {
+  const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  if (seconds < 60) return `${seconds} 秒`;
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+};
+const heartbeatAge = (value: unknown) => {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isFinite(date.getTime()) ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)) : null;
+};
 const sourceUrl = (value: unknown) => { try { const url = new URL(text(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : null; } catch { return null; } };
 const labels: Record<string, string> = {
   REVIEW: "待复核", TRACKING: "跟踪中", COMPLETED: "已完成", PARTIAL: "部分完成", APPROVED: "已确认",
@@ -94,6 +105,9 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const [focusDocument, setFocusDocument] = useState<number | null>(null);
   const [targetPrice, setTargetPrice] = useState("");
   const [resultPage, setResultPage] = useState(1);
+  const [modelInstances, setModelInstances] = useState<ModelInstance[]>([]);
+  const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
+  const [switchModelCode, setSwitchModelCode] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const retryProgress = (run?.criteria_json.retry_progress || {}) as SelectionRecord;
   const retryActive = ["QUEUED", "RUNNING"].includes(text(retryProgress.status));
@@ -103,10 +117,11 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
 
   useEffect(() => {
     let valid = true;
-    void Promise.all([selectionApi.acceptance(), selectionApi.listRuns(), selectionApi.listTracking()])
-      .then(async ([data, nextRuns, nextTracking]) => {
+    void Promise.all([selectionApi.acceptance(), selectionApi.listRuns(), selectionApi.listTracking(), api.listModelInstances(), api.listModelProviders()])
+      .then(async ([data, nextRuns, nextTracking, nextInstances, nextProviders]) => {
         if (!valid) return;
         setAcceptance(data); setRuns(nextRuns); setTracking(nextTracking);
+        setModelInstances(nextInstances); setModelProviders(nextProviders);
         const latest = nextRuns[0];
         if (latest) { const full = await selectionApi.getRun(latest.id); if (valid) setRun(full); }
       }).catch(err => { if (valid) setError(message(err)); }).finally(() => { if (valid) setLoading(false); });
@@ -195,6 +210,20 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       setNotice(run.status === "FAILED" ? `已创建重试批次 #${next.id}，原批次 #${run.id} 保留。` : "已提交失败股票重试，保留成功结果及原有证据快照。");
     } catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
+  async function retryWithModel() {
+    if (!run || running || !switchModelCode || !unresolvedCandidates.length) return;
+    const sourceRunId = run.id;
+    const selected = availableSwitchModels.find(item => item.instance_code === switchModelCode);
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.retryFailedWithModel(sourceRunId, {
+        model_instance_code: switchModelCode,
+        candidate_ids: unresolvedCandidates.map(item => item.id),
+      });
+      setRun(next); setRuns(await selectionApi.listRuns());
+      setNotice(`已通过${selected?.model_name || switchModelCode}预检，创建新批次 #${next.id}；原批次 #${sourceRunId} 保留。`);
+    } catch (err) { setError(message(err)); } finally { setBusy(false); }
+  }
 
   async function backfill(candidateIds: number[] = [], dimensions: AnalysisDimension[] = []) {
     if (!run || running) return;
@@ -218,11 +247,20 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const partialCount = run?.candidates.filter(item => item.analysis_json.analysis_validation_status === "PARTIAL").length || 0;
   const failedCandidates = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.model_output_status === "FAILED") || [];
   const unresolvedCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.model_output_status === "FAILED" || item.analysis_json.analysis_validation_status === "PARTIAL")) || [];
+  const availableSwitchModels = modelInstances.filter(item => item.instance_code !== run?.model_instance_code && item.enabled && item.api_key_configured && modelProviders.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const progress = (run?.criteria_json.progress || {}) as SelectionRecord;
+  const progressHeartbeat = text(progress.heartbeat_at || progress.updated_at);
+  const progressHeartbeatAge = heartbeatAge(progress.heartbeat_at);
+  const progressStale = running && progressHeartbeatAge != null && progressHeartbeatAge > 15;
   const fixedRuns = runs;
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil((run?.candidates.length || 0) / pageSize));
   const visibleCandidates = run?.candidates.slice((Math.min(resultPage, pageCount) - 1) * pageSize, Math.min(resultPage, pageCount) * pageSize) || [];
+  useEffect(() => {
+    if (!availableSwitchModels.some(item => item.instance_code === switchModelCode)) {
+      setSwitchModelCode(availableSwitchModels[0]?.instance_code || "");
+    }
+  }, [run?.id, availableSwitchModels.map(item => item.instance_code).join(",")]);
   const companyCount = run?.candidates.filter(item => item.evidence_json.identity?.company).length || 0;
   const documentCount = new Set(run?.candidates.flatMap(item => rows(item.evidence_json.documents).map(doc => doc.id)) || []).size;
   const runTracking = tracking.filter(item => run?.candidates.some(candidate => candidate.id === item.candidate_id));
@@ -258,11 +296,12 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
     {loading && <p className="batch-empty" role="status">正在读取20股数据与历史分析…</p>}
     {!loading && !run && <p className="batch-empty">{acceptance?.prepared ? "数据准备已通过，请点击“新建选股”或“验证20股样本”。" : "数据准备尚未完成，请查看验收状态。"}</p>}
     {run && <section className="batch-card"><div className="batch-card-title"><div><h2>{running ? "正在分析" : "本轮结果"} <span className="batch-badge">{label(run.status)}</span></h2><span>分析时间 {timestamp(run.as_of)}（北京时间） · {run.model_instance_code || "自动模型路由"}</span></div><select aria-label="历史分析批次" disabled={busy} value={run.id} onChange={event => { setError(""); void selectionApi.getRun(Number(event.target.value)).then(setRun).catch(err => setError(message(err))); }}>{fixedRuns.map(item => <option key={item.id} value={item.id}>第{item.id}轮 · {label(item.status)}</option>)}</select></div>
-      {(isRunning(run) || retryActive) && <div className="batch-progress" role="status"><div><strong>{text(progress.message) || "等待后台执行"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><small>可离开页面，任务会在后台继续执行。</small></div>}
+      {(isRunning(run) || retryActive) && <div className={`batch-progress${progressStale ? " stale" : ""}`} role="status"><div><strong>{text(progress.message) || "等待后台执行"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span>后台活动：{text(progress.activity) || "等待工作线程启动"}</span><span>已运行：{elapsed(progress.elapsed_seconds)}</span><span>模型：{text(progress.model_instance_code) || run?.model_instance_code || "自动路由"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span><span>最近心跳：{progressHeartbeat ? timestamp(progressHeartbeat) : "尚未记录"}</span></div>{progressStale && <strong className="batch-progress-warning">最近 {progressHeartbeatAge} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>可离开页面，任务会在后台继续执行；进度百分比表示阶段，不代表模型响应速度。</small></div>}
       {backfillActive && <div className="batch-progress" role="status"><div><strong>{text(backfillProgress.message) || "正在补齐缺失数据"}</strong><span>{Number(backfillProgress.percent || 0)}%</span></div><progress aria-label="数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /><small>逐股票、逐板块记录成功、空数据和失败原因；旧分析保持不变。</small></div>}
       {run.error_message && <p className="batch-alert error">{run.error_message}</p>}
       {(unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
         <div className="selection-scope-heading"><strong>已通过引用校验 {modelCount} 只 · 待核对 {partialCount} 只 · 失败 {failedCandidates.length} 只</strong><button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在重试失败项…" : run.status === "FAILED" ? "重新执行此批次" : partialCount ? `重新分析 ${unresolvedCandidates.length} 只失败或待核对股票` : `重试 ${failedCandidates.length} 只失败股票`}</button></div>
+        {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试"><label>更换模型<select value={switchModelCode} disabled={busy || running || !availableSwitchModels.length} onChange={event => setSwitchModelCode(event.target.value)}>{!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}{availableSwitchModels.map(item => { const provider = modelProviders.find(row => row.id === item.provider_id); return <option key={item.instance_code} value={item.instance_code}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"}</option>; })}</select></label><button type="button" disabled={busy || running || !switchModelCode || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "更换模型并重试"}</button><small>系统会先发送最小探测请求；探测失败不会创建任务，原批次和原调用记录保持不变。</small></div>}
         <p className="batch-note">逐股重试保留成功结果、本轮证据及历史尝试；整批异常会创建新批次。</p>
         {retryProgress.message && <p role="status">{text(retryProgress.message)}</p>}
         {failedCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedCandidates.length}）</summary><div className="selection-failure-list">{failedCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p>{text(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误，请重试。"}</p>{rows(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{attempt.at ? timestamp(text(attempt.at)) : ""} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {text(attempt.reason) || "已返回结果并经过引用校验"}</small>)}</article>)}</div></details>}

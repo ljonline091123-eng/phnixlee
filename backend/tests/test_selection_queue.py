@@ -1,5 +1,7 @@
 """Durable selection tasks: HTTP acknowledgement, recovery and decision gates."""
 from datetime import datetime, timezone
+import time
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -11,13 +13,20 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.ai_hub import KnowledgeBase, KnowledgeGraph
+from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelInstance, ModelProvider
 from app.models.decision_review import SelectionDecisionSnapshot
 from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.pipeline import ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionTracking
 from app.schemas.selection import SelectionReviewRequest, SelectionRunCreate
-from app.services.selection import execute_failed_selection_reanalysis, execute_selection_job, queue_selection_run, review_candidate
+from app.services.selection import (
+    _SelectionProgressHeartbeat,
+    _sanitize_model_evidence_references,
+    execute_failed_selection_reanalysis,
+    execute_selection_job,
+    queue_selection_run,
+    review_candidate,
+)
 
 
 NOW = datetime(2025, 1, 6, 10, tzinfo=timezone.utc)
@@ -44,6 +53,44 @@ def isolated():
 
 def request():
     return SelectionRunCreate(symbols=["DEMO001"], use_model=False, data_mode="MOCK")
+
+
+def test_graph_dimension_without_loaded_relation_is_downgraded_not_stock_failure():
+    output = {
+        "dimensions": [{
+            "dimension": "GRAPH", "status": "SUPPORTED", "direction": "POSITIVE",
+            "summary": "graph", "evidence_document_ids": [],
+            "evidence_fact_ids": [], "evidence_relation_ids": [],
+        }],
+        "events": [], "event_timeline": [], "event_links": [], "validation_findings": [],
+        "evidence_document_ids": [], "evidence_fact_ids": [], "evidence_chunk_ids": [],
+    }
+    _sanitize_model_evidence_references(output, {"evidence_json": {"documents": [], "chunks": [], "graph_paths": [], "evidence_fact_ids": []}})
+    graph = output["dimensions"][0]
+    assert graph["status"] == "INSUFFICIENT"
+    assert graph["direction"] == "UNKNOWN"
+    assert output["validation_status"] == "PARTIAL"
+
+
+def test_model_request_heartbeat_persists_activity_and_elapsed_time(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="RUNNING", criteria_json={"progress": {"stage": "MODEL", "percent": 40}})
+        db.add(run)
+        db.commit()
+        heartbeat = _SelectionProgressHeartbeat(
+            run.id, activity="等待测试模型返回", model_instance_code="ZHIPU_FLASH",
+            batch_index=1, batch_total=1, candidate_symbols=["DEMO001"],
+            percent=40, purpose="TEST", interval_seconds=0.01,
+        )
+        heartbeat.start()
+        time.sleep(0.06)
+        heartbeat.stop()
+        db.expire_all()
+        progress = (db.get(SelectionRun, run.id).criteria_json or {}).get("progress") or {}
+        assert progress["activity"] == "等待测试模型返回"
+        assert progress["model_instance_code"] == "ZHIPU_FLASH"
+        assert progress["heartbeat_at"]
+        assert progress["elapsed_seconds"] >= 0
 
 
 def test_start_acknowledges_before_execution_and_completed_job_is_idempotent(isolated):
@@ -204,6 +251,74 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
             assert next_response.status_code == 202, next_response.text
             retry_jobs = list(db.scalars(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed").order_by(ScheduledJob.id)))
             assert retry_jobs[-1].payload_json["candidate_ids"] == [failed.id]
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def _model_switch_fixture(db):
+    provider = ModelProvider(provider_code="SWITCH_PROVIDER", provider_name="切换测试服务", provider_type="OPENAI_COMPAT", enabled=True)
+    db.add(provider)
+    db.flush()
+    db.add_all([
+        ModelInstance(provider_id=provider.id, instance_code="ORIGINAL_MODEL", model_code="original", model_name="原模型", api_key="original-key"),
+        ModelInstance(provider_id=provider.id, instance_code="BACKUP_MODEL", model_code="backup", model_name="备用模型", api_key="backup-key"),
+    ])
+    run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL",
+                       model_instance_code="ORIGINAL_MODEL", knowledge_base_ids_json=[], graph_ids_json=[])
+    db.add(run)
+    db.flush()
+    candidate = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001", decision="PENDING",
+        analysis_json={"model_output_status": "FAILED", "model_failure_reason": "HTTP 402：余额不足"},
+        evidence_json={"documents": [{"id": 123, "content": "原始证据"}]})
+    db.add(candidate)
+    db.commit()
+    return run, candidate
+
+
+def test_model_switch_probe_failure_does_not_create_retry_job(isolated):
+    with isolated() as db:
+        run, _candidate = _model_switch_fixture(db)
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        failed_probe = SimpleNamespace(status="FAILED", error_message="HTTP 402：API 账户余额不足或付费额度不可用")
+        try:
+            with patch("app.services.model_hub.ModelHubService.chat", return_value=failed_probe):
+                response = client.post(f"/api/v1/selection/runs/{run.id}/retry-failed-with-model",
+                    json={"model_instance_code": "BACKUP_MODEL"})
+            assert response.status_code == 422
+            assert "余额不足" in response.json()["detail"]
+            assert db.scalar(select(func.count(SelectionRun.id))) == 1
+            assert db.scalar(select(func.count(ScheduledJob.id))) == 0
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
+    with isolated() as db:
+        run, candidate = _model_switch_fixture(db)
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        successful_probe = SimpleNamespace(status="SUCCESS", id=701, error_message=None)
+        try:
+            with patch("app.services.model_hub.ModelHubService.chat", return_value=successful_probe):
+                response = client.post(f"/api/v1/selection/runs/{run.id}/retry-failed-with-model",
+                    json={"model_instance_code": "BACKUP_MODEL", "candidate_ids": [candidate.id]})
+            assert response.status_code == 202, response.text
+            switched = response.json()
+            assert switched["id"] != run.id
+            assert switched["model_instance_code"] == "BACKUP_MODEL"
+            assert switched["criteria_json"]["retry_of_run_id"] == run.id
+            assert switched["criteria_json"]["model_switch"]["preflight"]["call_log_id"] == 701
+            assert db.get(SelectionRun, run.id).model_instance_code == "ORIGINAL_MODEL"
+            clone = db.scalar(select(SelectionCandidate).where(SelectionCandidate.run_id == switched["id"]))
+            assert clone is not None and clone.symbol == "DEMO001"
+            assert clone.evidence_json == candidate.evidence_json
+            job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed"))
+            assert job.payload_json["selection_run_id"] == switched["id"]
+            assert job.payload_json["model_instance_code"] == "BACKUP_MODEL"
+            assert job.payload_json["force_model_retry"] is True
         finally:
             client.close()
             app.dependency_overrides.pop(get_db, None)

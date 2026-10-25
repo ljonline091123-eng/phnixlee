@@ -15,13 +15,15 @@ from app.schemas.selection import (
     SelectionRefreshRequest,
     SelectionReviewRequest,
     SelectionRunCreate,
+    SelectionModelSwitchRequest,
     SelectionRunRead,
     SelectionSnapshotRead,
     SelectionTrackingRead,
 )
 from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
-    queue_selection_data_backfill, refresh_tracking, review_candidate,
+    queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
+    probe_selection_model, refresh_tracking, review_candidate,
 )
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.schemas.selection import SelectionScopePreview
@@ -366,6 +368,40 @@ def retry_failed(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/runs/{run_id}/retry-failed-with-model", response_model=SelectionRunRead, status_code=202)
+def retry_failed_with_model(
+    run_id: int,
+    payload: SelectionModelSwitchRequest,
+    db: Session = Depends(get_db),
+) -> SelectionRunRead:
+    """Probe a user-selected model, then queue an isolated retry batch."""
+    original = db.get(SelectionRun, run_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail="选股任务不存在")
+    if original.model_instance_code == payload.model_instance_code:
+        raise HTTPException(status_code=422, detail="请选择与原模型不同的模型实例")
+    try:
+        probe = probe_selection_model(db, payload.model_instance_code, data_mode=original.data_mode)
+        run = queue_failed_selection_reanalysis_with_model(
+            db, run_id, payload.model_instance_code, payload.candidate_ids,
+        )
+        criteria = dict(run.criteria_json or {})
+        criteria["model_switch"] = {
+            **(criteria.get("model_switch") or {}),
+            "preflight": probe,
+            "status": "QUEUED",
+        }
+        run.criteria_json = criteria
+        db.commit()
+        return _run_read(db, run)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        # A failed probe is intentionally returned before a job is created.
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/runs/{run_id}/backfill", response_model=SelectionRunRead, status_code=202)
