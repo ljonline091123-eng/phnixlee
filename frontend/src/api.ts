@@ -459,6 +459,11 @@ export type ModelInstance = {
   config_json: Record<string, unknown>;
   description?: string;
   api_key_configured: boolean;
+  availability_status?: "AVAILABLE" | "BILLING" | "UNAVAILABLE" | "NOT_CONFIGURED" | "DISABLED" | "CHECKING" | "UNKNOWN" | string;
+  availability_label?: string;
+  availability_reason?: string | null;
+  last_checked_at?: string | null;
+  last_call_log_id?: number | null;
   created_at: string;
   updated_at: string;
 };

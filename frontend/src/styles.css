@@ -5236,6 +5236,105 @@ textarea:focus {
 .agent-route-help strong { color: var(--text); }
 .agent-route-help code { padding: 2px 6px; border-radius: 6px; background: #ece8d9; color: #5e5130; font-size: 12px; }
 .resource-list-wrap { margin-top: 0; }
+
+/* The model registry is a dense operational list. Keep every column in the
+   viewport and move verbose configuration into cell tooltips/details. */
+.model-instance-table-wrap {
+  overflow-x: hidden;
+}
+.model-instance-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.model-instance-table th,
+.model-instance-table td {
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  vertical-align: middle;
+  overflow: hidden;
+}
+.model-instance-table th {
+  white-space: nowrap;
+}
+.model-instance-table .col-instance { width: 14%; }
+.model-instance-table .col-provider { width: 10%; }
+.model-instance-table .col-model { width: 14%; }
+.model-instance-table .col-purpose { width: 15%; }
+.model-instance-table .col-cost { width: 7%; }
+.model-instance-table .col-params { width: 11%; }
+.model-instance-table .col-key { width: 7%; }
+.model-instance-table .col-status { width: 10%; }
+.model-instance-table .col-actions { width: 15%; }
+.model-instance-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-instance-cell strong,
+.model-instance-cell code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-params-cell {
+  color: var(--text-muted);
+  font-size: 11px !important;
+}
+.model-purpose-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-height: 34px;
+  overflow: hidden;
+}
+.model-purpose-tag,
+.model-availability-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.model-purpose-tag { color: #315f48; background: #edf5ed; }
+.model-availability-available { color: #236542; background: #e4f3e8; }
+.model-availability-billing { color: #8a5b10; background: #fff1c8; }
+.model-availability-unavailable,
+.model-availability-not_configured { color: #9d342f; background: #fde3df; }
+.model-availability-disabled { color: #66736b; background: #edf0ed; }
+.model-availability-checking { color: #245b85; background: #e5f1fb; }
+.model-availability-unknown { color: #6c5b2d; background: #f7f1dc; }
+.model-actions {
+  gap: 3px !important;
+  min-width: 0;
+}
+.model-actions button {
+  min-width: 0;
+  margin-right: 0 !important;
+  padding: 4px 5px !important;
+  font-size: 11px !important;
+}
+@media (max-width: 860px) {
+  .model-instance-table .col-cost,
+  .model-instance-table .col-params,
+  .model-instance-table td:nth-child(5),
+  .model-instance-table td:nth-child(6) { display: none; }
+  .model-instance-table .col-instance { width: 17%; }
+  .model-instance-table .col-provider { width: 14%; }
+  .model-instance-table .col-model { width: 18%; }
+  .model-instance-table .col-purpose { width: 19%; }
+  .model-instance-table .col-key { width: 9%; }
+  .model-instance-table .col-status { width: 12%; }
+  .model-instance-table .col-actions { width: 19%; }
+}
 .resource-list-wrap .empty-state { margin: 0 24px 24px; }
 .selection-grid { gap: 12px; }
 .selection-grid label { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }

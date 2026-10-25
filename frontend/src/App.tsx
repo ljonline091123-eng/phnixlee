@@ -90,6 +90,36 @@ const providerTypeLabel: Record<string, string> = {
 function billingLabel(config: Record<string, unknown> | undefined) {
   return String(config?.billing_label || config?.billing_type || "--");
 }
+const modelPurposeLabels: Record<string, string> = {
+  GENERAL: "通用对话",
+  MULTI_STEP_AGENT: "多步智能体",
+  META_REVIEW: "元数据审核",
+  STOCK_SELECTION_ANALYSIS: "选股分析",
+  STOCK_SCREENING: "选股筛选",
+  STOCK_ANALYSIS: "个股分析",
+  DATA_GOVERNANCE: "数据治理",
+  DOCUMENT_GOVERNANCE: "文档治理",
+  RESEARCH: "研究分析",
+};
+function purposeTags(value: string | undefined) {
+  return String(value || "GENERAL")
+    .split(/[\s,;|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => modelPurposeLabels[item] || item);
+}
+function ModelAvailability({ item }: { item: ModelInstance }) {
+  const status = item.availability_status || (item.enabled ? "UNKNOWN" : "DISABLED");
+  const label = item.availability_label || (item.enabled ? "未检查" : "已停用");
+  return (
+    <span
+      className={`model-availability-tag model-availability-${status.toLowerCase()}`}
+      title={item.availability_reason || label}
+    >
+      {label}
+    </span>
+  );
+}
 const inputClass = "text-input";
 function ErrorText({ error }: { error: string }) {
   return error ? <p className="form-error">{error}</p> : null;
@@ -1719,44 +1749,48 @@ function ModelTab(props: {
             <h3>模型列表</h3>
             <span>{instances.length} 个模型实例</span>
           </div>
-          <div className="table-wrap resource-list-wrap">
-            <table>
+          <div className="table-wrap resource-list-wrap model-instance-table-wrap">
+            <table className="model-instance-table">
               <thead>
                 <tr>
-                  <th>实例</th>
-                  <th>供应商</th>
-                  <th>模型</th>
-                  <th>用途</th>
-                  <th>费用</th>
-                  <th>参数</th>
-                  <th>Key</th>
-                  <th>状态</th>
-                  <th>操作</th>
+                  <th className="col-instance">实例</th>
+                  <th className="col-provider">供应商</th>
+                  <th className="col-model">模型</th>
+                  <th className="col-purpose">用途</th>
+                  <th className="col-cost">费用</th>
+                  <th className="col-params">参数</th>
+                  <th className="col-key">Key</th>
+                  <th className="col-status">可用状态</th>
+                  <th className="col-actions">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {instances.length ? (
                   instances.map((item) => (
                     <tr key={item.id}>
-                      <td>
+                      <td className="model-instance-cell" title={`${item.instance_code} · ${item.model_name}`}>
                         <strong>{item.instance_code}</strong>
                         <code>{item.model_name}</code>
                       </td>
-                      <td>
+                      <td className="model-instance-cell" title={String(providers.find((p) => p.id === item.provider_id)?.provider_name || item.provider_id)}>
                         {providers.find((p) => p.id === item.provider_id)
                           ?.provider_name || item.provider_id}
                       </td>
-                      <td>{item.model_code}</td>
-                      <td>{item.purpose || "--"}</td>
-                      <td>{billingLabel(item.config_json)}</td>
-                      <td className="muted-cell">
-                        Token {item.max_tokens} / T {item.temperature} / P {item.top_p}
+                      <td className="model-instance-cell" title={item.model_code}>{item.model_code}</td>
+                      <td>
+                        <div className="model-purpose-tags">
+                          {purposeTags(item.purpose).map((purpose) => <span className="model-purpose-tag" key={purpose}>{purpose}</span>)}
+                        </div>
+                      </td>
+                      <td className="model-instance-cell" title={billingLabel(item.config_json)}>{billingLabel(item.config_json)}</td>
+                      <td className="muted-cell model-instance-cell model-params-cell" title={`最大输出 ${item.max_tokens} Token；随机性 ${item.temperature}；采样范围 ${item.top_p}`}>
+                        {item.max_tokens} / {item.temperature} / {item.top_p}
                       </td>
                       <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
                       <td>
-                        <Status enabled={item.enabled} />
+                        <ModelAvailability item={item} />
                       </td>
-                      <td className="button-row">
+                      <td className="button-row model-actions">
                         <button
                           type="button"
                           onClick={() => props.onEditInstance(item)}

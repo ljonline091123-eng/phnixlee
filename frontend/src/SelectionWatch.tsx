@@ -96,6 +96,16 @@ const heartbeatAge = (value: unknown) => {
 };
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 const records = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter((item): item is SelectionRecord => !!item && typeof item === "object") : [];
+const attemptsNewestFirst = (value: unknown) => [...records(value)].sort((left, right) => {
+  const toTime = (record: SelectionRecord) => {
+    const raw = textOf(record.at).trim();
+    if (!raw) return Number.NEGATIVE_INFINITY;
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw) ? raw : `${raw}Z`;
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+  return toTime(right) - toTime(left);
+});
 const sourceLabelFallback: Record<string, string> = {
   stock_news: "新闻", stock_notice: "公告", stock_context_event: "外部事件线索", stock_financial_report: "财务报告",
   stock_kline: "历史量价", stock_realtime_quote: "实时行情", stock_f10_cache: "F10资料", research_report: "研究报告",
@@ -552,7 +562,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
             {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}
             {failedModelCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedModelCandidates.length}）</summary><div className="selection-failure-list">{failedModelCandidates.map(item => <article key={item.id}>
               <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>
-              {records(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{dateOf(textOf(attempt.at) || null)} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {textOf(attempt.reason) || "结果已返回并经过证据校验"}</small>)}
+              {attemptsNewestFirst(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{dateOf(textOf(attempt.at) || null)} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {textOf(attempt.reason) || "结果已返回并经过证据校验"}</small>)}
             </article>)}</div></details>}
           </section>}
           {run.missing_data_json.length > 0 && <details className="selection-evidence"><summary>数据与分析限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, i) => <li key={i}>{item}</li>)}</ul><button type="button" disabled={busy || ["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status))} onClick={() => void backfill()}>补齐全部缺失并重新分析</button></details>}

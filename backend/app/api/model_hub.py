@@ -35,6 +35,7 @@ from app.orchestration.model_hub import (
     SkillToolWorkflow,
 )
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
+from app.services.model_errors import classify_model_error
 from app.services.model_hub import _runtime_api_key
 from app.connectors.model_registry import get_model_adapter
 from app.services.skill_files import delete_skill_file, write_skill_file
@@ -88,13 +89,97 @@ def _instance_or_404(db: Session, instance_id: int) -> ModelInstance:
     return instance
 
 
-def _instance_read(instance: ModelInstance) -> ModelInstanceRead:
+def _instance_availability(db: Session, instance: ModelInstance, api_key_configured: bool) -> dict[str, object]:
+    """Project model health from configuration and the latest durable call log.
+
+    Listing models must stay read-only.  Health is therefore derived from the
+    latest test/preflight/analysis call instead of issuing a new provider call.
+    """
+    if not instance.enabled:
+        return {
+            "availability_status": "DISABLED",
+            "availability_label": "已停用",
+            "availability_reason": "模型实例已停用",
+            "last_checked_at": None,
+            "last_call_log_id": None,
+        }
+    provider = instance.provider
+    if provider is not None and not provider.enabled:
+        return {
+            "availability_status": "UNAVAILABLE",
+            "availability_label": "不可用",
+            "availability_reason": "模型供应商已停用",
+            "last_checked_at": None,
+            "last_call_log_id": None,
+        }
+    # MOCK adapters do not require a credential.  Other providers without a
+    # configured key are clearly distinguishable from a failed provider call.
+    provider_type = provider.provider_type if provider is not None else ""
+    if not api_key_configured and provider_type != "MOCK":
+        return {
+            "availability_status": "NOT_CONFIGURED",
+            "availability_label": "未配置",
+            "availability_reason": "尚未配置 API Key",
+            "last_checked_at": None,
+            "last_call_log_id": None,
+        }
+    latest = db.scalar(
+        select(ModelCallLog)
+        .where(ModelCallLog.instance_code == instance.instance_code)
+        .order_by(ModelCallLog.started_at.desc(), ModelCallLog.id.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return {
+            "availability_status": "UNKNOWN",
+            "availability_label": "未检查",
+            "availability_reason": "尚无模型调用或连通性测试记录",
+            "last_checked_at": None,
+            "last_call_log_id": None,
+        }
+    checked_at = latest.completed_at or latest.started_at
+    if latest.status == "SUCCESS":
+        return {
+            "availability_status": "AVAILABLE",
+            "availability_label": "可用",
+            "availability_reason": "最近一次模型调用成功",
+            "last_checked_at": checked_at,
+            "last_call_log_id": latest.id,
+        }
+    if latest.status == "RUNNING":
+        return {
+            "availability_status": "CHECKING",
+            "availability_label": "检查中",
+            "availability_reason": "最近一次模型调用仍在执行",
+            "last_checked_at": checked_at,
+            "last_call_log_id": latest.id,
+        }
+    classified = classify_model_error(latest.error_message or "")
+    category = str(classified.get("category") or "MODEL_UNKNOWN")
+    if category == "MODEL_BILLING":
+        status, label = "BILLING", "欠费/额度不足"
+    elif category in {"MODEL_CREDENTIAL", "MODEL_UNAVAILABLE"}:
+        status, label = "UNAVAILABLE", "不可用"
+    else:
+        status, label = "UNAVAILABLE", "不可用"
+    return {
+        "availability_status": status,
+        "availability_label": label,
+        "availability_reason": str(classified.get("summary") or latest.error_message or "最近一次模型调用失败"),
+        "last_checked_at": checked_at,
+        "last_call_log_id": latest.id,
+    }
+
+
+def _instance_read(instance: ModelInstance, db: Session) -> ModelInstanceRead:
     data = ModelInstanceRead.model_validate(instance)
     data.config_json = _redact_config(instance.config_json or {})
     data.api_key_configured = bool(
         instance.api_key
         or (instance.provider and (instance.provider.api_key_encrypted or _runtime_api_key(instance.provider)))
     )
+    for field_name, value in _instance_availability(db, instance, data.api_key_configured).items():
+        setattr(data, field_name, value)
     return data
 
 
@@ -222,7 +307,7 @@ def list_instances(
         statement = statement.where(ModelInstance.provider_id == provider_id)
     if enabled is not None:
         statement = statement.where(ModelInstance.enabled == enabled)
-    return [_instance_read(item) for item in db.scalars(statement).all()]
+    return [_instance_read(item, db) for item in db.scalars(statement).all()]
 
 
 @router.post("/instances", response_model=ModelInstanceRead, status_code=status.HTTP_201_CREATED)
@@ -244,7 +329,7 @@ def create_instance(payload: ModelInstanceCreate, db: Session = Depends(get_db))
         db.rollback()
         raise HTTPException(status_code=409, detail="Model instance code already exists") from exc
     db.refresh(instance)
-    return _instance_read(instance)
+    return _instance_read(instance, db)
 
 
 @router.put("/instances/{instance_id}", response_model=ModelInstanceRead)
@@ -270,7 +355,7 @@ def update_instance(
         setattr(instance, field_name, value)
     db.commit()
     db.refresh(instance)
-    return _instance_read(instance)
+    return _instance_read(instance, db)
 
 
 @router.delete("/instances/{instance_id}", status_code=204)

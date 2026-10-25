@@ -161,7 +161,7 @@ def _model_attempts(calls: list[ModelCallLog]) -> list[dict]:
     """Flatten durable model call traces into a UI-safe attempt chain."""
     attempts: list[dict] = []
     seen: set[tuple] = set()
-    for call in sorted(calls, key=lambda item: item.id):
+    for call in sorted(calls, key=lambda item: (item.started_at.timestamp() if item.started_at else float("-inf"), item.id), reverse=True):
         request = call.request_json if isinstance(call.request_json, dict) else {}
         trace = request.get("attempted_models") if isinstance(request.get("attempted_models"), list) else []
         if trace:
@@ -177,6 +177,7 @@ def _model_attempts(calls: list[ModelCallLog]) -> list[dict]:
                     "retryable": bool(item.get("retryable")),
                     "call_log_id": item.get("call_log_id") or call.id,
                     "attempt": item.get("attempt"),
+                    "at": item.get("at") or (call.started_at.isoformat() if call.started_at else None),
                 }
                 key = (row["call_log_id"], row["attempt"], row["provider"], row["status"])
                 if key not in seen:
@@ -186,12 +187,13 @@ def _model_attempts(calls: list[ModelCallLog]) -> list[dict]:
         row = {"provider": call.provider_code, "instance": call.instance_code,
                "model": call.model_code, "status": call.status,
                "error": call.error_message, "retryable": False,
-               "call_log_id": call.id, "attempt": 1}
+               "call_log_id": call.id, "attempt": 1,
+               "at": call.started_at.isoformat() if call.started_at else None}
         key = (call.id, 1, call.provider_code, call.status)
         if key not in seen:
             attempts.append(row)
             seen.add(key)
-    return attempts
+    return sorted(attempts, key=lambda item: str(item.get("at") or ""), reverse=True)
 
 
 def _model_failure_summary(attempts: list[dict]) -> str:

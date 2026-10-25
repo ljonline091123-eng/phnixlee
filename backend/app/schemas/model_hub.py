@@ -100,6 +100,11 @@ class ModelInstanceRead(BaseModel):
     config_json: dict[str, Any]
     description: str | None
     api_key_configured: bool = False
+    availability_status: str = "UNKNOWN"
+    availability_label: str = "未检查"
+    availability_reason: str | None = None
+    last_checked_at: datetime | None = None
+    last_call_log_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

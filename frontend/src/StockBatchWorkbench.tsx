@@ -9,6 +9,16 @@ const message = (error: unknown) => error instanceof Error ? error.message : "�
 const number = (value: number | null | undefined) => value == null ? "—" : value.toFixed(2);
 const text = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "";
 const rows = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter(item => item && typeof item === "object") : [];
+const attemptsNewestFirst = (value: unknown) => [...rows(value)].sort((left, right) => {
+  const toTime = (record: SelectionRecord) => {
+    const raw = text(record.at).trim();
+    if (!raw) return Number.NEGATIVE_INFINITY;
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw) ? raw : `${raw}Z`;
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+  return toTime(right) - toTime(left);
+});
 const timestamp = (value: string) => new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
 const elapsed = (value: unknown) => {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
@@ -345,7 +355,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
         {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试"><label>更换模型<select value={switchModelCode} disabled={busy || running || !availableSwitchModels.length} onChange={event => setSwitchModelCode(event.target.value)}>{!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}{availableSwitchModels.map(item => { const provider = modelProviders.find(row => row.id === item.provider_id); return <option key={item.instance_code} value={item.instance_code}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"}</option>; })}</select></label><button type="button" disabled={busy || running || !switchModelCode || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "更换模型并重试"}</button><small>系统会先发送最小探测请求；探测失败不会创建任务，原批次和原调用记录保持不变。</small></div>}
         <p className="batch-note">逐股重试保留成功结果、本轮证据及历史尝试；整批异常会创建新批次。</p>
         {retryProgress.message && <p role="status">{text(retryProgress.message)}</p>}
-        {failedCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedCandidates.length}）</summary><div className="selection-failure-list">{failedCandidates.map(item => { const detail = (item.analysis_json.model_failure_detail || {}) as SelectionRecord; return <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p><b>{text(detail.title) || "执行未完成"}</b>：{text(detail.summary) || text(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误，请重试。"}</p><p className="batch-note">建议：{text(detail.suggestion) || "请查看调用记录或更换模型后重试。"}</p><details><summary>查看技术详情</summary><pre>{text(detail.raw_error) || text(item.analysis_json.model_failure_reason) || "暂无原始错误"}</pre></details>{rows(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{attempt.at ? timestamp(text(attempt.at)) : ""} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {text(attempt.reason) || "已返回结果并经过引用校验"}</small>)}</article>; })}</div></details>}
+        {failedCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedCandidates.length}）</summary><div className="selection-failure-list">{failedCandidates.map(item => { const detail = (item.analysis_json.model_failure_detail || {}) as SelectionRecord; return <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p><b>{text(detail.title) || "执行未完成"}</b>：{text(detail.summary) || text(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误，请重试。"}</p><p className="batch-note">建议：{text(detail.suggestion) || "请查看调用记录或更换模型后重试。"}</p><details><summary>查看技术详情</summary><pre>{text(detail.raw_error) || text(item.analysis_json.model_failure_reason) || "暂无原始错误"}</pre></details>{attemptsNewestFirst(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{attempt.at ? timestamp(text(attempt.at)) : ""} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {text(attempt.reason) || "已返回结果并经过引用校验"}</small>)}</article>; })}</div></details>}
       </section>}
       {run.missing_data_json.length > 0 && <details className="batch-missing"><summary>数据缺口与限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, index) => <li key={index}>{item}</li>)}</ul><button disabled={busy || running} onClick={() => void backfill()}>补齐全部缺失并重新分析</button></details>}
       <div className="batch-table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>模型判断</th><th>证据</th><th>确认状态</th><th>操作</th></tr></thead><tbody>{visibleCandidates.map(item => {
