@@ -40,13 +40,19 @@ router = APIRouter(prefix="/selection", tags=["Selection Watch"])
 
 def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCandidateRead:
     tracking = db.scalar(select(SelectionTracking).where(SelectionTracking.candidate_id == candidate.id))
+    analysis_json = dict(candidate.analysis_json or {})
+    if analysis_json.get("model_output_status") == "FAILED" and not analysis_json.get("model_failure_detail"):
+        detail = classify_model_error(analysis_json.get("model_failure_reason"))
+        analysis_json["model_failure_detail"] = detail
+        analysis_json["model_failure_reason"] = detail["summary"]
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
-            "hard_rules_json", "evidence_json", "analysis_json", "decision", "review_notes", "target_price",
+            "hard_rules_json", "evidence_json", "decision", "review_notes", "target_price",
             "stop_price", "target_return_pct", "confidence", "prediction_id", "reviewed_at", "created_at",
         )},
         tracking_id=tracking.id if tracking else None,
+        analysis_json=analysis_json,
     )
 
 
@@ -120,6 +126,10 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
         "reviewed_count", "tracking_count", "missing_data_json", "error_message", "as_of", "completed_at",
         "created_at", "updated_at",
     )}
+    if payload.get("error_message"):
+        error_detail = classify_model_error(payload["error_message"])
+        if error_detail["category"] != "MODEL_UNKNOWN":
+            payload["error_message"] = f"{error_detail['title']}：{error_detail['summary']} 建议：{error_detail['suggestion']}"
     payload["criteria_json"] = criteria_json
     if include_candidates:
         candidates = list(db.scalars(
