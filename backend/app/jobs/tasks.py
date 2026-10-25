@@ -47,7 +47,7 @@ def _refresh_selection_tracking(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _run_l0_change_detection(payload: dict[str, Any]) -> dict[str, Any]:
     with SessionLocal() as db:
-        return run_change_detection(db, as_of=payload.get("business_date"))
+        return run_change_detection(db, as_of=payload.get("business_date"), market=payload.get("market"))
 
 
 def execute_task(task_type: str, payload: dict[str, Any]) -> dict[str, Any]:
