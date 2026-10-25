@@ -78,6 +78,14 @@
 .batch-progress-meta span { overflow-wrap: anywhere; }
 .batch-progress.stale { background: #fff8e9; border: 1px solid #efd9a7; }
 .batch-progress-warning { display: block; color: #986b24; font-size: 12px; line-height: 1.6; }
+.batch-progress-activity { flex: 1 1 100%; color: #173f31; font-weight: 700; font-size: 14px; }
+.batch-model-picker { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #4f675a; font-size: 13px; }
+.batch-model-picker select { min-width: 250px; padding: 7px 9px; border: 1px solid #cbdacf; border-radius: 7px; background: #fff; color: #173f31; }
+.batch-model-status { display: flex; flex-direction: column; gap: 3px; margin-top: 9px; color: #1d5a42; }
+.batch-model-status small { color: #718278; }
+.batch-preflight { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 14px; margin: 12px 0; border: 1px solid #d8e4dc; border-radius: 10px; background: #f7fbf8; color: #355948; }
+.batch-preflight strong { color: #173f31; }
+.batch-preflight .batch-alert { width: 100%; margin: 0; }
 .batch-tabs { display: flex; gap: 6px; padding: 14px 0; flex-wrap: wrap; }
 .batch-tabs button.active { background: #e5f0e7; border-color: #4a7c5f; }
 .batch-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

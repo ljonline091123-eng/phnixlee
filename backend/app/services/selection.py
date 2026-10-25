@@ -40,6 +40,7 @@ from app.models.market_data import (
     StockSymbol,
 )
 from app.services.news_identity import check_news_identity, partition_news
+from app.services.model_errors import classify_model_error
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.schemas.selection import (
     SelectionBackfillRequest, SelectionModelOutput, SelectionModelRecommendation,
@@ -2508,7 +2509,9 @@ def _apply_model_analysis(
         else:
             reason = failures.get(symbol, "模型没有返回该股票的有效分析")
             last_attempt = attempts_by_symbol.get(symbol, [])[-1] if attempts_by_symbol.get(symbol) else {}
-            item["analysis_json"].update({"model_output_status": "FAILED", "model_failure_reason": reason,
+            detail = classify_model_error(reason)
+            item["analysis_json"].update({"model_output_status": "FAILED", "model_failure_reason": detail["summary"],
+                "model_failure_detail": detail,
                 "model_call_log_id": last_attempt.get("model_call_log_id"), "model_attempts": history,
                 "local_multi_source": _build_local_multi_source_analysis(item)})
 
@@ -2526,7 +2529,11 @@ def _apply_model_analysis(
         else:
             run.analysis_mode = "MODEL_FAILED_FALLBACK_LOCAL"
             summary = "；".join(f"{symbol}: {reason}" for symbol, reason in list(failures.items())[:4])
-            run.error_message = f"真实模型分析失败（0/{len(selected)}）：{summary or '模型未返回有效结果'}"
+            detail = classify_model_error(summary or "模型未返回有效结果")
+            run.error_message = f"{detail['title']}：{detail['summary']} 建议：{detail['suggestion']}"
+            criteria = dict(run.criteria_json or {})
+            criteria["last_error_detail"] = detail
+            run.criteria_json = criteria
 
 
 def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewRequest) -> SelectionCandidate:

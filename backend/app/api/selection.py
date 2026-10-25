@@ -15,6 +15,7 @@ from app.schemas.selection import (
     SelectionRefreshRequest,
     SelectionReviewRequest,
     SelectionRunCreate,
+    SelectionPreflightRequest,
     SelectionModelSwitchRequest,
     SelectionRunRead,
     SelectionSnapshotRead,
@@ -31,6 +32,7 @@ from app.models.ai_hub import (
 )
 from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
+from app.services.model_errors import classify_model_error
 from app.services.selection_audit import retrospective_read, snapshot_read
 
 router = APIRouter(prefix="/selection", tags=["Selection Watch"])
@@ -95,18 +97,21 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             stage_start = 40 + round(50 * max(0, batch_index - 1) / batch_total)
             stage_end = 40 + round(50 * batch_index / batch_total) - 1
             progress.update({
-                "activity": progress.get("activity") or f"模型调用中：{log.provider_code or '模型服务'}/{log.instance_code or '自动路由'}",
+                "activity": progress.get("activity") or f"正在调用 {log.provider_code or '模型服务'} 的 {log.instance_code or '自动路由'}",
                 "model_instance_code": log.instance_code or progress.get("model_instance_code") or run.model_instance_code,
                 "active_model_call_id": log.id,
                 "provider_code": log.provider_code,
                 "model_code": log.model_code,
                 "purpose": metadata.get("purpose") or progress.get("purpose") or "STOCK_SELECTION_ANALYSIS",
                 "elapsed_seconds": max(int(progress.get("elapsed_seconds") or 0), elapsed_seconds),
+                "activity_started_at": progress.get("activity_started_at") or started_at.isoformat() if started_at else progress.get("activity_started_at"),
+                "last_activity_at": datetime.now(timezone.utc).isoformat(),
+                "heartbeat_at": datetime.now(timezone.utc).isoformat(),
                 "percent": min(stage_end, max(int(progress.get("percent") or stage_start), stage_start + elapsed_seconds // 5)),
                 "batch_index": batch_index,
                 "batch_total": batch_total,
                 "candidate_symbols": progress.get("candidate_symbols") or metadata.get("candidate_symbols") or [],
-                "updated_at": progress.get("updated_at") or started_at.isoformat() if started_at else progress.get("updated_at"),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             criteria_json["progress"] = progress
     payload = {key: getattr(run, key) for key in (
@@ -396,6 +401,85 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
             "warnings": warnings,
             "source_labels": source_names,
             "scope_note": "覆盖层级只按本次选择范围内的文档数量、来源种类和直接关系数量计算，不是语义相关度、来源可靠度或投资价值评分。模型只引用本次证据；图谱关系仅提供实体连接线索，不直接证明因果。上市公司公告是公司法定披露；外部事件是政策、原材料、产业链等外部线索，不是公告。"}
+
+
+@router.post("/preflight")
+def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depends(get_db)) -> dict:
+    """Check evidence coverage and model connectivity before creating a run.
+
+    No SelectionRun or ScheduledJob is created here.  The model probe is a
+    small auditable connectivity call; all stock evidence checks are read-only.
+    """
+    scope = scope_preview(SelectionScopePreview.model_validate(payload.model_dump()), db)
+    from app.services.graph_rag import selection_period_bounds
+    from app.services.model_hub import ModelHubService
+
+    model_info: dict[str, object] = {"status": "SKIPPED", "instance_code": payload.model_instance_code}
+    model_ready = not payload.use_model
+    if payload.use_model:
+        requested_code = payload.model_instance_code
+        try:
+            if not requested_code:
+                options = ModelHubService(db).list_route_options("stock_screening")
+                if not options:
+                    raise ValueError("当前没有可用的选股模型实例")
+                requested_code = options[0].instance.instance_code
+            probe = probe_selection_model(db, requested_code, data_mode=payload.data_mode)
+            model_info = {**probe, "status": "READY", "instance_code": requested_code}
+            model_ready = True
+        except Exception as exc:
+            detail = classify_model_error(exc)
+            model_info = {"status": "FAILED", "instance_code": requested_code, **detail}
+            model_ready = False
+
+    period_start, period_end = selection_period_bounds(datetime.now(timezone.utc), payload.period_months, payload.market)
+    data_rows: list[dict[str, object]] = []
+    for symbol in payload.symbols:
+        try:
+            context = build_selection_context(
+                db, payload.market, symbol,
+                knowledge_base_ids=payload.knowledge_base_ids,
+                graph_ids=payload.graph_ids,
+                as_of=datetime.now(timezone.utc),
+                period_start=period_start, period_end=period_end,
+                max_documents=8, max_relations=8, max_facts=8, max_chunks=8,
+            )
+            counts = context.get("counts") or {}
+            missing = list(context.get("missing_data") or [])
+            data_rows.append({
+                "symbol": symbol,
+                "document_count": int(counts.get("documents") or 0),
+                "fact_count": int(counts.get("facts") or 0),
+                "relation_count": int(counts.get("graph_paths") or 0),
+                "chunk_count": int(counts.get("chunks") or 0),
+                "source_counts": counts.get("period_source_counts") or {},
+                "missing": missing,
+                "status": "READY" if not missing else "PARTIAL",
+            })
+        except Exception as exc:
+            data_rows.append({"symbol": symbol, "status": "FAILED", "missing": [f"数据检查失败：{str(exc)[:180]}"]})
+    missing_symbols = [row["symbol"] for row in data_rows if row.get("status") != "READY"]
+    data_complete = bool(data_rows) and not missing_symbols
+    blockers: list[str] = []
+    if payload.use_model and not model_ready:
+        blockers.append("当前模型不可用，请更换模型后再开始分析")
+    if not scope.get("ready"):
+        blockers.extend(scope.get("blockers") or [])
+    warnings: list[str] = list(scope.get("warnings") or [])
+    if missing_symbols:
+        warnings.append(f"{len(missing_symbols)} 只股票存在数据缺口；可先更新数据，或确认以部分数据继续分析")
+    return {
+        "ready": bool(model_ready and scope.get("ready") and data_complete),
+        "model_ready": model_ready,
+        "data_ready": data_complete,
+        "model": model_info,
+        "data": {"period_months": payload.period_months, "start": period_start.isoformat(),
+                  "end": period_end.isoformat(), "rows": data_rows,
+                  "missing_symbols": missing_symbols, "requested_count": len(payload.symbols)},
+        "blockers": blockers,
+        "warnings": warnings,
+        "scope": scope,
+    }
 
 
 @router.get("/runs", response_model=list[SelectionRunRead])

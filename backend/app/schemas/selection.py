@@ -41,6 +41,14 @@ class SelectionScopePreview(BaseModel):
     period_months: int = Field(default=3, ge=1, le=60)
 
 
+class SelectionPreflightRequest(SelectionScopePreview):
+    """Read-only gate checked immediately before creating an analysis run."""
+
+    model_instance_code: str | None = Field(default=None, max_length=64)
+    use_model: bool = True
+    data_mode: Literal["REAL", "MOCK"] = "REAL"
+
+
 class SelectionDimension(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dimension: Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]

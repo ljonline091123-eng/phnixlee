@@ -137,6 +137,15 @@ export type SelectionModelSwitchRequest = {
   model_instance_code: string;
   candidate_ids?: number[];
 };
+export type SelectionPreflight = SelectionRecord & {
+  ready: boolean;
+  model_ready: boolean;
+  data_ready: boolean;
+  model: SelectionRecord;
+  data: SelectionRecord;
+  blockers: string[];
+  warnings: string[];
+};
 export type BatchAcceptance = {
   prepared: boolean; graph_id: number | null; knowledge_base_id: number | null; graph_status: string;
   market: string; symbols: string[]; rows: Array<{symbol: string; name: string; company_linked: boolean;
@@ -147,6 +156,7 @@ export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?
 export const selectionApi = {
   candidateDocument: (candidateId: number, documentId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/documents/${documentId}`),
   scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
+  preflight: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number; model_instance_code?: string | null; use_model?: boolean; data_mode?: "REAL" | "MOCK"}) => request<SelectionPreflight>("/selection/preflight", {method: "POST", body: JSON.stringify(payload)}),
   acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
   startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
   retryRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry`, { method: "POST" }),

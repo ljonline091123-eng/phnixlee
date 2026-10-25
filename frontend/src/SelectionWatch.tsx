@@ -83,6 +83,12 @@ const elapsed = (value: unknown) => {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
   return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
 };
+const liveElapsed = (progress: SelectionRecord, _tick: number) => {
+  const stored = Math.max(0, Math.floor(Number(progress.elapsed_seconds) || 0));
+  const started = progress.activity_started_at || progress.started_at;
+  const stamp = started ? new Date(String(started)).getTime() : NaN;
+  return Number.isFinite(stamp) ? Math.max(stored, Math.floor((Date.now() - stamp) / 1000)) : stored;
+};
 const heartbeatAge = (value: unknown) => {
   if (!value) return null;
   const date = new Date(String(value));
@@ -305,6 +311,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [detailRetrospectives, setDetailRetrospectives] = useState<SelectionRetrospective[]>([]);
   const [detailAuditError, setDetailAuditError] = useState("");
   const [switchModelCode, setSwitchModelCode] = useState("");
+  const [activityTick, setActivityTick] = useState(0);
   const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
@@ -361,13 +368,41 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     }).catch(err => {if(valid) setError(errorOf(err));});}, 2500);
     return () => {valid = false; window.clearInterval(timer);};
   }, [run?.id, run?.status, (run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status]);
+  useEffect(() => {
+    const progress = (run?.criteria_json.progress || {}) as SelectionRecord;
+    const active = !!run && (["QUEUED", "RUNNING"].includes(run.status) || ["QUEUED", "RUNNING"].includes(String((run.criteria_json.retry_progress as SelectionRecord | undefined)?.status || "")));
+    if (!active) return;
+    const timer = window.setInterval(() => setActivityTick(value => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [run?.id, run?.status, run?.criteria_json.progress, run?.criteria_json.retry_progress]);
   async function selectRun(id: number) { setBusy(true); setError(""); try { setRun(await selectionApi.getRun(id)); } catch (err) { setError(errorOf(err)); } finally { setBusy(false); } }
   async function create(event: FormEvent) {
     event.preventDefault(); setError(""); setNotice(""); setBusy(true);
     try {
       if (stockQuery.trim() && !chosenStocks.length) throw new Error("请勾选搜索结果中的股票，或清空搜索框后按本地市场筛选。");
       const modelReady = Boolean(form.use_model && form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
-      const result = await selectionApi.startRun({ ...form, use_model: modelReady, symbols: chosenStocks.map(item => item.symbol), model_instance_code: form.model_instance_code || null, data_mode: "REAL" });
+      const symbols = chosenStocks.map(item => item.symbol);
+      let actualModelCode = form.model_instance_code || null;
+      if (modelReady) {
+        const gate = await selectionApi.preflight({
+          market: form.market, symbols, knowledge_base_ids: form.knowledge_base_ids,
+          graph_ids: form.graph_ids, period_months: form.period_months,
+          model_instance_code: actualModelCode, use_model: true, data_mode: "REAL",
+        });
+        if (!gate.model_ready) {
+          const model = gate.model || {};
+          throw new Error(`${textOf(model.title) || "模型不可用"}：${textOf(model.summary) || "无法完成连通性检查"} ${textOf(model.suggestion)}`);
+        }
+        actualModelCode = textOf((gate.model || {}).instance_code) || actualModelCode;
+        if (!gate.data_ready) {
+          const missing = Number((gate.data || {}).missing_symbols?.length || 0);
+          if (!window.confirm(`分析前检查发现 ${missing} 只股票存在数据缺口。建议先更新数据；是否继续以部分数据分析？`)) {
+            setNotice("已取消分析，请先补齐数据后再开始。");
+            return;
+          }
+        }
+      }
+      const result = await selectionApi.startRun({ ...form, use_model: modelReady, symbols, model_instance_code: actualModelCode, data_mode: "REAL" });
       setRun(result); await reload(); setCreateOpen(false);
       setNotice(`选股批次 #${result.id} 已提交后台${form.use_model && !modelReady ? "；所选知识库/图谱暂不可用，本次按规则生成候选，未调用模型" : ""}。`); onCreated?.(result);
     } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
