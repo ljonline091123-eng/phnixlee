@@ -315,9 +315,25 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const visibleCandidates = run?.candidates.slice((Math.min(resultPage, pageCount) - 1) * pageSize, Math.min(resultPage, pageCount) * pageSize) || [];
   useEffect(() => {
     if (!availableSwitchModels.some(item => item.instance_code === switchModelCode)) {
-      setSwitchModelCode(availableSwitchModels[0]?.instance_code || "");
+      if (!analysisModelCode || !modelPickerOptions.some(item => item.instance_code === analysisModelCode)) {
+        setSwitchModelCode(availableSwitchModels[0]?.instance_code || "");
+      }
     }
-  }, [run?.id, availableSwitchModels.map(item => item.instance_code).join(",")]);
+  }, [run?.id, availableSwitchModels.map(item => item.instance_code).join(","), analysisModelCode]);
+
+  useEffect(() => {
+    if (switchModelCode && switchModelCode !== analysisModelCode
+      && modelPickerOptions.some(item => item.instance_code === switchModelCode)) {
+      setAnalysisModelCode(switchModelCode);
+    }
+  }, [switchModelCode, analysisModelCode, modelPickerOptions.map(item => item.instance_code).join(",")]);
+
+  useEffect(() => {
+    if (analysisModelCode && analysisModelCode !== switchModelCode
+      && modelPickerOptions.some(item => item.instance_code === analysisModelCode)) {
+      setSwitchModelCode(analysisModelCode);
+    }
+  }, [analysisModelCode, switchModelCode, modelPickerOptions.map(item => item.instance_code).join(",")]);
   const companyCount = run?.candidates.filter(item => item.evidence_json.identity?.company).length || 0;
   const documentCount = new Set(run?.candidates.flatMap(item => rows(item.evidence_json.documents).map(doc => doc.id)) || []).size;
   const runTracking = tracking.filter(item => run?.candidates.some(candidate => candidate.id === item.candidate_id));

@@ -137,6 +137,7 @@ const modelStatusLabel = (item: ModelInstance) => item.availability_label || ({
 } as Record<string, string>)[item.availability_status || "UNKNOWN"] || "未检查";
 const modelIsSelectable = (item: ModelInstance) => item.enabled && item.api_key_configured
   && ["AVAILABLE", "UNKNOWN", "CHECKING"].includes(item.availability_status || "UNKNOWN");
+const modelStatusClass = (item: ModelInstance) => modelIsSelectable(item) ? "model-option-available" : "model-option-unavailable";
 function Badge({ value }: { value: string }) { return <span className={`selection-badge ${["PENDING_REVIEW", "WAITING_DATA", "FAILED", "MOCK", "RULES_ONLY"].includes(value) ? "warning" : ""}`}>{nameOf(value)}</span>; }
 
 function Dialog({ title, close, children, busy = false }: { title: string; close: () => void; children: ReactNode; busy?: boolean }) {
@@ -457,6 +458,18 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
   const modelPickerOptions = instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const availableSwitchModels = modelPickerOptions.filter(item => item.instance_code !== run?.model_instance_code && modelIsSelectable(item));
+  useEffect(() => {
+    if (form.model_instance_code && form.model_instance_code !== switchModelCode
+      && modelPickerOptions.some(item => item.instance_code === form.model_instance_code)) {
+      setSwitchModelCode(form.model_instance_code);
+    }
+  }, [form.model_instance_code, switchModelCode, modelPickerOptions.map(item => item.instance_code).join(",")]);
+  useEffect(() => {
+    if (switchModelCode && switchModelCode !== form.model_instance_code
+      && modelPickerOptions.some(item => item.instance_code === switchModelCode)) {
+      setForm(current => ({ ...current, model_instance_code: switchModelCode }));
+    }
+  }, [switchModelCode, form.model_instance_code, modelPickerOptions.map(item => item.instance_code).join(",")]);
   const updateChosenStocks = (next: StockSymbol[]) => {
     setChosenStocks(next);
     setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
@@ -558,7 +571,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
                     const provider = providers.find(row => row.id === item.provider_id);
                     const current = item.instance_code === run?.model_instance_code;
                     const selectable = availableSwitchModels.some(candidate => candidate.instance_code === item.instance_code);
-                    return <option key={item.instance_code} value={item.instance_code} disabled={!selectable}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}{current ? "（当前模型）" : item.availability_reason ? `（${item.availability_reason}）` : ""}</option>;
+                    return <option className={modelStatusClass(item)} key={item.instance_code} value={item.instance_code} disabled={!selectable}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}{current ? "（当前模型）" : item.availability_reason ? `（${item.availability_reason}）` : ""}</option>;
                   })}
                 </select>
               </label>
@@ -623,7 +636,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
         </>}
       </section>
       <label style={{ display: "flex", flexDirection: "row", alignItems: "center" }}><input type="checkbox" checked={form.use_model} onChange={event => setForm({ ...form, use_model: event.target.checked })} />调用模型综合分析候选证据</label>
-      <label>分析模型<select disabled={!form.use_model} value={form.model_instance_code} onChange={event => setForm({ ...form, model_instance_code: event.target.value })}><option value="">按选股任务自动路由</option>{instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK")).map(item => <option key={item.id} value={item.instance_code} disabled={!item.api_key_configured}>{item.model_name} · {item.instance_code}{item.api_key_configured ? "" : "（未配置密钥）"}</option>)}</select></label>
+      <label>分析模型<select disabled={!form.use_model} value={form.model_instance_code} onChange={event => setForm({ ...form, model_instance_code: event.target.value })}><option value="">按选股任务自动路由</option>{instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK")).map(item => <option className={modelStatusClass(item)} key={item.id} value={item.instance_code} disabled={!modelIsSelectable(item)}>{item.model_name} · {item.instance_code} · {modelStatusLabel(item)}{item.availability_reason ? `（${item.availability_reason}）` : ""}</option>)}</select></label>
       <p className="selection-help">只向模型发送筛选后的候选和有限证据。取消模型分析时保存为规则预选，供人工核验；数据不足或模型失败会明确记录。</p>
       <p className="selection-submit-mode" role="status">本次将：{form.use_model && modelScopeSelected ? `生成候选池并进行多源模型分析${scopeBusy ? "（覆盖统计进行中，不影响提交）" : ""}` : "生成规则候选，不调用模型"}{form.use_model && !modelScopeSelected ? "。若需模型分析，请勾选知识库及其已治理图谱。" : ""}</p>
       {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">{submitBlockReason}</span><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={!!submitBlockReason}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
