@@ -7,7 +7,10 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.selection import (
+    SelectionCandidate, SelectionDimensionDefinition, SelectionDimensionResult,
+    SelectionRun, SelectionSnapshot, SelectionStrategyProfile, SelectionTracking,
+)
 from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
     SelectionBackfillRequest,
@@ -17,6 +20,9 @@ from app.schemas.selection import (
     SelectionRunCreate,
     SelectionPreflightRequest,
     SelectionModelSwitchRequest,
+    SelectionProfileCloneRequest,
+    SelectionProfileCreate,
+    SelectionProfileUpdate,
     SelectionRunRead,
     SelectionSnapshotRead,
     SelectionTrackingRead,
@@ -34,8 +40,18 @@ from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.model_errors import classify_model_error
 from app.services.selection_audit import retrospective_read, snapshot_read
+from app.services.selection_scoring import (
+    clone_profile, create_profile, evaluation_summary, list_profiles,
+    publish_profile, refresh_candidate_evaluations, resolve_profile,
+    retire_profile, score_candidate, seed_selection_scoring, serialize_profile,
+    update_profile,
+)
 
 router = APIRouter(prefix="/selection", tags=["Selection Watch"])
+
+
+def _scoring_error(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=404 if isinstance(exc, LookupError) else 409, detail=str(exc))
 
 
 def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCandidateRead:
@@ -167,6 +183,138 @@ def _tracking_read(db: Session, row: SelectionTracking, include_snapshots: bool 
             select(SelectionSnapshot).where(SelectionSnapshot.tracking_id == row.id).order_by(SelectionSnapshot.sequence)
         ).all()]
     return SelectionTrackingRead(**payload)
+
+
+@router.get("/scoring/dimensions")
+def scoring_dimensions(db: Session = Depends(get_db)) -> list[dict]:
+    rows = db.scalars(select(SelectionDimensionDefinition).where(
+        SelectionDimensionDefinition.enabled.is_(True),
+    ).order_by(SelectionDimensionDefinition.sort_order)).all()
+    return [{
+        "id": row.id, "dimension_code": row.dimension_code,
+        "dimension_name": row.dimension_name, "description": row.description,
+        "score_interpretation": row.score_interpretation,
+        "default_method": row.default_method, "sort_order": row.sort_order,
+        "enabled": row.enabled,
+    } for row in rows]
+
+
+@router.get("/scoring/profiles")
+def scoring_profiles(db: Session = Depends(get_db)) -> list[dict]:
+    return list_profiles(db)
+
+
+@router.get("/scoring/profiles/{profile_id}")
+def scoring_profile(profile_id: int, db: Session = Depends(get_db)) -> dict:
+    row = db.get(SelectionStrategyProfile, profile_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="评价方案不存在")
+    return serialize_profile(db, row)
+
+
+@router.post("/scoring/profiles", status_code=201)
+def add_scoring_profile(payload: SelectionProfileCreate, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, create_profile(db, payload))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.patch("/scoring/profiles/{profile_id}")
+def edit_scoring_profile(profile_id: int, payload: SelectionProfileUpdate, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, update_profile(db, profile_id, payload))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.post("/scoring/profiles/{profile_id}/clone", status_code=201)
+def copy_scoring_profile(profile_id: int, payload: SelectionProfileCloneRequest, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, clone_profile(db, profile_id, version=payload.version))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.post("/scoring/profiles/{profile_id}/publish")
+def enable_scoring_profile(profile_id: int, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, publish_profile(db, profile_id))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.post("/scoring/profiles/{profile_id}/retire")
+def disable_scoring_profile(profile_id: int, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, retire_profile(db, profile_id))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.post("/scoring/profiles/{profile_id}/rollback")
+def rollback_scoring_profile(profile_id: int, db: Session = Depends(get_db)) -> dict:
+    try:
+        return serialize_profile(db, publish_profile(db, profile_id))
+    except (LookupError, ValueError) as exc:
+        raise _scoring_error(exc) from exc
+
+
+@router.get("/scoring/evaluations")
+def scoring_evaluations(profile_id: int | None = None, db: Session = Depends(get_db)) -> dict:
+    return evaluation_summary(db, profile_id)
+
+
+@router.get("/candidates/{candidate_id}/scorecard")
+def candidate_scorecard(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="选股候选不存在")
+    scoring = (candidate.analysis_json or {}).get("scoring")
+    if not scoring:
+        raise HTTPException(status_code=404, detail="该历史候选尚未生成八维评分")
+    evaluations = refresh_candidate_evaluations(db, candidate)
+    db.commit()
+    return {**scoring, "evaluations": evaluations}
+
+
+@router.post("/candidates/{candidate_id}/scorecard")
+def rescore_candidate(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="选股候选不存在")
+    run = db.get(SelectionRun, candidate.run_id)
+    requested_profile = int((((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0)) if run else 0
+    try:
+        profile = resolve_profile(db, requested_profile or None, candidate.market)
+        result = score_candidate(db, candidate, profile)
+        evaluations = refresh_candidate_evaluations(db, candidate)
+        db.commit()
+        return {**result, "evaluations": evaluations}
+    except (LookupError, ValueError) as exc:
+        db.rollback()
+        raise _scoring_error(exc) from exc
+
+
+@router.post("/runs/{run_id}/scorecards")
+def rescore_run(run_id: int, db: Session = Depends(get_db)) -> dict:
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="选股任务不存在")
+    candidates = list(db.scalars(select(SelectionCandidate).where(
+        SelectionCandidate.run_id == run.id,
+    ).order_by(SelectionCandidate.id)).all())
+    profile_id = int((((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0))
+    try:
+        profile = resolve_profile(db, profile_id or None, run.market)
+        results = [{"candidate_id": candidate.id, "symbol": candidate.symbol,
+                    "scoring": score_candidate(db, candidate, profile)} for candidate in candidates]
+        db.commit()
+        return {"run_id": run.id, "profile": serialize_profile(db, profile),
+                "candidate_count": len(results), "results": results}
+    except (LookupError, ValueError) as exc:
+        db.rollback()
+        raise _scoring_error(exc) from exc
 
 
 @router.post("/runs", response_model=SelectionRunRead, status_code=201)

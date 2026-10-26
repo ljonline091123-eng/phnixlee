@@ -1,4 +1,6 @@
-# GEMINI QUANT 核心模型、Skill 与复盘链路
+# GEMINI QUANT 系统总体设计（核心模型、Skill 与复盘链路）
+
+> 更新日期：2026-10-26。本文描述当前生产架构；选股评价实施细节见 [selection-scoring-implementation.md](selection-scoring-implementation.md)。
 
 ## 四层应用架构
 
@@ -34,6 +36,32 @@ PostgreSQL Worker 使用 `FOR UPDATE SKIP LOCKED` 竞争任务。领取后立即
 ## 两层筛选
 
 Python/SQL 对全市场量价、财务和数据质量做批量计算。`filter-watch-candidates` 最多接收 5,000 条已聚合指标，每次最多返回 50 只候选股。Agent 只接收候选池、证据摘要、研报片段和知识图谱关系；`stock_screening`、`stock_analysis`、`risk_warning`、`data_governance` 调用还受 60,000 字符及 50 只候选股的服务层边界约束。不要通过普通 `general_chat` 端点传输全市场原始表。
+
+## 混合八维评价与复盘闭环
+
+候选生成后采用“确定性评分 Skill + LLM 语义分析 + GraphRAG 证据 + 版本化权重 + T+3/T+5/T+7 评估”，不把所有判断交给模型自由发挥，也不把图谱节点数量当成投资价值。
+
+| 维度 | 短周期权重 | 核心证据与边界 |
+| --- | ---: | --- |
+| 基本面与盈利质量 | 12% | 已治理财务指标及报告期；缺失指标不补零。 |
+| 估值与盈利预期 | 6% | 明确口径的 PE、PB、股息与预测；当前不直接跨行业比较绝对估值。 |
+| 行业与板块景气 | 14% | 标准行业、同行中位收益与上涨广度；概念标签不替代行业。 |
+| 价格趋势与风险收益 | 20% | 同证券、同周期日线的收益、波动与回撤。 |
+| 资金与交易行为 | 17% | 白名单资金字段和同源量价；放量不等于确认主力或游资。 |
+| 事件催化与信披可信度 | 17% | 通过文档 ID、原文引句和时间线校验的新闻公告语义结果。 |
+| 治理与股东稳定性 | 6% | 控制权、增减持、回购、解禁、质押和高管变化。 |
+| 产业链与外部韧性 | 8% | 仅已核验业务关系；归属边和候选关系不参与评分。 |
+
+每个维度输出 `SUPPORTED` 或 `INSUFFICIENT`、原始分、覆盖率、证据置信度、证据 ID 和警告。雷达图展示原始分；缺失轴留空。只有达到方案门槛的维度参与基础分，可信综合分按证据强度向中性值收缩：
+
+```text
+base_score = Σ(有效维度权重 × 维度分) / Σ有效维度权重
+trusted_score = 50 + (base_score - 50) × evidence_confidence
+```
+
+评价方案使用 `DRAFT -> ENABLED -> RETIRED` 生命周期。新任务冻结方案、权重及 Skill 版本快照；历史候选不会因新权重静默变化，只能显式补算。LLM 可以提出优化建议，但不能发布权重。人工确认候选后，系统按真实后续交易日生成 T+3/T+5/T+7 收益、回撤和方向命中；行情未到时保持 `PENDING_DATA`。
+
+对应数据表为 `selection_dimension_definition`、`selection_strategy_profile`、`selection_strategy_profile_item`、`selection_dimension_result` 和 `selection_evaluation_metric`。管理入口为 `AI能力中心 -> 评价体系`，候选雷达图和证据下钻位于 `投研工作台 -> 选股与复选`。
 
 ## 数据模型与配置
 

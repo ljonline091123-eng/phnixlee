@@ -124,7 +124,41 @@ export type SelectionRunCreate = {
   universe_scope?: string;
   market: string; symbols: string[]; candidate_limit: number; min_abs_change_pct: number; min_volume_ratio: number;
   period_months: number;
+  strategy_profile_id?: number | null;
   model_instance_code: string | null; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
+};
+export type SelectionScoringDimension = {
+  id: number; dimension_code: string; dimension_name: string; description: string;
+  score_interpretation: string; default_method: string; sort_order: number; enabled: boolean;
+};
+export type SelectionProfileItem = SelectionScoringDimension & {
+  method: string;
+  weight: number; minimum_coverage: number; minimum_confidence: number;
+  skill_code: string; skill_version: string;
+};
+export type SelectionScoringProfile = {
+  id: number; profile_code: string; profile_name: string; version: string; description: string;
+  horizon_code: string; market_scope: string[]; status: string; enabled: boolean;
+  published_at: string | null; parent_profile_id: number | null; weight_total: number;
+  items: SelectionProfileItem[]; created_at: string; updated_at: string;
+};
+export type SelectionScoreDimensionResult = SelectionRecord & {
+  dimension_code: string; dimension_name: string; status: string; direction: string;
+  score: number | null; observed_score?: number | null; coverage: number;
+  evidence_confidence: number; weight: number; weighted_contribution: number | null;
+  method: string; summary: string; metrics: SelectionRecord; evidence: SelectionRecord;
+  warnings: string[];
+};
+export type SelectionScorecard = SelectionRecord & {
+  contract_version: string; status: string; base_score: number | null; trusted_score: number | null;
+  coverage: number; evidence_confidence: number; supported_weight: number;
+  profile: SelectionRecord; dimensions: SelectionScoreDimensionResult[];
+  evaluations?: SelectionRecord[];
+};
+export type SelectionEvaluationSummary = {
+  profile_id: number | null; horizons: Array<{horizon_sessions: number; total: number; completed: number;
+    pending: number; direction_hit_rate: number | null; average_return_pct: number | null;
+    average_max_drawdown_pct: number | null}>; note: string;
 };
 export type SelectionBackfillRequest = {
   candidate_ids?: number[];
@@ -154,6 +188,19 @@ export type BatchAcceptance = {
 };
 export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?: number; stop_price?: number; target_return_pct?: number; confidence?: number; notes?: string };
 export const selectionApi = {
+  scoringDimensions: () => request<SelectionScoringDimension[]>("/selection/scoring/dimensions"),
+  scoringProfiles: () => request<SelectionScoringProfile[]>("/selection/scoring/profiles"),
+  scoringProfile: (id: number) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}`),
+  createScoringProfile: (payload: SelectionRecord) => request<SelectionScoringProfile>("/selection/scoring/profiles", {method: "POST", body: JSON.stringify(payload)}),
+  updateScoringProfile: (id: number, payload: SelectionRecord) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}`, {method: "PATCH", body: JSON.stringify(payload)}),
+  cloneScoringProfile: (id: number, version: string) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}/clone`, {method: "POST", body: JSON.stringify({version})}),
+  publishScoringProfile: (id: number) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}/publish`, {method: "POST"}),
+  retireScoringProfile: (id: number) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}/retire`, {method: "POST"}),
+  rollbackScoringProfile: (id: number) => request<SelectionScoringProfile>(`/selection/scoring/profiles/${id}/rollback`, {method: "POST"}),
+  scoringEvaluations: (profileId?: number) => request<SelectionEvaluationSummary>(`/selection/scoring/evaluations${profileId ? `?profile_id=${profileId}` : ""}`),
+  scorecard: (candidateId: number) => request<SelectionScorecard>(`/selection/candidates/${candidateId}/scorecard`),
+  rescoreCandidate: (candidateId: number) => request<SelectionScorecard>(`/selection/candidates/${candidateId}/scorecard`, {method: "POST"}),
+  rescoreRun: (runId: number) => request<SelectionRecord>(`/selection/runs/${runId}/scorecards`, {method: "POST"}),
   candidateDocument: (candidateId: number, documentId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/documents/${documentId}`),
   scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
   preflight: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number; model_instance_code?: string | null; use_model?: boolean; data_mode?: "REAL" | "MOCK"}) => request<SelectionPreflight>("/selection/preflight", {method: "POST", body: JSON.stringify(payload)}),

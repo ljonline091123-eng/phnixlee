@@ -51,6 +51,7 @@ import { GovernanceCenter } from "./GovernanceCenter";
 import { GovernanceRecords } from "./GovernanceRecords";
 import { GovernanceWorkbench } from "./GovernanceWorkbench";
 import { DocumentSemanticWorkbench } from "./DocumentSemanticWorkbench";
+import { SelectionScoringAdmin } from "./SelectionScoringAdmin";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
 import {
   defaultSections,
@@ -60,7 +61,7 @@ import {
   type ModuleView,
 } from "./navigation";
 
-type ModelHubTab = "models" | "agents" | "skills" | "evaluation" | "governance";
+type ModelHubTab = "models" | "agents" | "skills" | "scoring" | "evaluation" | "governance";
 type DataView = "access" | "master" | "business" | "lakehouse" | "knowledge" | "graphs" | "pipeline";
 type AccessView = "sources" | "interfaces" | "sync";
 type MasterView = "securities" | "entities";
@@ -1298,7 +1299,7 @@ function message(text: string) {
         detail={notice || "模型提供推理，技能沉淀方法，智能体负责组合与执行"}
       />
       <div className="resource-tabs">
-        {(["models", "agents", "skills", "evaluation", "governance"] as ModelHubTab[]).map((item) => (
+        {(["models", "agents", "skills", "scoring", "evaluation", "governance"] as ModelHubTab[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -1311,6 +1312,8 @@ function message(text: string) {
                 ? "智能体"
                 : item === "skills"
                   ? "技能库"
+                : item === "scoring"
+                  ? "评价体系"
                   : item === "evaluation"
                     ? "运行与评测"
                     : "治理契约"}
@@ -1508,6 +1511,7 @@ function message(text: string) {
           onDelete={deleteSkill}
         />
       )}
+      {tab === "scoring" && <SelectionScoringAdmin />}
       {tab === "evaluation" && <div className="resource-stack">
         <AiWorkflowGuide agents={agents} skills={skills} knowledge={knowledge} />
         <LogsTab

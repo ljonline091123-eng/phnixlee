@@ -39,7 +39,11 @@ from app.models.schema_catalog import DatabaseTableComment
 from app.models.context_event import StockContextEvent
 from app.models.change_event import StockChangeEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
-from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.selection import (
+    SelectionCandidate, SelectionDimensionDefinition, SelectionDimensionResult,
+    SelectionEvaluationMetric, SelectionRun, SelectionSnapshot,
+    SelectionStrategyProfile, SelectionStrategyProfileItem, SelectionTracking,
+)
 from app.models.decision_review import (
     SelectionDecisionSnapshot,
     SelectionRetrospective,
@@ -124,6 +128,11 @@ __all__ = [
     "SelectionCandidate",
     "SelectionTracking",
     "SelectionSnapshot",
+    "SelectionDimensionDefinition",
+    "SelectionStrategyProfile",
+    "SelectionStrategyProfileItem",
+    "SelectionDimensionResult",
+    "SelectionEvaluationMetric",
     "SelectionDecisionSnapshot",
     "SelectionRetrospective",
     "SkillEvaluationCase",

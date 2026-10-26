@@ -283,6 +283,7 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
             assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"}
             assert good.evidence_json == {"documents": [{"id": 456}]}
             assert failed.evidence_json == {"documents": [{"id": 123, "content": "原始证据"}]}
+            assert failed.analysis_json["scoring"]["contract_version"] == "SELECTION_SCORECARD_V1"
             assert run.status == "PARTIAL" and run.analysis_mode == "MODEL_PARTIAL"
             assert result["passed_count"] == 1 and result["citation_partial_count"] == 1
             assert run.criteria_json["retry_progress"]["passed_count"] == 1

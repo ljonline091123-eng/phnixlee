@@ -18,6 +18,7 @@ class SelectionRunCreate(BaseModel):
     # reproducible even when they are opened later.
     period_months: int = Field(default=3, ge=1, le=60)
     model_instance_code: str | None = Field(default=None, max_length=64)
+    strategy_profile_id: int | None = Field(default=None, gt=0)
     knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
     use_model: bool = True
@@ -306,3 +307,62 @@ class SelectionModelSwitchRequest(BaseModel):
     def unique_candidate_ids(self) -> "SelectionModelSwitchRequest":
         self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
         return self
+
+
+class SelectionProfileItemInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    dimension_code: Literal[
+        "FUNDAMENTAL_QUALITY", "VALUATION_EXPECTATION", "INDUSTRY_MOMENTUM",
+        "PRICE_RISK", "CAPITAL_BEHAVIOR", "EVENT_DISCLOSURE",
+        "GOVERNANCE_STABILITY", "SUPPLY_CHAIN_RESILIENCE",
+    ]
+    weight: float = Field(ge=0, le=100)
+    minimum_coverage: float = Field(default=0.4, ge=0, le=1)
+    minimum_confidence: float = Field(default=0.4, ge=0, le=1)
+    skill_code: str = Field(min_length=2, max_length=128)
+    skill_version: str = Field(default="1.0.0", min_length=1, max_length=32)
+
+
+class SelectionProfileCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile_code: str = Field(min_length=2, max_length=64, pattern=r"^[A-Z0-9_]+$")
+    profile_name: str = Field(min_length=2, max_length=128)
+    version: str = Field(min_length=1, max_length=32)
+    description: str = Field(default="", max_length=4000)
+    horizon_code: str = Field(default="T3_T5_T7", max_length=32)
+    market_scope: list[str] = Field(default_factory=lambda: ["CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"], max_length=16)
+    items: list[SelectionProfileItemInput] = Field(min_length=8, max_length=8)
+    parent_profile_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def valid_weights(self) -> "SelectionProfileCreate":
+        codes = [item.dimension_code for item in self.items]
+        if len(set(codes)) != 8:
+            raise ValueError("八个评价维度必须各配置一次")
+        if abs(sum(item.weight for item in self.items) - 100) > 0.001:
+            raise ValueError("维度权重合计必须为100%")
+        self.market_scope = list(dict.fromkeys(value.strip().upper() for value in self.market_scope if value.strip()))
+        return self
+
+
+class SelectionProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile_name: str | None = Field(default=None, min_length=2, max_length=128)
+    description: str | None = Field(default=None, max_length=4000)
+    horizon_code: str | None = Field(default=None, max_length=32)
+    market_scope: list[str] | None = Field(default=None, max_length=16)
+    items: list[SelectionProfileItemInput] | None = Field(default=None, min_length=8, max_length=8)
+
+    @model_validator(mode="after")
+    def valid_optional_weights(self) -> "SelectionProfileUpdate":
+        if self.items is not None:
+            codes = [item.dimension_code for item in self.items]
+            if len(set(codes)) != 8 or abs(sum(item.weight for item in self.items) - 100) > 0.001:
+                raise ValueError("八个评价维度必须各配置一次，且权重合计为100%")
+        if self.market_scope is not None:
+            self.market_scope = list(dict.fromkeys(value.strip().upper() for value in self.market_scope if value.strip()))
+        return self
+
+
+class SelectionProfileCloneRequest(BaseModel):
+    version: str = Field(min_length=1, max_length=32)

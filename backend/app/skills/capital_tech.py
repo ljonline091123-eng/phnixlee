@@ -89,10 +89,6 @@ def get_capital_and_tech_skill(
             )
             if value is None:
                 value = first_matching_number(row, ("主力", "净"))
-            if value is None:
-                # Keep the tool useful for providers that use an opaque column
-                # name: the first numeric amount is a conservative fallback.
-                value = next((number(item) for item in row.values() if number(item) is not None), None)
             if value is not None:
                 net_values.append(value)
 
@@ -122,6 +118,8 @@ def get_capital_and_tech_skill(
             warnings.append("本地 K 线不足 20 个交易日，均线和支撑位仅供参考。")
         if not flow_rows:
             warnings.append("本地资金流向暂无记录，主力意图无法充分判断。")
+        elif not net_values:
+            warnings.append("资金流记录存在，但未识别到口径明确的主力净流入字段；未使用其他数值字段替代。")
         quality = "HIGH" if len(kline_rows) >= 20 and flow_rows else "MEDIUM" if kline_rows else "LOW"
 
         return CapitalAndTechOutput(

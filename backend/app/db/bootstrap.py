@@ -17,6 +17,7 @@ from app.services.resource_hub import (
 )
 from app.services.taxonomy import seed_builtin_definitions
 from app.services.governance_defaults import seed_default_quality_rules
+from app.services.selection_scoring import seed_selection_scoring
 
 
 def initialize_database(*, seed_defaults: bool = True) -> None:
@@ -35,4 +36,5 @@ def initialize_database(*, seed_defaults: bool = True) -> None:
         seed_default_agents(db)
         seed_builtin_definitions(db)
         seed_default_quality_rules(db)
+        seed_selection_scoring(db)
         db.commit()

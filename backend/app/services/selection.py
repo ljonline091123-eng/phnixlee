@@ -519,6 +519,10 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
     )
     model_requested = bool(payload.use_model and (payload.data_mode == "MOCK" or governed_context))
     as_of = _now()
+    from app.services.selection_scoring import resolve_profile, seed_selection_scoring, serialize_profile
+    seed_selection_scoring(db)
+    scoring_profile = resolve_profile(db, payload.strategy_profile_id, market)
+    scoring_snapshot = serialize_profile(db, scoring_profile)
     from app.services.graph_rag import selection_period_bounds
     period_start, period_end = selection_period_bounds(as_of, payload.period_months, market)
     run = SelectionRun(
@@ -528,7 +532,8 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
         criteria_json={"min_abs_change_pct": payload.min_abs_change_pct, "min_volume_ratio": payload.min_volume_ratio,
                        "symbols": symbols, "analysis_contract": "MULTI_SOURCE_LINKAGE_V3",
                        "period_months": payload.period_months,
-                       "period_start": period_start.isoformat(), "period_end": period_end.isoformat()},
+                       "period_start": period_start.isoformat(), "period_end": period_end.isoformat(),
+                       "strategy_profile": scoring_snapshot},
         model_instance_code=model_code,
         knowledge_base_ids_json=list(payload.knowledge_base_ids),
         graph_ids_json=list(payload.graph_ids),
@@ -1175,11 +1180,16 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             _apply_model_analysis(db, run, [(item, float(item.get("hard_score") or 0)) for item in retry_items],
                                   update_run_summary=False, max_batch_candidates=1)
             by_symbol = {item["symbol"]: item for item in retry_items}
+            from app.services.selection_scoring import resolve_profile, score_candidate, seed_selection_scoring
+            seed_selection_scoring(db)
+            profile_id = int(((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0)
+            scoring_profile = resolve_profile(db, profile_id or None, run.market)
             for row in candidates:
                 item = by_symbol.get(row.symbol)
                 if item:
                     row.analysis_json = item["analysis_json"]
                     row.evidence_json = item["evidence_json"]
+                    score_candidate(db, row, scoring_profile)
             db.flush()
 
             all_candidates = list(db.scalars(select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)).all())
@@ -1390,6 +1400,9 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
         candidate = SelectionCandidate(run_id=run.id, **item)
         db.add(candidate)
         db.flush()
+        from app.services.selection_scoring import resolve_profile, score_candidate
+        profile_id = int(((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0)
+        score_candidate(db, candidate, resolve_profile(db, profile_id, candidate.market))
         from app.services.selection_audit import capture_decision_snapshot
         capture_decision_snapshot(
             db, candidate, snapshot_kind="CANDIDATE", decision="PENDING",
@@ -2779,6 +2792,10 @@ def refresh_tracking(db: Session, tracking_ids: list[int] | None = None) -> dict
     rows = list(db.scalars(query).all())
     for row in rows:
         _refresh_one(db, row)
+        candidate = db.get(SelectionCandidate, row.candidate_id)
+        if candidate is not None:
+            from app.services.selection_scoring import refresh_candidate_evaluations
+            refresh_candidate_evaluations(db, candidate)
     # Close the parent selection run only when every human-approved tracking
     # record has completed its required sessions.  Rejected/pending candidates
     # keep the run in their existing review state.

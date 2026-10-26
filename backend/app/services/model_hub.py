@@ -635,6 +635,62 @@ DEFAULT_MODEL_SKILLS_V2 = (
                         "managed_contract_version": "EVENT_LINKAGE_V1"},
     },
     {
+        "skill_code": "FINANCIAL_QUALITY_SCORER",
+        "skill_name": "基本面与盈利质量评分",
+        "description": "按结构化财务事实计算盈利质量，并保留字段口径、期次和缺失状态。",
+        "instructions": "只读取已治理财务事实。核对指标编码、报告期、单位和修订状态；缺失指标返回INSUFFICIENT，不以零值或推测替代。输出分数、覆盖率、证据置信度、指标及事实ID。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "DETERMINISTIC_HYBRID", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "VALUATION_EXPECTATION_SCORER",
+        "skill_name": "估值与盈利预期评分",
+        "description": "按估值、股息和盈利预期的明确字段生成可复现评分。",
+        "instructions": "仅使用口径明确的估值、股息和预测指标；保留日期和来源。不同行业不得只按绝对估值比较；缺少有效字段时返回INSUFFICIENT。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "DETERMINISTIC", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "INDUSTRY_RELATIVE_STRENGTH_ANALYST",
+        "skill_name": "行业相对强弱分析",
+        "description": "按标准行业成员、上涨广度和区间收益评估行业联动。",
+        "instructions": "使用有版本和来源的标准行业分类，比较同市场同行区间表现。主题标签不得替代标准行业；同行样本不足时返回INSUFFICIENT。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "DETERMINISTIC", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "PRICE_RISK_ANALYST",
+        "skill_name": "价格趋势与风险收益分析",
+        "description": "按同源日线计算收益、波动、回撤和量价确认。",
+        "instructions": "只使用同一证券、同一复权和同一来源的有日期行情。计算区间收益、波动率和最大回撤；样本不足时返回INSUFFICIENT，不预测未来价格。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "DETERMINISTIC", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "CAPITAL_BEHAVIOR_ANALYST",
+        "skill_name": "资金与交易行为分析",
+        "description": "仅按已识别资金字段和同源量价行为评估资金特征。",
+        "instructions": "必须按明确字段名和单位读取资金流，禁止取任意首个数值替代。成交放大只能形成交易行为线索，不得据此确认主力或游资身份。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "DETERMINISTIC_HYBRID", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "GOVERNANCE_SHAREHOLDER_ANALYST",
+        "skill_name": "治理与股东稳定性分析",
+        "description": "综合控制权、增减持、回购、解禁、质押和高管变化。",
+        "instructions": "区分来源事实、时间关联与动机推断。时间接近不能证明因果；所有判断须引用股东事实或原文，证据不足返回INSUFFICIENT。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "HYBRID", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
+        "skill_code": "RELATION_RISK_ANALYST",
+        "skill_name": "产业链与外部关系风险分析",
+        "description": "评估供应链、经营往来、司法事项和外部事件的已核验关系。",
+        "instructions": "仅使用具业务含义且带证据、时间和审核状态的关系。资料归属边和候选关系不计为已验证业务事实；缺少已核验关系时返回INSUFFICIENT。",
+        "enabled": True,
+        "config_json": {"task_type": "selection_scoring", "execution_mode": "HYBRID", "managed_contract_version": "SELECTION_SCORING_V1"},
+    },
+    {
         "skill_code": "RESEARCH_REPORT_REVIEW",
         "skill_name": "研报历史复盘与修正",
         "description": "生成新研报时对比历史研报，评估历史预测是否有效，并提出需要调整的判断。",
@@ -696,14 +752,68 @@ GENERIC_ERROR_POLICY: dict[str, Any] = {
     "expose_internal_error": False,
 }
 
+SELECTION_SCORING_INPUT_CONTRACT: dict[str, Any] = {
+    "type": "object",
+    "required": ["candidate_id", "market", "symbol", "as_of", "evidence"],
+    "properties": {
+        "candidate_id": {"type": "integer", "minimum": 1},
+        "market": {"type": "string", "minLength": 1, "maxLength": 32},
+        "symbol": {"type": "string", "minLength": 1, "maxLength": 32},
+        "as_of": {"type": "string", "format": "date-time"},
+        "evidence": {"type": "object"},
+        "evidence_ids": {"type": "array", "maxItems": 500, "items": {"type": ["string", "integer"]}},
+        "profile": {"type": "object"},
+    },
+    "additionalProperties": False,
+}
+
+SELECTION_SCORING_OUTPUT_CONTRACT: dict[str, Any] = {
+    "type": "object",
+    "required": ["dimension_code", "status", "direction", "score", "coverage", "evidence_confidence", "metrics", "evidence", "warnings"],
+    "properties": {
+        "dimension_code": {"type": "string", "minLength": 2, "maxLength": 64},
+        "status": {"type": "string", "enum": ["SUPPORTED", "INSUFFICIENT"]},
+        "direction": {"type": "string", "enum": ["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]},
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "summary": {"type": "string", "maxLength": 800},
+        "metrics": {"type": "object"},
+        "evidence": {"type": "object"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+    },
+    "additionalProperties": False,
+}
+
+SELECTION_SCORING_RETRY_POLICY: dict[str, Any] = {"max_attempts": 1, "retry_on": []}
+SELECTION_SCORING_ERROR_POLICY: dict[str, Any] = {
+    "on_error": "RETURN_INSUFFICIENT",
+    "retain_audit": True,
+    "expose_internal_error": False,
+    "fabricate_fallback": False,
+}
+
 
 def seed_default_skills(db: Session) -> None:
     """Seed built-in skills without overwriting user-maintained content."""
     for skill_config in (*DEFAULT_MODEL_SKILLS_V2, *core_skill_rows()):
         managed_contract_changed = False
+        selection_scoring = (skill_config.get("config_json") or {}).get("task_type") == "selection_scoring"
+        resolved_contracts = {
+            "input_contract_json": skill_config.get("input_contract_json") or (SELECTION_SCORING_INPUT_CONTRACT if selection_scoring else GENERIC_PROMPT_INPUT_CONTRACT),
+            "output_contract_json": skill_config.get("output_contract_json") or (SELECTION_SCORING_OUTPUT_CONTRACT if selection_scoring else GENERIC_PROMPT_OUTPUT_CONTRACT),
+            "permission_policy_json": skill_config.get("permission_policy_json") or GENERIC_READ_ONLY_PERMISSION_POLICY,
+            "retry_policy_json": skill_config.get("retry_policy_json") or (SELECTION_SCORING_RETRY_POLICY if selection_scoring else GENERIC_RETRY_POLICY),
+            "error_policy_json": skill_config.get("error_policy_json") or (SELECTION_SCORING_ERROR_POLICY if selection_scoring else GENERIC_ERROR_POLICY),
+            "side_effect_level": skill_config.get("side_effect_level", "READ_ONLY"),
+            "idempotency_policy": skill_config.get("idempotency_policy", "REQUIRED" if selection_scoring else "OPTIONAL"),
+        }
         skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == skill_config["skill_code"]))
         if skill is None:
-            skill = ModelSkill(**skill_config, is_builtin=True)
+            create_values = {**skill_config, "is_builtin": True}
+            create_values.setdefault("side_effect_level", resolved_contracts["side_effect_level"])
+            create_values.setdefault("idempotency_policy", resolved_contracts["idempotency_policy"])
+            skill = ModelSkill(**create_values)
             db.add(skill)
             db.flush()
         elif not skill.file_path:
@@ -716,20 +826,20 @@ def seed_default_skills(db: Session) -> None:
                 dict(skill.config_json or {}), dict(skill_config.get("config_json") or {})
             )
             for field_name, default_value in (
-                ("input_contract_json", skill_config.get("input_contract_json") or GENERIC_PROMPT_INPUT_CONTRACT),
-                ("output_contract_json", skill_config.get("output_contract_json") or GENERIC_PROMPT_OUTPUT_CONTRACT),
-                ("permission_policy_json", skill_config.get("permission_policy_json") or GENERIC_READ_ONLY_PERMISSION_POLICY),
-                ("retry_policy_json", skill_config.get("retry_policy_json") or GENERIC_RETRY_POLICY),
-                ("error_policy_json", skill_config.get("error_policy_json") or GENERIC_ERROR_POLICY),
+                ("input_contract_json", resolved_contracts["input_contract_json"]),
+                ("output_contract_json", resolved_contracts["output_contract_json"]),
+                ("permission_policy_json", resolved_contracts["permission_policy_json"]),
+                ("retry_policy_json", resolved_contracts["retry_policy_json"]),
+                ("error_policy_json", resolved_contracts["error_policy_json"]),
             ):
                 if not getattr(skill, field_name, None):
                     setattr(skill, field_name, default_value)
             if getattr(skill, "lifecycle_status", "DRAFT") == "DRAFT" and skill.enabled:
                 skill.lifecycle_status = "ENABLED"
             if not getattr(skill, "side_effect_level", None):
-                skill.side_effect_level = skill_config.get("side_effect_level", "READ_ONLY")
+                skill.side_effect_level = resolved_contracts["side_effect_level"]
             if not getattr(skill, "idempotency_policy", None):
-                skill.idempotency_policy = skill_config.get("idempotency_policy", "OPTIONAL")
+                skill.idempotency_policy = resolved_contracts["idempotency_policy"]
             # A versioned built-in contract is migrated once and then tracked in
             # the Skill revision.  Unversioned/user-maintained contracts retain
             # the existing non-overwrite behaviour above.
@@ -741,7 +851,7 @@ def seed_default_skills(db: Session) -> None:
                     "input_contract_json", "output_contract_json", "permission_policy_json",
                     "retry_policy_json", "error_policy_json", "side_effect_level", "idempotency_policy",
                 ):
-                    setattr(skill, field_name, skill_config[field_name])
+                    setattr(skill, field_name, resolved_contracts[field_name])
                 skill.config_json = {**dict(skill.config_json or {}), **dict(skill_config.get("config_json") or {})}
         file_changed = sync_skill_from_file(db, skill)
         if managed_contract_changed and not file_changed:

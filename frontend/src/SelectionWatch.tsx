@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider, type StockSymbol } from "./api";
 import { SelectionAnalysis, type AnalysisDimension } from "./SelectionAnalysis";
-import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 
 const labels: Record<string, string> = {
@@ -305,6 +305,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [graphs, setGraphs] = useState<KnowledgeGraph[]>([]);
   const [instances, setInstances] = useState<ModelInstance[]>([]);
   const [providers, setProviders] = useState<ModelProvider[]>([]);
+  const [scoringProfiles, setScoringProfiles] = useState<SelectionScoringProfile[]>([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadVersion, setLoadVersion] = useState(0);
@@ -329,7 +330,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   const [detailAuditError, setDetailAuditError] = useState("");
   const [switchModelCode, setSwitchModelCode] = useState("");
   const [activityTick, setActivityTick] = useState(0);
-  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
+  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, strategy_profile_id: null as number | null, model_instance_code: "", use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
   async function reload() {
@@ -340,13 +341,13 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
   useEffect(() => {
     let valid = true;
     setLoading(true); setError("");
-    void Promise.all([selectionApi.listRuns(), selectionApi.listTracking(), api.listKnowledgeBases(), api.listKnowledgeGraphs(), api.listModelInstances(), api.listModelProviders()]).then(async ([nextRuns, nextTracking, nextBases, nextGraphs, nextInstances, nextProviders]) => {
+    void Promise.all([selectionApi.listRuns(), selectionApi.listTracking(), api.listKnowledgeBases(), api.listKnowledgeGraphs(), api.listModelInstances(), api.listModelProviders(), selectionApi.scoringProfiles()]).then(async ([nextRuns, nextTracking, nextBases, nextGraphs, nextInstances, nextProviders, nextProfiles]) => {
       if (!valid) return;
-      setRuns(nextRuns); setTracking(nextTracking); setBases(nextBases); setGraphs(nextGraphs); setInstances(nextInstances); setProviders(nextProviders);
+      setRuns(nextRuns); setTracking(nextTracking); setBases(nextBases); setGraphs(nextGraphs); setInstances(nextInstances); setProviders(nextProviders); setScoringProfiles(nextProfiles);
       const enabledBases = nextBases.filter(item => item.enabled);
       const preferred = nextGraphs.find(item => item.graph_code === "FIXED20_ACCEPTANCE_20261021" && item.enabled && ["GOVERNED", "LOCKED"].includes(item.governance_status))
         || nextGraphs.find(item => item.enabled && ["GOVERNED", "LOCKED"].includes(item.governance_status));
-      setForm(current => ({ ...current, knowledge_base_ids: preferred ? [preferred.knowledge_base_id] : enabledBases.slice(0, 1).map(item => item.id), graph_ids: preferred ? [preferred.id] : [], use_model: Boolean(preferred) }));
+      setForm(current => ({ ...current, strategy_profile_id: current.strategy_profile_id || nextProfiles.find(item => item.enabled)?.id || null, knowledge_base_ids: preferred ? [preferred.knowledge_base_id] : enabledBases.slice(0, 1).map(item => item.id), graph_ids: preferred ? [preferred.id] : [], use_model: Boolean(preferred) }));
       if (nextRuns.length) { const first = await selectionApi.getRun(nextRuns[0].id); if (valid) setRun(first); }
     }).catch(err => { if (valid) setError(errorOf(err)); }).finally(() => { if (valid) setLoading(false); });
     return () => { valid = false; };
@@ -544,6 +545,17 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
   }
+  async function rescore(item: SelectionCandidate) {
+    setBusy(true); setError("");
+    try {
+      const scoring = await selectionApi.rescoreCandidate(item.id);
+      const next = {...item, analysis_json: {...item.analysis_json, scoring}};
+      setCandidate(next);
+      setRun(current => current ? {...current, candidates: current.candidates.map(row => row.id === next.id ? next : row)} : current);
+      setNotice("八维评分已生成，原分析证据和历史结论未被覆盖。");
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
   return <div className="selection-workbench">
     {error && !createOpen && !candidate && <div className="form-error" role="alert">{error} <button type="button" disabled={loading} onClick={() => setLoadVersion(value => value + 1)}>重新加载</button></div>}{notice && <p className="selection-notice" role="status">{notice}</p>}
     <section className="panel">
@@ -636,13 +648,14 @@ export function SelectionWorkbench({ mode, initialCreate = false, onCreated }: {
         </>}
       </section>
       <label style={{ display: "flex", flexDirection: "row", alignItems: "center" }}><input type="checkbox" checked={form.use_model} onChange={event => setForm({ ...form, use_model: event.target.checked })} />调用模型综合分析候选证据</label>
+      <label>评价权重方案<select required value={form.strategy_profile_id || ""} onChange={event => setForm({ ...form, strategy_profile_id: Number(event.target.value) || null })}>{scoringProfiles.filter(item => item.enabled).map(item => <option key={item.id} value={item.id}>{item.profile_name} v{item.version} · {item.horizon_code}</option>)}</select><small>雷达图展示八维原始分；该版本权重只影响可信综合分，并随批次冻结。</small></label>
       <label>分析模型<select disabled={!form.use_model} value={form.model_instance_code} onChange={event => setForm({ ...form, model_instance_code: event.target.value })}><option value="">按选股任务自动路由</option>{instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK")).map(item => <option className={modelStatusClass(item)} key={item.id} value={item.instance_code} disabled={!modelIsSelectable(item)}>{item.model_name} · {item.instance_code} · {modelStatusLabel(item)}{item.availability_reason ? `（${item.availability_reason}）` : ""}</option>)}</select></label>
       <p className="selection-help">只向模型发送筛选后的候选和有限证据。取消模型分析时保存为规则预选，供人工核验；数据不足或模型失败会明确记录。</p>
       <p className="selection-submit-mode" role="status">本次将：{form.use_model && modelScopeSelected ? `生成候选池并进行多源模型分析${scopeBusy ? "（覆盖统计进行中，不影响提交）" : ""}` : "生成规则候选，不调用模型"}{form.use_model && !modelScopeSelected ? "。若需模型分析，请勾选知识库及其已治理图谱。" : ""}</p>
       {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">{submitBlockReason}</span><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={!!submitBlockReason}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
-      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
+      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} onRescore={() => void rescore(candidate)} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
       {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price || candidate.analysis_json.analysis_validation_status === "PARTIAL"}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
     </Dialog>}
     {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<RetrospectiveTrail rows={detailRetrospectives} error={detailAuditError} /><div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}
