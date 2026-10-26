@@ -120,6 +120,20 @@ function ModelAvailability({ item }: { item: ModelInstance }) {
     </span>
   );
 }
+function RouteAvailability({ route, instances }: { route: ModelRoute; instances: ModelInstance[] }) {
+  const model = instances.find(item => item.instance_code === route.preferred_instance_code);
+  if (!model) return <span className="route-availability route-availability-missing">模型未登记</span>;
+  const usable = model.enabled && model.api_key_configured
+    && ["AVAILABLE", "UNKNOWN", "CHECKING"].includes(model.availability_status || "UNKNOWN");
+  return <span className={`route-availability ${usable ? "route-availability-ready" : "route-availability-unavailable"}`} title={model.availability_reason || model.availability_label || "模型状态"}>
+    {usable ? "模型可用" : (model.availability_label || "模型不可用")}
+  </span>;
+}
+function routeIsAvailable(route: ModelRoute, instances: ModelInstance[]) {
+  const model = instances.find(item => item.instance_code === route.preferred_instance_code);
+  return Boolean(model && model.enabled && model.api_key_configured
+    && ["AVAILABLE", "UNKNOWN", "CHECKING"].includes(model.availability_status || "UNKNOWN"));
+}
 const inputClass = "text-input";
 function ErrorText({ error }: { error: string }) {
   return error ? <p className="form-error">{error}</p> : null;
@@ -1860,7 +1874,7 @@ function ModelTab(props: {
               <tbody>
                 {routes.length ? (
                   routes.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={routeIsAvailable(item, instances) ? "" : "route-row-unavailable"}>
                       <td>
                         <code className="route-code">{item.task_type}</code>
                       </td>
@@ -1886,6 +1900,7 @@ function ModelTab(props: {
                       <td>{item.route_policy || "--"}</td>
                       <td>
                         <Status enabled={item.enabled} />
+                        <RouteAvailability route={item} instances={instances} />
                       </td>
                       <td className="button-row">
                         <button

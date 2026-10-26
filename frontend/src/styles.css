@@ -5535,6 +5535,11 @@ textarea:focus {
 .status-inline-warning {
   color: #a76325;
 }
+.route-availability { display: inline-block; margin-left: 6px; font-size: 11px; }
+.route-availability-ready { color: #2e7951; }
+.route-availability-unavailable, .route-availability-missing { color: #9aa5a0; filter: grayscale(1); }
+.route-row-unavailable { color: #9aa5a0; background: #f5f6f5; }
+.route-row-unavailable .route-code, .route-row-unavailable .route-pill, .route-row-unavailable button { opacity: .68; }
 .log-execution-meta {
   display: grid;
   gap: 3px;

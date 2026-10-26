@@ -94,6 +94,9 @@
 .batch-model-picker select option:disabled,
 .selection-model-switch select option:disabled,
 .selection-form select option:disabled { color: #9aa5a0; background: #eef1ef; }
+.batch-model-picker select option.model-option-unavailable,
+.selection-model-switch select option.model-option-unavailable,
+.selection-form select option.model-option-unavailable { color: #9aa5a0; background: #eef1ef; }
 .batch-model-status { display: flex; flex-direction: column; gap: 3px; margin-top: 9px; color: #1d5a42; }
 .batch-model-status small { color: #718278; }
 .batch-preflight { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 14px; margin: 12px 0; border: 1px solid #d8e4dc; border-radius: 10px; background: #f7fbf8; color: #355948; }
