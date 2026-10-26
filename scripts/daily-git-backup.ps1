@@ -65,11 +65,25 @@ function Backup-Repo {
             Write-BackupLog "$Name has no local changes."
         }
 
-        if ([string]::IsNullOrWhiteSpace($RemoteBranch)) {
-            Invoke-Git $Path push
+        if (-not [string]::IsNullOrWhiteSpace($RemoteBranch)) {
+            Invoke-Git $Path push origin "HEAD:refs/heads/$RemoteBranch"
         }
         else {
-            Invoke-Git $Path push origin "HEAD:refs/heads/$RemoteBranch"
+            $upstream = & $git -C $Path rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null
+            $upstreamOk = ($LASTEXITCODE -eq 0) -and (-not [string]::IsNullOrWhiteSpace($upstream))
+
+            if ($upstreamOk) {
+                Invoke-Git $Path push
+            }
+            else {
+                $branch = & $git -C $Path rev-parse --abbrev-ref HEAD 2>$null
+                if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
+                    throw "cannot determine current branch in $Path"
+                }
+
+                Write-BackupLog "$Name has no upstream; pushing to origin/$branch and setting upstream."
+                Invoke-Git -RepoPath $Path -GitArgs @('push', '-u', 'origin', $branch)
+            }
         }
 
         Write-BackupLog "$Name pushed."
