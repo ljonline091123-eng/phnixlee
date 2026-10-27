@@ -125,7 +125,7 @@ export type SelectionRunCreate = {
   market: string; symbols: string[]; candidate_limit: number; min_abs_change_pct: number; min_volume_ratio: number;
   period_months: number;
   strategy_profile_id?: number | null;
-  model_instance_code: string | null; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
+  model_instance_code: string | null; model_instance_codes?: string[]; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
 };
 export type SelectionScoringDimension = {
   id: number; dimension_code: string; dimension_name: string; description: string;
@@ -187,6 +187,7 @@ export type BatchAcceptance = {
   scope_notes: string[]; prepared_at: string | null; datasets: Record<string, SelectionRecord>;
 };
 export type SelectionReview = { decision: "APPROVED" | "REJECTED"; target_price?: number; stop_price?: number; target_return_pct?: number; confidence?: number; notes?: string };
+export type SelectionLlmEvaluation = { status: string; text?: string; recommendation?: string; model_instance_code?: string; model_call_log_id?: number; evidence_document_ids?: number[]; generated_at?: string; message?: string };
 export const selectionApi = {
   scoringDimensions: () => request<SelectionScoringDimension[]>("/selection/scoring/dimensions"),
   scoringProfiles: () => request<SelectionScoringProfile[]>("/selection/scoring/profiles"),
@@ -203,7 +204,7 @@ export const selectionApi = {
   rescoreRun: (runId: number) => request<SelectionRecord>(`/selection/runs/${runId}/scorecards`, {method: "POST"}),
   candidateDocument: (candidateId: number, documentId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/documents/${documentId}`),
   scopePreview: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number}) => request<SelectionRecord>("/selection/scope-preview", {method: "POST", body: JSON.stringify(payload)}),
-  preflight: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number; model_instance_code?: string | null; use_model?: boolean; data_mode?: "REAL" | "MOCK"}) => request<SelectionPreflight>("/selection/preflight", {method: "POST", body: JSON.stringify(payload)}),
+  preflight: (payload: {market: string; symbols: string[]; knowledge_base_ids: number[]; graph_ids: number[]; period_months?: number; model_instance_code?: string | null; model_instance_codes?: string[]; use_model?: boolean; data_mode?: "REAL" | "MOCK"}) => request<SelectionPreflight>("/selection/preflight", {method: "POST", body: JSON.stringify(payload)}),
   acceptance: () => request<BatchAcceptance>("/selection/acceptance"),
   startRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs/start", { method: "POST", body: JSON.stringify(payload) }),
   retryRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}/retry`, { method: "POST" }),
@@ -218,6 +219,9 @@ export const selectionApi = {
   document: (graphId: number, documentId: number) => request<SelectionRecord>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
   createRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs", { method: "POST", body: JSON.stringify(payload) }),
   review: (id: number, payload: SelectionReview) => request<SelectionCandidate>(`/selection/candidates/${id}/review`, { method: "POST", body: JSON.stringify(payload) }),
+  llmEvaluation: (id: number) => request<SelectionLlmEvaluation>(`/selection/candidates/${id}/llm-evaluation`),
+  createLlmEvaluation: (id: number, model_instance_code?: string) => request<SelectionLlmEvaluation>(`/selection/candidates/${id}/llm-evaluation`, { method: "POST", body: JSON.stringify({ model_instance_code: model_instance_code || null }) }),
+  follow: (id: number, payload: { target_price?: number; stop_price?: number; confidence?: number; notes?: string } = {}) => request<SelectionCandidate>(`/selection/candidates/${id}/follow`, { method: "POST", body: JSON.stringify(payload) }),
   listTracking: () => request<SelectionTracking[]>("/selection/tracking"),
   getTracking: (id: number) => request<SelectionTracking>(`/selection/tracking/${id}`),
   candidateAudit: (id: number) => request<SelectionAudit>(`/selection/candidates/${id}/audit`),

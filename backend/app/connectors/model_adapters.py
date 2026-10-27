@@ -247,6 +247,21 @@ class GeminiRestAdapter(ModelAdapter):
         generation_config.update(extra_body.pop("generationConfig", {}))
         metadata = metadata_json or {}
         output_schema = metadata.get("json_schema_output")
+        controlled_json = (
+            metadata.get("purpose") in {
+                "STOCK_SELECTION_ANALYSIS",
+                "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
+                "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
+            }
+            and metadata.get("require_real_model")
+        )
+        if controlled_json:
+            # JSON MIME prevents prose/fences, while a small thinking budget
+            # leaves enough output capacity for the complete evidence contract.
+            generation_config.setdefault("responseMimeType", "application/json")
+            generation_config.setdefault("thinkingConfig", {"thinkingBudget": 1024})
+        elif metadata.get("purpose") == "SELECTION_MODEL_SWITCH_PREFLIGHT":
+            generation_config.setdefault("thinkingConfig", {"thinkingBudget": 0})
         if output_schema and metadata.get("native_structured_output"):
             generation_config["responseMimeType"] = "application/json"
             generation_config["responseJsonSchema"] = output_schema

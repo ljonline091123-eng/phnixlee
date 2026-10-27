@@ -18,6 +18,7 @@ class SelectionRunCreate(BaseModel):
     # reproducible even when they are opened later.
     period_months: int = Field(default=3, ge=1, le=60)
     model_instance_code: str | None = Field(default=None, max_length=64)
+    model_instance_codes: list[str] = Field(default_factory=list, max_length=10)
     strategy_profile_id: int | None = Field(default=None, gt=0)
     knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
@@ -31,6 +32,13 @@ class SelectionRunCreate(BaseModel):
             raise ValueError("手选股票中存在重复代码，请先去重")
         if symbols and len(symbols) > self.candidate_limit:
             raise ValueError("手选股票数量超过候选上限，请提高候选数量上限")
+        self.model_instance_codes = list(dict.fromkeys(
+            str(item).strip() for item in self.model_instance_codes if str(item).strip()
+        ))
+        if self.model_instance_code and self.model_instance_code not in self.model_instance_codes:
+            self.model_instance_codes.insert(0, self.model_instance_code)
+        if not self.model_instance_code and self.model_instance_codes:
+            self.model_instance_code = self.model_instance_codes[0]
         return self
 
 
@@ -46,8 +54,20 @@ class SelectionPreflightRequest(SelectionScopePreview):
     """Read-only gate checked immediately before creating an analysis run."""
 
     model_instance_code: str | None = Field(default=None, max_length=64)
+    model_instance_codes: list[str] = Field(default_factory=list, max_length=10)
     use_model: bool = True
     data_mode: Literal["REAL", "MOCK"] = "REAL"
+
+    @model_validator(mode="after")
+    def normalize_models(self) -> "SelectionPreflightRequest":
+        self.model_instance_codes = list(dict.fromkeys(
+            str(item).strip() for item in self.model_instance_codes if str(item).strip()
+        ))
+        if self.model_instance_code and self.model_instance_code not in self.model_instance_codes:
+            self.model_instance_codes.insert(0, self.model_instance_code)
+        if not self.model_instance_code and self.model_instance_codes:
+            self.model_instance_code = self.model_instance_codes[0]
+        return self
 
 
 class SelectionDimension(BaseModel):
@@ -178,6 +198,17 @@ class SelectionReviewRequest(BaseModel):
         if self.decision == "APPROVED" and self.target_price is None and self.target_return_pct is None:
             raise ValueError("approved candidate requires target_price or target_return_pct")
         return self
+
+
+class SelectionEvaluationRequest(BaseModel):
+    model_instance_code: str | None = Field(default=None, max_length=64)
+
+
+class SelectionFollowRequest(BaseModel):
+    target_price: float | None = Field(default=None, gt=0)
+    stop_price: float | None = Field(default=None, gt=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    notes: str | None = Field(default=None, max_length=4000)
 
 
 class SelectionSnapshotRead(BaseModel):

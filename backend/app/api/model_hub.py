@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.ai_hub import AgentSkillLink, ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill, ModelSkillRevision, PredictionLedger, SkillOptimizationDraft, ResearchReportRecord
+from app.models.selection import SelectionRun
 from app.schemas.model_hub import (
     ModelCallLogRead,
     ModelChatRequest,
@@ -158,7 +159,9 @@ def _instance_availability(db: Session, instance: ModelInstance, api_key_configu
     category = str(classified.get("category") or "MODEL_UNKNOWN")
     if category == "MODEL_BILLING":
         status, label = "BILLING", "欠费/额度不足"
-    elif category in {"MODEL_CREDENTIAL", "MODEL_UNAVAILABLE"}:
+    elif category == "MODEL_UNAVAILABLE":
+        status, label = "DEGRADED", "暂时不可用，可重试"
+    elif category == "MODEL_CREDENTIAL":
         status, label = "UNAVAILABLE", "不可用"
     else:
         status, label = "UNAVAILABLE", "不可用"
@@ -171,6 +174,41 @@ def _instance_availability(db: Session, instance: ModelInstance, api_key_configu
     }
 
 
+def _selection_contract_status(db: Session, instance_code: str) -> dict[str, object]:
+    """Report full selection-contract health separately from connectivity."""
+    run = db.scalar(
+        select(SelectionRun)
+        .where(SelectionRun.model_instance_code == instance_code)
+        .order_by(SelectionRun.created_at.desc(), SelectionRun.id.desc())
+        .limit(1)
+    )
+    if run is None:
+        return {
+            "selection_contract_status": "NOT_TESTED",
+            "selection_contract_label": "未验证选股契约",
+            "selection_contract_reason": "尚未使用该模型完成真实选股任务",
+            "selection_run_id": None,
+        }
+    if run.status in {"QUEUED", "RUNNING"}:
+        status, label = "RUNNING", "选股验证中"
+        reason = "该模型正在执行完整选股任务"
+    elif run.analysis_mode == "MODEL_COMPLETED":
+        status, label = "PASSED", "选股契约已通过"
+        reason = "最近一次完整选股任务已通过输出与证据校验"
+    elif run.analysis_mode == "MODEL_PARTIAL":
+        status, label = "PARTIAL", "最近选股部分通过"
+        reason = run.error_message or "最近一次选股任务只有部分股票通过契约校验"
+    else:
+        status, label = "FAILED", "最近选股失败"
+        reason = run.error_message or "连通性不代表完整选股契约已通过"
+    return {
+        "selection_contract_status": status,
+        "selection_contract_label": label,
+        "selection_contract_reason": reason,
+        "selection_run_id": run.id,
+    }
+
+
 def _instance_read(instance: ModelInstance, db: Session) -> ModelInstanceRead:
     data = ModelInstanceRead.model_validate(instance)
     data.config_json = _redact_config(instance.config_json or {})
@@ -180,6 +218,27 @@ def _instance_read(instance: ModelInstance, db: Session) -> ModelInstanceRead:
     )
     for field_name, value in _instance_availability(db, instance, data.api_key_configured).items():
         setattr(data, field_name, value)
+    for field_name, value in _selection_contract_status(db, instance.instance_code).items():
+        setattr(data, field_name, value)
+    recent = list(db.scalars(select(ModelCallLog).where(
+        ModelCallLog.instance_code == instance.instance_code,
+    ).order_by(ModelCallLog.started_at.desc(), ModelCallLog.id.desc()).limit(20)).all())
+    successful = [row for row in recent if row.status == "SUCCESS"]
+    success_rate = len(successful) / len(recent) if recent else 0.0
+    latency_values = [float(row.latency_ms) for row in successful if row.latency_ms is not None]
+    avg_latency = sum(latency_values) / len(latency_values) if latency_values else None
+    contract = data.selection_contract_status
+    base = 0
+    if data.availability_status == "AVAILABLE": base += 2
+    elif data.availability_status in {"DEGRADED", "UNKNOWN", "CHECKING"}: base += 1
+    if success_rate >= 0.9: base += 1
+    if avg_latency is not None and avg_latency < 12000: base += 1
+    if contract == "PASSED": base += 1
+    elif contract == "PARTIAL": base += 0
+    elif contract == "FAILED": base = max(0, base - 1)
+    strength = max(0, min(4, base))
+    setattr(data, "signal_strength", strength)
+    setattr(data, "signal_strength_label", ("未知", "弱", "中", "强", "超强")[strength])
     return data
 
 

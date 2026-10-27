@@ -227,3 +227,45 @@ def test_model_adapters_send_native_structured_output_schema() -> None:
         generation_config = post.call_args.kwargs["json"]["generationConfig"]
         assert generation_config["responseMimeType"] == "application/json"
         assert generation_config["responseJsonSchema"] == schema
+
+
+def test_gemini_selection_reserves_output_budget_and_requests_json() -> None:
+    gemini = ModelInstance(
+        provider_id=1,
+        instance_code="GEMINI_SELECTION_TEST",
+        model_code="gemini-flash-test",
+        model_name="Gemini selection test",
+        api_key="test-key",
+        api_base_url="https://generativelanguage.googleapis.com/v1beta",
+        config_json={},
+    )
+    metadata = {
+        "purpose": "STOCK_SELECTION_ANALYSIS",
+        "require_real_model": True,
+        "json_schema_output": DataCleaningOutput.model_json_schema(),
+        "native_structured_output": False,
+    }
+    with patch("app.connectors.model_adapters.httpx.Client") as client_type:
+        post = client_type.return_value.__enter__.return_value.post
+        post.return_value.json.return_value = {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}
+        GeminiRestAdapter().chat(gemini, [{"role": "user", "content": "test"}], metadata_json=metadata)
+        generation_config = post.call_args.kwargs["json"]["generationConfig"]
+        assert generation_config["responseMimeType"] == "application/json"
+        assert generation_config["thinkingConfig"] == {"thinkingBudget": 1024}
+        assert "responseJsonSchema" not in generation_config
+
+
+def test_gemini_selection_preflight_disables_thinking() -> None:
+    gemini = ModelInstance(
+        provider_id=1, instance_code="GEMINI_PREFLIGHT_TEST", model_code="gemini-flash-test",
+        model_name="Gemini preflight test", api_key="test-key",
+        api_base_url="https://generativelanguage.googleapis.com/v1beta", config_json={},
+    )
+    with patch("app.connectors.model_adapters.httpx.Client") as client_type:
+        post = client_type.return_value.__enter__.return_value.post
+        post.return_value.json.return_value = {"candidates": [{"content": {"parts": [{"text": "OK"}]}}]}
+        GeminiRestAdapter().chat(
+            gemini, [{"role": "user", "content": "只返回 OK"}],
+            max_tokens=16, metadata_json={"purpose": "SELECTION_MODEL_SWITCH_PREFLIGHT"},
+        )
+        assert post.call_args.kwargs["json"]["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}

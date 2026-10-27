@@ -41,6 +41,7 @@ from app.models.market_data import (
 )
 from app.services.news_identity import check_news_identity, partition_news
 from app.services.model_errors import classify_model_error
+from app.services.catalog import select_data_source
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.schemas.selection import (
     SelectionBackfillRequest, SelectionModelOutput, SelectionModelRecommendation,
@@ -566,6 +567,37 @@ def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message:
     db.commit()
 
 
+def _sync_selection_data(db: Session, run: SelectionRun) -> dict[str, Any]:
+    """Refresh selected securities before evidence construction and model use."""
+    symbols = [str(item).strip() for item in ((run.criteria_json or {}).get("symbols") or []) if str(item).strip()]
+    if run.data_mode != "REAL" or not symbols:
+        return {"status": "SKIPPED", "attempted": 0, "succeeded": 0, "failed": [], "reason": "MOCK 或未指定股票"}
+    source = select_data_source(db, run.market, "QUOTE", fallback_code="AKSHARE")
+    if source is None:
+        return {"status": "FAILED", "attempted": len(symbols), "succeeded": 0,
+                "failed": [{"symbol": symbol, "error": "未找到可用行情数据源"} for symbol in symbols]}
+    from app.services.stock_on_demand import StockOnDemandService
+    service = StockOnDemandService(db)
+    failures: list[dict[str, str]] = []
+    succeeded = 0
+    total = len(symbols)
+    for index, symbol in enumerate(symbols, start=1):
+        _progress(db, run, "DATA_SYNC", 5 + round(index / total * 18),
+                  f"同步股票数据 {index}/{total}：{symbol}",
+                  current_symbol=symbol, candidate_symbols=[symbol], phase="DATA_SYNC")
+        try:
+            errors = service.refresh_stock_data(source, run.market, symbol)
+            if errors:
+                failures.append({"symbol": symbol, "error": "; ".join(errors)[:500]})
+            else:
+                succeeded += 1
+        except Exception as exc:
+            db.rollback()
+            failures.append({"symbol": symbol, "error": str(exc)[:500]})
+    return {"status": "SUCCESS" if not failures else "PARTIAL", "attempted": total,
+            "succeeded": succeeded, "failed": failures, "source_code": source.source_code}
+
+
 def queue_selection_run(
     db: Session,
     payload: SelectionRunCreate,
@@ -634,8 +666,8 @@ def probe_selection_model(db: Session, instance_code: str, *, data_mode: str = "
     log = ModelHubService(db).chat(
         task_type="selection_preflight",
         instance_code=instance_code,
-        messages=[{"role": "user", "content": "只返回：选股模型连通性检查通过。"}],
-        max_tokens=32,
+        messages=[{"role": "user", "content": "只返回 OK"}],
+        max_tokens=16,
         temperature=0,
         metadata_json={
             "strict_instance": True,
@@ -646,6 +678,13 @@ def probe_selection_model(db: Session, instance_code: str, *, data_mode: str = "
     )
     if getattr(log, "status", None) != "SUCCESS":
         raise ValueError(getattr(log, "error_message", None) or "新模型连通性检查失败")
+    finish_reasons = [
+        str(row.get("finishReason") or "")
+        for row in ((getattr(log, "response_json", None) or {}).get("candidates") or [])
+        if isinstance(row, dict)
+    ]
+    if "MAX_TOKENS" in finish_reasons:
+        raise ValueError("模型网络可连接，但连通性探测输出被截断，不能标记为完整预检成功")
     return {
         "status": "SUCCESS",
         "model_instance_code": instance_code,
@@ -670,8 +709,6 @@ def queue_failed_selection_reanalysis_with_model(
         raise LookupError("选股任务不存在")
     if not str(original.analysis_mode or "").startswith("MODEL"):
         raise ValueError("该批次没有模型分析结果可重试")
-    if original.model_instance_code and original.model_instance_code == model_instance_code:
-        raise ValueError("请选择与原模型不同的模型实例")
     _selection_model_instance(db, model_instance_code, data_mode=original.data_mode)
     active_jobs = list(db.scalars(select(ScheduledJob).where(
         ScheduledJob.task_type == "selection_retry_failed",
@@ -750,9 +787,16 @@ def queue_failed_selection_reanalysis_with_model(
     clones: list[SelectionCandidate] = []
     for source in source_candidates:
         analysis = deepcopy(source.analysis_json or {})
+        for stale_key in (
+            "model", "model_call_log_id", "model_failure_detail",
+            "actual_instance_code", "model_attempts", "recommendation",
+            "analysis_validation_status", "evidence_validation_warnings",
+        ):
+            analysis.pop(stale_key, None)
         analysis.update({
             "model_output_status": "FAILED",
             "model_failure_reason": "等待用户切换模型后重试",
+            "model_attempts": [],
             "model_switch_from": original.model_instance_code,
             "model_switch_to": model_instance_code,
             "model_switch_source_candidate_id": source.id,
@@ -1214,6 +1258,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 run.error_message = f"模型分析仍有 {failed}/{total} 只股票失败，请检查逐股错误原因与模型调用记录。"
             run.completed_at = _now()
             retry_state = (run.criteria_json or {}).get("retry_progress", {})
+            completed_progress = dict((run.criteria_json or {}).get("progress") or {})
             message = f"重新分析完成：全批 {total} 只，引用校验通过 {passed} 只、待核对 {citation_partial} 只、执行失败 {failed} 只"
             run.criteria_json = {**(run.criteria_json or {}), "retry_progress": {
                 **retry_state, "status": "COMPLETED", "candidate_count": len(candidates),
@@ -1222,7 +1267,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 "passed_count": passed, "citation_partial_count": citation_partial,
                 "message": message,
                 "updated_at": _now().isoformat(),
-            }, "progress": {"stage": "RETRY_COMPLETED", "percent": 100,
+            }, "progress": {**completed_progress, "stage": "RETRY_COMPLETED", "percent": 100,
                 "message": message, "updated_at": _now().isoformat()}}
             db.commit()
             return {"selection_run_id": run.id, "candidate_count": len(candidates),
@@ -1232,10 +1277,11 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             db.rollback()
             run = db.get(SelectionRun, run_id)
             retry_state = (run.criteria_json or {}).get("retry_progress", {})
+            failed_progress = dict((run.criteria_json or {}).get("progress") or {})
             run.criteria_json = {**(run.criteria_json or {}), "retry_progress": {
                 **retry_state, "status": "FAILED", "message": f"失败项重试任务异常：{str(exc)[:220]}",
                 "updated_at": _now().isoformat(),
-            }, "progress": {"stage": "RETRY_FAILED", "percent": 100,
+            }, "progress": {**failed_progress, "stage": "RETRY_FAILED", "percent": 100,
                 "message": "失败项重试遇到系统错误；原有候选和证据已保留", "updated_at": _now().isoformat()}}
             run.status = "PARTIAL"
             run.completed_at = _now()
@@ -1285,10 +1331,16 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     run.error_message = None
     market = run.market
     symbols = list(run.criteria_json.get("symbols") or [])
+    sync_result = _sync_selection_data(db, run)
+    run.criteria_json = {**(run.criteria_json or {}), "data_sync": sync_result}
+    _progress(db, run, "DATA_QUALITY_GATE", 25,
+              "数据同步完成，正在检查行情、文档、事实和图谱覆盖",
+              phase="DATA_QUALITY_GATE", data_sync_status=sync_result.get("status"),
+              data_sync_failed_count=len(sync_result.get("failed") or []))
     graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
     model_requested = run.analysis_mode == "MODEL_REQUESTED"
     analysis_graph_ids = [row.id for row in graphs if row.governance_status in {"GOVERNED", "LOCKED"}] if model_requested else payload.graph_ids
-    _progress(db, run, "SCREENING", 5, "读取本地行情并筛选固定样本")
+    _progress(db, run, "SCREENING", 28, "数据门禁通过后读取本地行情并筛选样本", phase="SCREENING")
     quotes = _latest_quotes(db, market, symbols, run.as_of)
     # SQL/Python scans the locally available universe. Only the final <=50
     # candidates are enriched with documents and sent to the model.
@@ -1359,14 +1411,54 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
         evidence["missing_data"] += [f"图谱 {row.graph_name} 尚有待治理事项，未作为模型分析依据" for row in graphs if row.governance_status not in {"GOVERNED", "LOCKED"}]
         item["evidence_json"] = evidence
         item["analysis_json"]["evidence"] = evidence["evidence_text"]
-        _progress(db, run, "EVIDENCE", 10 + round(30 * (position + 1) / len(candidates)),
+        _progress(db, run, "EVIDENCE", 30 + round(10 * (position + 1) / len(candidates)),
                   f"已加载 {position + 1}/{len(candidates)} 只股票的图谱证据")
     priced_symbols = {row.symbol for row in quotes}
     missing.extend(f"{market}:{symbol}:quote" for symbol in stock_map if symbol not in priced_symbols)
     if payload.use_model and not model_requested:
         missing.append("缺少已治理知识库/图谱，已降级为本地规则分析")
     if model_requested and candidates:
-        _apply_model_analysis(db, run, candidates)
+        preflight_error = None
+        if run.data_mode == "REAL":
+            _progress(db, run, "MODEL_PREFLIGHT", 42, "第三阶段：测试模型可用性，未通过则不开始分析",
+                      phase="MODEL_PREFLIGHT", model_instance_code=run.model_instance_code)
+            try:
+                requested_models = list(dict.fromkeys(
+                    [str(item) for item in ((run.criteria_json or {}).get("request") or {}).get("model_instance_codes") or []]
+                    + ([run.model_instance_code] if run.model_instance_code else [])
+                ))
+                if not requested_models:
+                    raise ValueError("未确定分析模型，无法进行模型预检")
+                last_error: Exception | None = None
+                for model_code in requested_models:
+                    try:
+                        probe_selection_model(db, model_code, data_mode=run.data_mode)
+                        run.model_instance_code = model_code
+                        last_error = None
+                        break
+                    except Exception as exc:
+                        last_error = exc
+                if last_error is not None:
+                    raise last_error
+                run.criteria_json = {**(run.criteria_json or {}), "model_preflight": {"status": "SUCCESS", "instance_code": run.model_instance_code, "checked_at": _now().isoformat(), "tested_models": requested_models}}
+            except Exception as exc:
+                preflight_error = classify_model_error(exc)
+                run.criteria_json = {**(run.criteria_json or {}), "model_preflight": {"status": "FAILED", "instance_code": run.model_instance_code, "checked_at": _now().isoformat(), **preflight_error}}
+                for item, _score in candidates:
+                    item["analysis_json"].update({
+                        "model_output_status": "FAILED", "conclusion_available": False,
+                        "conclusion_source": "MODEL_PREFLIGHT_FAILED",
+                        "model_failure_reason": preflight_error["summary"],
+                        "model_failure_detail": preflight_error,
+                        "local_multi_source": _build_local_multi_source_analysis(item),
+                    })
+                run.analysis_mode = "MODEL_PREFLIGHT_FAILED"
+                run.error_message = f"模型预检失败，未开始模型分析：{preflight_error['summary']}"
+                _progress(db, run, "MODEL_PREFLIGHT_FAILED", 100,
+                          f"模型预检失败，已停止分析：{preflight_error['summary']}", phase="MODEL_PREFLIGHT")
+        if preflight_error is None:
+            _progress(db, run, "MODEL_ANALYSIS", 45, "第四阶段：开始模型分析", phase="MODEL_ANALYSIS")
+            _apply_model_analysis(db, run, candidates)
     # Make the Skill/model boundary explicit in the persisted evidence.  The
     # immutable audit row below repeats these values so a later Skill edit
     # cannot change the interpretation of this run.
@@ -1492,7 +1584,7 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     evidence = item.get("evidence_json") or {}
     analysis = item.get("analysis_json") or {}
 
-    def clip(value: Any, limit: int) -> Any:
+    def clip(value: Any, limit: int, depth: int = 0) -> Any:
         if value is None or isinstance(value, (int, float, bool)):
             return value
         if isinstance(value, dict):
@@ -1506,9 +1598,16 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
                         "REPORT_DATE", "CURRENCY", "REPORT_TYPE")
             keys = [key for key in priority if key in value]
             keys.extend(key for key in value if key not in keys)
-            return {str(key): clip(value[key], min(limit, 320)) for key in keys[:16]}
+            # F10/shareholder payloads can contain many tables and rows. Keep
+            # representative values from every retained section instead of
+            # allowing one nested payload to consume the whole model prompt.
+            max_keys = 16 if depth == 0 else 10
+            return {
+                str(key): clip(value[key], min(limit, 180), depth + 1)
+                for key in keys[:max_keys]
+            }
         if isinstance(value, (list, tuple)):
-            return [clip(child, min(limit, 320)) for child in value[:4]]
+            return [clip(child, min(limit, 180), depth + 1) for child in value[:3]]
         text = str(value)
         return text[:limit]
 
@@ -1524,6 +1623,35 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
                     for field in fields if row.get(field) is not None
                 })
         return result
+
+    def compact_fact_value(value: Any, budget: int, depth: int = 0) -> Any:
+        """Bound one fact as a whole, not once for every nested field."""
+        if value is None or isinstance(value, (int, float, bool)):
+            return value
+        if isinstance(value, str):
+            return value[:max(16, budget)]
+        if isinstance(value, (list, tuple)):
+            values = list(value)[:3]
+            child_budget = max(48, (budget - 16) // max(1, len(values)))
+            return [compact_fact_value(child, child_budget, depth + 1) for child in values]
+        if isinstance(value, dict):
+            priority = (
+                "TOTALOPERATEREVE", "PARENTNETPROFIT", "KCFJCXSYJLR", "MLR",
+                "EPSJB", "EPSKCJB", "BPS", "MGJYXJJE", "TOTALOPERATEREVETZ",
+                "PARENTNETPROFITTZ", "ROEJQ", "XSMLL", "XSJLL",
+                "REPORT_DATE", "CURRENCY", "REPORT_TYPE",
+                "section", "source", "major", "holder_count", "capital_structure",
+            )
+            keys = [key for key in priority if key in value]
+            keys.extend(key for key in value if key not in keys)
+            keys = keys[:(14 if depth == 0 else 8)]
+            key_chars = sum(len(str(key)) + 6 for key in keys)
+            child_budget = max(40, (budget - key_chars) // max(1, len(keys)))
+            return {
+                str(key): compact_fact_value(value[key], child_budget, depth + 1)
+                for key in keys
+            }
+        return str(value)[:max(16, budget)]
 
     # Balance types: a large financial history must not displace current prices
     # or shareholder observations. Numeric properties are evidence, not titles.
@@ -1550,9 +1678,12 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         for fact in category[:1] if isinstance(category, list) else []:
             if isinstance(fact, dict) and fact.get("id") not in {row.get("id") for row in fact_rows}:
                 fact_rows.append(fact)
-    visible_facts = [{key: clip(row[key], 240) for key in (
-        "id", "fact_type", "title", "properties", "status", "observed_at", "source_table", "evidence",
-    ) if key in row} for row in fact_rows[:16]]
+    visible_facts = [{
+        key: compact_fact_value(row[key], 1_800) if key == "properties" else clip(row[key], 240)
+        for key in (
+            "id", "fact_type", "title", "properties", "status", "observed_at", "source_table", "evidence",
+        ) if key in row
+    } for row in fact_rows[:16]]
     # Reserve reading space for disclosures, not just metadata titles.
     documents = {}
     for doc in [
@@ -1567,7 +1698,10 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     ordered = sorted(documents.values(), key=lambda row: str(row.get("published_at") or ""), reverse=True)
     ordered.sort(key=lambda row: priorities.get(row.get("source_table"), 4))
     disclosure_count = sum(row.get("source_table") in {"stock_news", "stock_notice"} for row in ordered)
-    disclosure_excerpt_limit = max(120, min(800, 9_000 // max(1, disclosure_count)))
+    # Retain every selected disclosure ID/title/date while sharing a bounded
+    # excerpt budget across the period. Full text remains in persisted evidence
+    # and can still be opened from the UI.
+    disclosure_excerpt_limit = max(72, min(360, 4_800 // max(1, disclosure_count)))
     selected_docs, source_counts = [], {}
     for doc in ordered:
         source = doc.get("source_table", "OTHER")
@@ -1578,7 +1712,7 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         selected_docs.append({field: clip(doc[field], disclosure_excerpt_limit
             if field in {"content", "excerpt"} and source in {"stock_news", "stock_notice"}
             else 480 if field in {"content", "excerpt"} and source in priorities else 360)
-            for field in ("id", "title", "source_table", "market", "symbol", "published_at", "url", "source_name", "content_state", "content", "excerpt", "relation_scope", "related_security", "related_via_fact_ids")
+            for field in ("id", "title", "source_table", "published_at", "source_name", "content_state", "content", "excerpt", "relation_scope", "related_security", "related_via_fact_ids")
             if doc.get(field) is not None and (field != "excerpt" or not doc.get("content"))})
         if len(selected_docs) >= 92:
             break
@@ -1599,6 +1733,13 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         "related_securities": clip(evidence.get("related_securities") or [], 300),
         "selected_scope": {"knowledge_bases": (evidence.get("evidence_context") or {}).get("knowledge_base_versions", []),
                            "graphs": (evidence.get("evidence_context") or {}).get("graph_versions", [])},
+        "prompt_compaction": {
+            "source_document_count": len(documents),
+            "retained_document_count": len(selected_docs),
+            "omitted_document_count": max(0, len(documents) - len(selected_docs)),
+            "disclosure_excerpt_limit": disclosure_excerpt_limit,
+            "full_text_preserved_in_evidence": True,
+        },
     }
     # Build the whitelist from the evidence actually sent. A sorted, truncated
     # full-document list can exclude a document whose text is visible here.
@@ -2295,10 +2436,43 @@ def _apply_model_analysis(
                    candidate_symbols: list[str], percent: int):
         """Run one model call and keep the user-visible progress alive."""
         purpose = str(metadata_json.get("purpose") or "STOCK_SELECTION_ANALYSIS")
+        skill_codes = list(metadata_json.get("skill_codes") or [])
+        skill_prompt_chars = 0
+        if db is not None and skill_codes:
+            skill_prompt_chars = sum(
+                len(skill.instructions or "")
+                for skill in db.scalars(select(ModelSkill).where(
+                    ModelSkill.skill_code.in_(skill_codes),
+                    ModelSkill.enabled.is_(True),
+                )).all()
+                if skill.skill_type == "PROMPT_SOP"
+            )
+        message_chars = sum(len(message.get("content", "")) for message in messages)
+        prompt_chars = message_chars + skill_prompt_chars
+        prompt_limit_chars = 60_000
+        active_symbols = set(candidate_symbols)
+        context_items = [item for item in batch if str(item.get("symbol")) in active_symbols]
+        retained_documents = sum(
+            len((item.get("evidence_json") or {}).get("documents") or [])
+            for item in context_items
+        )
+        omitted_documents = sum(
+            int(((item.get("evidence_json") or {}).get("prompt_compaction") or {}).get("omitted_document_count") or 0)
+            for item in context_items
+        )
+        if prompt_chars > prompt_limit_chars:
+            raise ValueError(
+                f"选股分析完整上下文为 {prompt_chars} 字符，超过 {prompt_limit_chars} 字符安全上限；"
+                "系统已执行证据压缩但仍无法安全调用，请缩小单次候选范围后重试"
+            )
         _progress(db, run, "MODEL", percent, activity,
                   activity=activity, model_instance_code=run.model_instance_code,
                   batch_index=batch_index + 1, batch_total=len(batches),
                   candidate_symbols=candidate_symbols, purpose=purpose,
+                  prompt_chars=prompt_chars, prompt_limit_chars=prompt_limit_chars,
+                  retained_document_count=retained_documents,
+                  omitted_document_count=omitted_documents,
+                  context_compacted=True,
                   started_at=_now().isoformat(), heartbeat_at=None,
                   elapsed_seconds=0)
         heartbeat = None
@@ -2318,6 +2492,11 @@ def _apply_model_analysis(
                     "bounded_schema_repair": True,
                     "selection_run_id": getattr(run, "id", None),
                     "candidate_symbols": candidate_symbols,
+                    "prompt_chars": prompt_chars,
+                    "prompt_limit_chars": prompt_limit_chars,
+                    "retained_document_count": retained_documents,
+                    "omitted_document_count": omitted_documents,
+                    "context_compacted": True,
                 },
             )
         finally:
@@ -2328,6 +2507,10 @@ def _apply_model_analysis(
                       model_instance_code=run.model_instance_code,
                       batch_index=batch_index + 1, batch_total=len(batches),
                       candidate_symbols=candidate_symbols, purpose=purpose,
+                      prompt_chars=prompt_chars, prompt_limit_chars=prompt_limit_chars,
+                      retained_document_count=retained_documents,
+                      omitted_document_count=omitted_documents,
+                      context_compacted=True,
                       heartbeat_at=_now().isoformat())
 
     for batch_index, batch in enumerate(batches):
@@ -2351,7 +2534,7 @@ def _apply_model_analysis(
                 messages=[{"role": "system", "content": system_prompt},
                           {"role": "system", "content": contract_prompt},
                           {"role": "user", "content": user_prompt}],
-                max_tokens=8192,
+                max_tokens=12288,
                 metadata_json={"candidate_count": len(batch), "batch_index": batch_index,
                     "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                     "require_skills": True,
@@ -2383,7 +2566,7 @@ def _apply_model_analysis(
                             messages=[{"role": "system", "content": system_prompt},
                                       {"role": "system", "content": contract_prompt},
                                       {"role": "user", "content": user_prompt.split("候选上下文：", 1)[0] + "候选上下文：" + single_context}],
-                            max_tokens=4096,
+                            max_tokens=8192,
                             metadata_json={"candidate_count": 1, "batch_index": batch_index,
                                 "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                                 "require_skills": True,
@@ -2447,7 +2630,7 @@ def _apply_model_analysis(
                         citation_allowlist(item) + "。" + json.dumps(schema, ensure_ascii=False)},
                         {"role": "system", "content": contract_prompt},
                         {"role": "user", "content": "仅分析并返回该股票，严格遵守正文引句及七维度约束：" + retry_context}],
-                    max_tokens=8192,
+                    max_tokens=12288,
                     metadata_json={"candidate_count": 1, "batch_index": batch_index,
                         "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
                         "require_skills": True,
@@ -2538,6 +2721,7 @@ def _apply_model_analysis(
             item["analysis_json"].update({"model_output_status": "FAILED", "model_failure_reason": detail["summary"],
                 "model_failure_detail": detail,
                 "model_call_log_id": last_attempt.get("model_call_log_id"), "model_attempts": history,
+                "actual_instance_code": last_attempt.get("model_instance_code") or run.model_instance_code,
                 "local_multi_source": _build_local_multi_source_analysis(item)})
 
     success_count = len(predictions)

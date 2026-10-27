@@ -27,7 +27,16 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
         "先查看模型状态和最近一次调用记录，再决定是否重试。",
         "不要连续重试同一失败模型；必要时先做连通性预检。",
     ]
-    if any(token in lowered for token in ("余额不足", "欠费", "insufficient_quota", "quota", "billing", "payment required", "http 402")):
+    if any(token in lowered for token in ("60,000", "60000", "input exceeds", "上下文", "context length")):
+        category, title = "MODEL_CONTEXT_LIMIT", "分析上下文超过安全上限"
+        summary = "完整证据、输出契约和 Skill 指令合计超过模型调用前的安全预算。"
+        suggestion = "系统应先压缩证据上下文；仍超限时请缩小单批股票范围后重试，可继续使用当前模型。"
+        recovery_actions = [
+            "保留文档 ID、标题、来源和关键原文，对重复元数据与大型嵌套载荷执行有界压缩。",
+            "确认进度记录中的压缩后字符数低于 60,000，再使用当前模型重试。",
+            "仍超限时减少单批候选数量，不需要因该错误更换模型。",
+        ]
+    elif any(token in lowered for token in ("余额不足", "欠费", "insufficient_quota", "quota", "billing", "payment required", "http 402")):
         category, title = "MODEL_BILLING", "模型额度或账单不可用"
         summary = "当前模型账户余额不足、额度耗尽或未开通调用权限。"
         suggestion = "请在模型服务商控制台检查余额和配额，或切换到其他可用模型。"
@@ -54,7 +63,7 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
             "等待服务恢复后重新执行预检；预检失败不会创建新的分析任务。",
             "仍不可用时切换到状态为“可用”的其他模型。",
         ]
-    elif any(token in lowered for token in ("json schema", "validationerror", "model results", "不符合契约", "not one of", "required property", "additional properties", "缺少 candidates")):
+    elif any(token in lowered for token in ("json schema", "validationerror", "jsondecodeerror", "expecting property name", "有效 json", "model results", "不符合契约", "not one of", "required property", "additional properties", "缺少 candidates")):
         category, title = "MODEL_SCHEMA", "模型输出格式不符合分析契约"
         summary = "模型返回内容无法按选股分析契约解析，部分字段缺失或取值不受支持。"
         match = re.search(r"['\"]([^'\"]+)['\"]\s+is not one of", raw, re.IGNORECASE)

@@ -17,6 +17,7 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 def enqueue_due_jobs(now: datetime | None = None) -> int:
     local_now = now or datetime.now(SHANGHAI)
     day = local_now.date().isoformat()
+    hour_key = local_now.strftime("%Y%m%d%H")
     scheduled = 0
     with SessionLocal() as db:
         dispatcher = DatabaseJobDispatcher(db)
@@ -25,6 +26,13 @@ def enqueue_due_jobs(now: datetime | None = None) -> int:
             pipeline_type="master_data_sync",
             idempotency_key=f"daily_master_sync:{day}",
             payload={"business_date": day},
+        )
+        scheduled += 1
+        dispatcher.enqueue(
+            task_type="model_health_test",
+            pipeline_type="model_health_test",
+            idempotency_key=f"model_health_test:{hour_key}",
+            payload={"hour": hour_key},
         )
         scheduled += 1
         if (local_now.hour, local_now.minute) >= (0, 10):

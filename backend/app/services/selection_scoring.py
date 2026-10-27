@@ -335,7 +335,9 @@ def _numbers(value: Any, keys: Iterable[str]) -> list[float]:
 
 
 def _legacy_dimensions(analysis: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    model = analysis.get("model") or analysis.get("local_multi_source") or {}
+    if analysis.get("model_output_status") == "FAILED":
+        return {}
+    model = analysis.get("model") or {}
     return {str(row.get("dimension")): row for row in _records(model.get("dimensions")) if row.get("dimension")}
 
 
@@ -467,7 +469,7 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     fund_flow = _records(observations.get("fund_flow"))
     bars = _bars(evidence)
     bar_metrics = _bar_metrics(bars)
-    model = analysis.get("model") or analysis.get("local_multi_source") or {}
+    model = analysis.get("model") or {}
     model_confidence = model.get("confidence_breakdown") or {}
     event_confidence = float(model_confidence.get("final_confidence") or 0)
     result: dict[str, dict[str, Any]] = {}

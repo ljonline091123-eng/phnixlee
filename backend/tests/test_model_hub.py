@@ -170,7 +170,7 @@ class ModelHubFoundationTest(unittest.TestCase):
             enabled=True, skill_type="PROMPT_SOP",
         ))
         self.db.commit()
-        with TemporaryDirectory() as temporary, patch("app.services.skill_files.SKILL_ROOT", Path(temporary) / "skills"), self.assertRaisesRegex(ValueError, "after skill instructions"):
+        with TemporaryDirectory() as temporary, patch("app.services.skill_files.SKILL_ROOT", Path(temporary) / "skills"), self.assertRaisesRegex(ValueError, "Skill 指令"):
             ModelHubService(self.db).chat(
                 task_type="stock_screening",
                 messages=[{"role": "user", "content": "u" * 59_000}],

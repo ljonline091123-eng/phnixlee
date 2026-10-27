@@ -282,6 +282,45 @@ def test_compact_financial_evidence_retains_revenue_and_profit_after_source_meta
     assert len(raw) == 31  # bounded view must not mutate historical evidence
 
 
+def test_large_disclosure_and_shareholder_context_stays_within_call_budget():
+    from app.services.selection import _model_candidate_context
+    documents = [{
+        "id": index + 1,
+        "source_table": "stock_notice" if index % 2 else "stock_news",
+        "title": f"第{index + 1}篇披露文件",
+        "published_at": f"2026-10-{index % 28 + 1:02d}",
+        "content_state": "TEXT_AVAILABLE",
+        "content": "经营事项、财务影响和后续验证条件。" * 80,
+        "url": f"https://example.test/{index + 1}",
+        "market": "CN_A",
+        "symbol": "DEMO001",
+    } for index in range(84)]
+    shareholder_payload = {
+        f"section_{section}": [
+            {f"field_{field}": f"value-{section}-{row}-{field}" * 20 for field in range(18)}
+            for row in range(8)
+        ]
+        for section in range(18)
+    }
+    item = {"symbol": "DEMO001", "market": "CN_A", "evidence_json": {
+        "documents": documents,
+        "facts": [{"id": "holder:1", "fact_type": "SHAREHOLDER_OBSERVATION",
+                   "properties": {"section": "holders", "payload": shareholder_payload}}],
+    }}
+    compact = _model_candidate_context(item)
+    evidence = compact["evidence_json"]
+    assert len(evidence["documents"]) == 84
+    assert evidence["prompt_compaction"] == {
+        "source_document_count": 84,
+        "retained_document_count": 84,
+        "omitted_document_count": 0,
+        "disclosure_excerpt_limit": 72,
+        "full_text_preserved_in_evidence": True,
+    }
+    assert len(json.dumps(compact, ensure_ascii=False, separators=(",", ":"))) < 32_000
+    assert len(documents[0]["content"]) > 1_000
+
+
 def test_twenty_stock_batch_isolates_citations_and_withdraws_unverifiable_conclusions():
     required = ["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
     pool = [({"symbol": f"DEMO{index:03}", "market": "CN_A", "analysis_json": {}, "evidence_json": {

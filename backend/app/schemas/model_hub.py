@@ -105,6 +105,12 @@ class ModelInstanceRead(BaseModel):
     availability_reason: str | None = None
     last_checked_at: datetime | None = None
     last_call_log_id: int | None = None
+    selection_contract_status: str = "NOT_TESTED"
+    selection_contract_label: str = "未验证选股契约"
+    selection_contract_reason: str | None = None
+    selection_run_id: int | None = None
+    signal_strength: int = 0
+    signal_strength_label: str = "未知"
     created_at: datetime
     updated_at: datetime
 

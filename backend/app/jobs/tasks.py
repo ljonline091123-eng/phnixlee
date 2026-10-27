@@ -18,6 +18,7 @@ from app.services.stock_batch import TASK_TYPE as STOCK_BATCH_TASK, execute_stoc
 from app.services.investor_qa import TASK_TYPE as QA_TASK, execute_qa_sync
 from app.services.document_semantic_skills import TEST_TASK_TYPE, execute_test_job
 from app.db.session import SessionLocal
+from app.services.model_hub import run_hourly_model_health_checks
 
 
 TaskHandler = Callable[[dict[str, Any]], dict[str, Any]]
@@ -37,6 +38,7 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
     STOCK_BATCH_TASK: execute_stock_batch_governance,
     QA_TASK: execute_qa_sync,
     TEST_TASK_TYPE: execute_test_job,
+    "model_health_test": lambda payload: _run_model_health_test(payload),
 }
 
 
@@ -48,6 +50,11 @@ def _refresh_selection_tracking(payload: dict[str, Any]) -> dict[str, Any]:
 def _run_l0_change_detection(payload: dict[str, Any]) -> dict[str, Any]:
     with SessionLocal() as db:
         return run_change_detection(db, as_of=payload.get("business_date"), market=payload.get("market"))
+
+
+def _run_model_health_test(payload: dict[str, Any]) -> dict[str, Any]:
+    with SessionLocal() as db:
+        return run_hourly_model_health_checks(db)
 
 
 def execute_task(task_type: str, payload: dict[str, Any]) -> dict[str, Any]:

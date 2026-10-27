@@ -459,11 +459,17 @@ export type ModelInstance = {
   config_json: Record<string, unknown>;
   description?: string;
   api_key_configured: boolean;
-  availability_status?: "AVAILABLE" | "BILLING" | "UNAVAILABLE" | "NOT_CONFIGURED" | "DISABLED" | "CHECKING" | "UNKNOWN" | string;
+  availability_status?: "AVAILABLE" | "DEGRADED" | "BILLING" | "UNAVAILABLE" | "NOT_CONFIGURED" | "DISABLED" | "CHECKING" | "UNKNOWN" | string;
   availability_label?: string;
   availability_reason?: string | null;
   last_checked_at?: string | null;
   last_call_log_id?: number | null;
+  selection_contract_status?: "PASSED" | "PARTIAL" | "FAILED" | "RUNNING" | "NOT_TESTED" | string;
+  selection_contract_label?: string;
+  selection_contract_reason?: string | null;
+  selection_run_id?: number | null;
+  signal_strength?: number;
+  signal_strength_label?: string;
   created_at: string;
   updated_at: string;
 };

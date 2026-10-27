@@ -367,3 +367,45 @@ def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
         finally:
             client.close()
             app.dependency_overrides.pop(get_db, None)
+
+
+def test_current_model_can_be_retried_after_context_repair(isolated):
+    with isolated() as db:
+        run, candidate = _model_switch_fixture(db)
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        successful_probe = SimpleNamespace(status="SUCCESS", id=702, error_message=None)
+        try:
+            with patch("app.services.model_hub.ModelHubService.chat", return_value=successful_probe):
+                response = client.post(
+                    f"/api/v1/selection/runs/{run.id}/retry-failed-with-model",
+                    json={"model_instance_code": "ORIGINAL_MODEL", "candidate_ids": [candidate.id]},
+                )
+            assert response.status_code == 202, response.text
+            retried = response.json()
+            assert retried["id"] != run.id
+            assert retried["model_instance_code"] == "ORIGINAL_MODEL"
+            clone = db.scalar(select(SelectionCandidate).where(SelectionCandidate.run_id == retried["id"]))
+            assert clone is not None
+            assert clone.analysis_json["model_switch_from"] == "ORIGINAL_MODEL"
+            assert clone.analysis_json["model_switch_to"] == "ORIGINAL_MODEL"
+            assert "actual_instance_code" not in clone.analysis_json
+            assert clone.analysis_json["model_attempts"] == []
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_model_probe_rejects_truncated_connectivity_response(isolated):
+    from app.services.selection import probe_selection_model
+
+    with isolated() as db:
+        _run, _candidate = _model_switch_fixture(db)
+        truncated = SimpleNamespace(
+            status="SUCCESS", id=703, error_message=None,
+            response_json={"candidates": [{"finishReason": "MAX_TOKENS"}]},
+        )
+        with patch("app.services.model_hub.ModelHubService.chat", return_value=truncated), pytest.raises(
+            ValueError, match="探测输出被截断"
+        ):
+            probe_selection_model(db, "ORIGINAL_MODEL")

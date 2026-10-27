@@ -87,6 +87,24 @@ class ModelHubError(RuntimeError):
         self.call_log_id = call_log_id
 
 
+def run_hourly_model_health_checks(db: Session) -> dict[str, Any]:
+    """Run lightweight connectivity checks for configured models.
+
+    These checks populate the model-picker signal only. Selection analysis
+    still performs its own task-scoped preflight immediately before analysis.
+    """
+    service = ModelHubService(db)
+    rows = list(db.scalars(select(ModelInstance).where(ModelInstance.enabled.is_(True))).all())
+    results = []
+    for row in rows:
+        try:
+            log = service.test_instance(row.instance_code)
+            results.append({"instance_code": row.instance_code, "status": log.status, "call_log_id": log.id})
+        except Exception as exc:
+            results.append({"instance_code": row.instance_code, "status": "FAILED", "error": str(exc)[:300]})
+    return {"checked": len(results), "results": results, "checked_at": datetime.now(timezone.utc).isoformat()}
+
+
 DEFAULT_MODEL_PROVIDERS = (
     {
         "provider_code": "DEEPSEEK",
@@ -964,7 +982,7 @@ class ModelHubService:
         # any enabled Skill instructions added above.
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
             if sum(len(item.get("content", "")) for item in messages) > 60_000:
-                raise ValueError("Soft-analysis input exceeds 60,000 characters after skill instructions; run Python/SQL filtering first")
+                raise ValueError("完整分析上下文（含 Skill 指令）超过 60,000 字符安全上限，请压缩证据包或缩小单次候选范围")
         candidates = self.list_route_options(
             task_type=task_type,
             requested_instance_code=instance_code,
@@ -999,6 +1017,7 @@ class ModelHubService:
                     "metadata_json": metadata,
                 },
             )
+            result = None
             try:
                 result, retry_trace = self._chat_with_transient_retry(
                     provider_type=provider_type,
@@ -1044,6 +1063,12 @@ class ModelHubService:
             except Exception as exc:
                 self.db.rollback()
                 last_log = self._mark_failed(log.id, exc, routed.instance.api_key)
+                # Contract failures must retain the provider response so the
+                # controlled repair flow and audit UI can inspect what failed.
+                if result is not None:
+                    last_log.response_text = result.response_text
+                    last_log.response_json = result.response_json if isinstance(result.response_json, dict) else {}
+                    self.db.commit()
                 trace = getattr(exc, "model_attempts", None) or [{
                     "attempt": 1, "provider": provider_code,
                     "instance": routed.instance.instance_code,

@@ -17,6 +17,8 @@ from app.schemas.selection import (
     SelectionCandidateRead,
     SelectionRefreshRequest,
     SelectionReviewRequest,
+    SelectionEvaluationRequest,
+    SelectionFollowRequest,
     SelectionRunCreate,
     SelectionPreflightRequest,
     SelectionModelSwitchRequest,
@@ -70,6 +72,14 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
             if not detail.get(key) and current.get(key) is not None:
                 detail[key] = current[key]
         analysis_json["model_failure_detail"] = detail
+    if analysis_json.get("model_output_status") == "FAILED":
+        analysis_json["conclusion_available"] = False
+        analysis_json["conclusion_source"] = analysis_json.get("conclusion_source") or "LOCAL_EVIDENCE_ONLY"
+        analysis_json["scoring_available"] = False
+        analysis_json.pop("scoring", None)
+    elif analysis_json.get("model_output_status") == "SUCCESS":
+        analysis_json["conclusion_available"] = True
+        analysis_json["conclusion_source"] = "LLM_EVIDENCE_VALIDATED"
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
@@ -583,21 +593,6 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
 
     model_info: dict[str, object] = {"status": "SKIPPED", "instance_code": payload.model_instance_code}
     model_ready = not payload.use_model
-    if payload.use_model:
-        requested_code = payload.model_instance_code
-        try:
-            if not requested_code:
-                options = ModelHubService(db).list_route_options("stock_screening")
-                if not options:
-                    raise ValueError("当前没有可用的选股模型实例")
-                requested_code = options[0].instance.instance_code
-            probe = probe_selection_model(db, requested_code, data_mode=payload.data_mode)
-            model_info = {**probe, "status": "READY", "instance_code": requested_code}
-            model_ready = True
-        except Exception as exc:
-            detail = classify_model_error(exc)
-            model_info = {"status": "FAILED", "instance_code": requested_code, **detail}
-            model_ready = False
 
     period_start, period_end = selection_period_bounds(datetime.now(timezone.utc), payload.period_months, payload.market)
     data_rows: list[dict[str, object]] = []
@@ -627,6 +622,33 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
             data_rows.append({"symbol": symbol, "status": "FAILED", "missing": [f"数据检查失败：{str(exc)[:180]}"]})
     missing_symbols = [row["symbol"] for row in data_rows if row.get("status") != "READY"]
     data_complete = bool(data_rows) and not missing_symbols
+    # Keep the preflight order identical to the real worker: data is inspected
+    # first, then the selected model is tested, and only then can analysis run.
+    if payload.use_model:
+        requested_code = payload.model_instance_code
+        try:
+            requested_codes = list(dict.fromkeys(payload.model_instance_codes or ([] if not requested_code else [requested_code])))
+            if not requested_codes:
+                options = ModelHubService(db).list_route_options("stock_screening")
+                if not options:
+                    raise ValueError("当前没有可用的选股模型实例")
+                requested_codes = [options[0].instance.instance_code]
+            errors: list[Exception] = []
+            for candidate_code in requested_codes:
+                requested_code = candidate_code
+                try:
+                    probe = probe_selection_model(db, requested_code, data_mode=payload.data_mode)
+                    model_info = {**probe, "status": "READY", "instance_code": requested_code, "tested_models": requested_codes}
+                    model_ready = True
+                    break
+                except Exception as exc:
+                    errors.append(exc)
+            if not model_ready and errors:
+                raise errors[-1]
+        except Exception as exc:
+            detail = classify_model_error(exc)
+            model_info = {"status": "FAILED", "instance_code": requested_code, **detail}
+            model_ready = False
     blockers: list[str] = []
     if payload.use_model and not model_ready:
         blockers.append("当前模型不可用，请更换模型后再开始分析")
@@ -695,8 +717,6 @@ def retry_failed_with_model(
     original = db.get(SelectionRun, run_id)
     if original is None:
         raise HTTPException(status_code=404, detail="选股任务不存在")
-    if original.model_instance_code == payload.model_instance_code:
-        raise HTTPException(status_code=422, detail="请选择与原模型不同的模型实例")
     try:
         probe = probe_selection_model(db, payload.model_instance_code, data_mode=original.data_mode)
         run = queue_failed_selection_reanalysis_with_model(
@@ -776,6 +796,89 @@ def candidate_audit(candidate_id: int, db: Session = Depends(get_db)) -> dict:
     ).order_by(SelectionRetrospective.created_at, SelectionRetrospective.id)).all()) if snapshot_ids else []
     return {"candidate_id": candidate_id, "snapshots": [snapshot_read(row) for row in snapshots],
             "retrospectives": [retrospective_read(row) for row in retrospectives]}
+
+
+@router.get("/candidates/{candidate_id}/llm-evaluation")
+def get_llm_evaluation(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="selection candidate not found")
+    return dict((candidate.analysis_json or {}).get("llm_evaluation") or {
+        "status": "NOT_GENERATED", "message": "尚未生成 LLM 评价"
+    })
+
+
+@router.post("/candidates/{candidate_id}/llm-evaluation")
+def create_llm_evaluation(candidate_id: int, payload: SelectionEvaluationRequest | None = None,
+                          db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="selection candidate not found")
+    analysis = candidate.analysis_json or {}
+    if analysis.get("model_output_status") != "SUCCESS" or analysis.get("analysis_validation_status") == "PARTIAL":
+        raise HTTPException(status_code=409, detail="只有模型分析成功且引用校验通过后才能生成 LLM 评价")
+    run = db.get(SelectionRun, candidate.run_id)
+    model_code = (payload.model_instance_code if payload else None) or analysis.get("actual_instance_code") or (run.model_instance_code if run else None)
+    if not model_code:
+        raise HTTPException(status_code=409, detail="本次分析未记录可用模型")
+    from app.services.model_hub import ModelHubService
+    model = analysis.get("model") or {}
+    evidence = candidate.evidence_json or {}
+    documents = [row for row in (evidence.get("documents") or []) if isinstance(row, dict)][:12]
+    compact = {
+        "stock": {"market": candidate.market, "symbol": candidate.symbol, "name": candidate.name},
+        "conclusion": {key: model.get(key) for key in ("decision", "confidence", "headline", "reasoning", "positives", "risks", "watch_conditions")},
+        "dimensions": model.get("dimensions") or [],
+        "events": model.get("events") or [],
+        "links": model.get("event_links") or [],
+        "validation_findings": model.get("validation_findings") or [],
+        "evidence_titles": [row.get("title") for row in documents],
+        "analysis_period": evidence.get("analysis_period"),
+    }
+    prompt = (
+        "请基于以下已经通过证据引用校验的股票分析结果，写一段约800字的中文评价。"
+        "必须分清已知事实、基于事实的推断、主要风险和待验证事项，引用现有结论和证据标题，"
+        "不得编造数据或把推断写成事实。末尾给出明确建议：建议跟踪、暂不跟踪或证据不足。\n"
+        + __import__("json").dumps(compact, ensure_ascii=False)
+    )
+    log = ModelHubService(db).chat(
+        task_type="selection_llm_evaluation", instance_code=model_code,
+        messages=[{"role": "system", "content": "你是证券研究复核员，只能使用输入证据。"}, {"role": "user", "content": prompt}],
+        max_tokens=2200, temperature=0.2,
+        metadata_json={"strict_instance": True, "require_real_model": run.data_mode == "REAL" if run else True,
+                       "purpose": "SELECTION_LLM_EVALUATION", "candidate_id": candidate_id,
+                       "evidence_document_ids": [row.get("id") for row in documents]},
+    )
+    if log.status != "SUCCESS" or not str(log.response_text or "").strip():
+        detail = classify_model_error(log.error_message or "LLM评价未返回有效内容")
+        raise HTTPException(status_code=502, detail=detail["summary"])
+    evaluation = {"status": "SUCCESS", "text": log.response_text.strip(), "recommendation": model.get("decision"),
+                  "model_instance_code": model_code, "model_call_log_id": log.id,
+                  "evidence_document_ids": [row.get("id") for row in documents], "generated_at": datetime.now(timezone.utc).isoformat()}
+    candidate.analysis_json = {**analysis, "llm_evaluation": evaluation}
+    db.commit()
+    return evaluation
+
+
+@router.post("/candidates/{candidate_id}/follow")
+def follow_candidate(candidate_id: int, payload: SelectionFollowRequest | None = None,
+                     db: Session = Depends(get_db)) -> SelectionCandidateRead:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="selection candidate not found")
+    model = (candidate.analysis_json or {}).get("model") or {}
+    target = payload.target_price if payload else None
+    target = target or model.get("target_price")
+    if not target:
+        raise HTTPException(status_code=422, detail="缺少模型目标价，请先人工填写后确认跟踪")
+    review = SelectionReviewRequest(decision="APPROVED", target_price=float(target),
+                                    stop_price=payload.stop_price if payload else None,
+                                    confidence=payload.confidence if payload else None,
+                                    notes=(payload.notes if payload else None) or "已在 LLM 评价页确认跟踪")
+    try:
+        return _candidate_read(db, review_candidate(db, candidate_id, review))
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/candidates/{candidate_id}/documents/{document_id}")

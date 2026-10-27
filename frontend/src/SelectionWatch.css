@@ -283,3 +283,41 @@
 @media (max-width: 760px) { .batch-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .batch-summary > label { grid-column: 1 / -1; } .batch-heading { align-items: flex-start; padding: 17px; } .batch-heading h1 { font-size: 21px; } .batch-card { padding: 14px; } }
 @media (max-width: 760px) { .selection-form-grid, .selection-choices, .selection-evidence-meta, .selection-identity-grid, .selection-fact-grid { grid-template-columns: 1fr; } .selection-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); } .selection-backdrop { padding: 10px; } .selection-dialog { padding: 18px; } .selection-workbench .panel { padding: 16px; } }
 @media (max-width: 760px) { .selection-dialog .selection-form > footer { bottom: -18px; margin-inline: -18px; padding: 12px 18px; } }
+
+/* Keep long evidence/model payloads inside the workbench instead of widening
+   the page on landscape screens. Tables retain their own local scroller. */
+.batch-workbench { min-width: 0; max-width: 100%; overflow-x: hidden; }
+.batch-workbench * { min-width: 0; }
+.batch-card, .batch-heading, .batch-scope, .batch-detail { max-width: 100%; overflow-wrap: anywhere; }
+.batch-progress-meta { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+.batch-progress-meta span, .batch-process-steps, .batch-process-steps li { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.batch-table-wrap { max-width: 100%; overflow-x: auto; }
+.batch-detail { width: min(1000px, calc(100vw - 32px)); }
+.batch-scope-button { margin: 8px 0; background: #edf6f0 !important; border-color: #78a88a !important; }
+.batch-run-scope-dialog { width: min(900px, calc(100vw - 32px)); }
+.batch-scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-top: 14px; }
+.batch-scope-grid > div { padding: 12px; border: 1px solid #dfe8e2; border-radius: 8px; background: #f7faf7; }
+.batch-scope-grid p { margin: 6px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.selection-stage-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 10px 0; padding: 14px 16px; border-left: 4px solid #2d7952; border-radius: 8px; background: #eaf5ee; color: #183f2f; }
+.selection-stage-banner strong { font-size: 17px; }
+.selection-stage-banner span { color: #587363; font-size: 12px; }
+.analysis-local-inventory { padding: 14px; border: 1px solid #e7d7b3; border-radius: 8px; background: #fffaf0; }
+.llm-evaluation-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid #dce7df; border-radius: 10px; background: #fbfdfb; }
+.llm-evaluation-panel h3 { margin: 0; }
+.llm-evaluation-text { white-space: pre-wrap; line-height: 1.9 !important; }
+.batch-heading .batch-model-picker { display: none; }
+.model-multi-picker { display: grid; gap: 10px; margin: 10px 0; padding: 14px; border: 1px solid #dbe5df; border-radius: 10px; background: #fff; }
+.model-multi-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.model-multi-heading small { color: #6e7f75; font-size: 11px; }
+.model-multi-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.model-multi-list label { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 10px; border: 1px solid #dce7df; border-radius: 8px; background: #f8fbf8; cursor: pointer; }
+.model-multi-list label.unavailable { opacity: .5; cursor: not-allowed; }
+.model-multi-list input { flex: 0 0 auto; accent-color: #2e7652; }
+.model-multi-name { display: grid; min-width: 0; gap: 3px; flex: 1 1 auto; }
+.model-multi-name b, .model-multi-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-multi-name small { color: #6c7d73; font-size: 11px; }
+.model-signal { display: inline-flex; align-items: end; gap: 2px; height: 18px; flex: 0 0 auto; }
+.model-signal i { display: block; width: 3px; height: 5px; border-radius: 1px; background: #c5d0c8; }
+.model-signal i:nth-child(2) { height: 8px; }.model-signal i:nth-child(3) { height: 12px; }.model-signal i:nth-child(4) { height: 16px; }
+.model-signal i.on { background: #2f8759; }
+@media (max-width: 760px) { .batch-scope-grid { grid-template-columns: 1fr; } .selection-stage-banner { align-items: flex-start; flex-direction: column; } }
