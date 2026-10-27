@@ -32,7 +32,7 @@ from app.schemas.selection import (
 from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
-    probe_selection_model, refresh_tracking, review_candidate,
+    probe_selection_model, refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
 )
 from app.models.ai_hub import (
     KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
@@ -77,9 +77,17 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
         analysis_json["conclusion_source"] = analysis_json.get("conclusion_source") or "LOCAL_EVIDENCE_ONLY"
         analysis_json["scoring_available"] = False
         analysis_json.pop("scoring", None)
+    elif (analysis_json.get("model_output_status") == "SUCCESS"
+          and analysis_json.get("analysis_validation_status") == "PARTIAL"):
+        analysis_json["conclusion_available"] = False
+        analysis_json["provisional_conclusion_available"] = True
+        analysis_json["conclusion_source"] = "LLM_EVIDENCE_UNVERIFIED"
+        analysis_json["scoring_available"] = False
+        analysis_json.pop("scoring", None)
     elif analysis_json.get("model_output_status") == "SUCCESS":
         analysis_json["conclusion_available"] = True
         analysis_json["conclusion_source"] = "LLM_EVIDENCE_VALIDATED"
+        analysis_json["scoring_available"] = bool(analysis_json.get("scoring"))
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
@@ -93,6 +101,32 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
 
 def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -> SelectionRunRead:
     criteria_json = dict(run.criteria_json or {})
+    progress_snapshot = dict(criteria_json.get("progress") or {})
+    # Older batches only have process_steps. Project them into the new phase
+    # contract at read time without rewriting historical records.
+    if not isinstance(progress_snapshot.get("phases"), dict):
+        phases = {
+            "DATA": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
+            "MODEL_PREFLIGHT": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
+            "ANALYSIS": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
+        }
+        phase_for_stage = lambda stage: "DATA" if str(stage or "").upper() in {"QUEUED", "DATA_SYNC", "DATA_QUALITY_GATE", "SCREENING", "EVIDENCE"} else (
+            "MODEL_PREFLIGHT" if "PREFLIGHT" in str(stage or "").upper() else "ANALYSIS"
+        )
+        for step in progress_snapshot.get("process_steps") or []:
+            if not isinstance(step, dict):
+                continue
+            phase_name = phase_for_stage(step.get("stage"))
+            phase = phases[phase_name]
+            phase["started_at"] = phase["started_at"] or step.get("at")
+            phase["activities"].append(step)
+            if str(step.get("stage") or "").upper() in {"COMPLETED", "PARTIAL", "FAILED", "MODEL_PREFLIGHT_FAILED"}:
+                phase["status"] = "FAILED" if str(step.get("stage") or "").upper() in {"FAILED", "MODEL_PREFLIGHT_FAILED", "PARTIAL"} else "SUCCESS"
+                phase["completed_at"] = step.get("at")
+            elif phase["status"] == "PENDING":
+                phase["status"] = "RUNNING"
+        progress_snapshot["phases"] = phases
+        criteria_json["progress"] = progress_snapshot
     # The worker writes a durable model-call log before it sends the request.
     # Use that log as a read-side fallback when a separate heartbeat thread is
     # delayed or SQLite briefly rejects its write. This keeps the UI honest
@@ -718,14 +752,31 @@ def retry_failed_with_model(
     if original is None:
         raise HTTPException(status_code=404, detail="选股任务不存在")
     try:
-        probe = probe_selection_model(db, payload.model_instance_code, data_mode=original.data_mode)
+        model_codes = list(payload.model_instance_codes or [])
+        if payload.model_instance_code and payload.model_instance_code not in model_codes:
+            model_codes.insert(0, payload.model_instance_code)
+        if not model_codes:
+            raise ValueError("请先在分析模型中至少勾选一个模型")
+        probe = None
+        last_error: Exception | None = None
+        selected_code = None
+        for code in model_codes:
+            try:
+                probe = probe_selection_model(db, code, data_mode=original.data_mode)
+                selected_code = code
+                break
+            except Exception as exc:
+                last_error = exc
+        if selected_code is None:
+            raise last_error or ValueError("所选模型均未通过预检")
         run = queue_failed_selection_reanalysis_with_model(
-            db, run_id, payload.model_instance_code, payload.candidate_ids,
+            db, run_id, selected_code, payload.candidate_ids, model_instance_codes=model_codes,
         )
         criteria = dict(run.criteria_json or {})
         criteria["model_switch"] = {
             **(criteria.get("model_switch") or {}),
             "preflight": probe,
+            "model_instance_codes": model_codes,
             "status": "QUEUED",
         }
         run.criteria_json = criteria
@@ -821,42 +872,10 @@ def create_llm_evaluation(candidate_id: int, payload: SelectionEvaluationRequest
     model_code = (payload.model_instance_code if payload else None) or analysis.get("actual_instance_code") or (run.model_instance_code if run else None)
     if not model_code:
         raise HTTPException(status_code=409, detail="本次分析未记录可用模型")
-    from app.services.model_hub import ModelHubService
-    model = analysis.get("model") or {}
-    evidence = candidate.evidence_json or {}
-    documents = [row for row in (evidence.get("documents") or []) if isinstance(row, dict)][:12]
-    compact = {
-        "stock": {"market": candidate.market, "symbol": candidate.symbol, "name": candidate.name},
-        "conclusion": {key: model.get(key) for key in ("decision", "confidence", "headline", "reasoning", "positives", "risks", "watch_conditions")},
-        "dimensions": model.get("dimensions") or [],
-        "events": model.get("events") or [],
-        "links": model.get("event_links") or [],
-        "validation_findings": model.get("validation_findings") or [],
-        "evidence_titles": [row.get("title") for row in documents],
-        "analysis_period": evidence.get("analysis_period"),
-    }
-    prompt = (
-        "请基于以下已经通过证据引用校验的股票分析结果，写一段约800字的中文评价。"
-        "必须分清已知事实、基于事实的推断、主要风险和待验证事项，引用现有结论和证据标题，"
-        "不得编造数据或把推断写成事实。末尾给出明确建议：建议跟踪、暂不跟踪或证据不足。\n"
-        + __import__("json").dumps(compact, ensure_ascii=False)
-    )
-    log = ModelHubService(db).chat(
-        task_type="selection_llm_evaluation", instance_code=model_code,
-        messages=[{"role": "system", "content": "你是证券研究复核员，只能使用输入证据。"}, {"role": "user", "content": prompt}],
-        max_tokens=2200, temperature=0.2,
-        metadata_json={"strict_instance": True, "require_real_model": run.data_mode == "REAL" if run else True,
-                       "purpose": "SELECTION_LLM_EVALUATION", "candidate_id": candidate_id,
-                       "evidence_document_ids": [row.get("id") for row in documents]},
-    )
-    if log.status != "SUCCESS" or not str(log.response_text or "").strip():
-        detail = classify_model_error(log.error_message or "LLM评价未返回有效内容")
-        raise HTTPException(status_code=502, detail=detail["summary"])
-    evaluation = {"status": "SUCCESS", "text": log.response_text.strip(), "recommendation": model.get("decision"),
-                  "model_instance_code": model_code, "model_call_log_id": log.id,
-                  "evidence_document_ids": [row.get("id") for row in documents], "generated_at": datetime.now(timezone.utc).isoformat()}
-    candidate.analysis_json = {**analysis, "llm_evaluation": evaluation}
+    evaluation = generate_candidate_llm_evaluation(db, candidate, model_instance_code=model_code)
     db.commit()
+    if evaluation.get("status") != "SUCCESS":
+        raise HTTPException(status_code=502, detail=evaluation.get("message") or "LLM评价未返回有效内容")
     return evaluation
 
 

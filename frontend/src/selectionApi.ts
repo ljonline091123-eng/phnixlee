@@ -168,7 +168,8 @@ export type SelectionBackfillRequest = {
   rerun_analysis?: boolean;
 };
 export type SelectionModelSwitchRequest = {
-  model_instance_code: string;
+  model_instance_code?: string | null;
+  model_instance_codes: string[];
   candidate_ids?: number[];
 };
 export type SelectionPreflight = SelectionRecord & {

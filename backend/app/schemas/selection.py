@@ -331,11 +331,24 @@ class SelectionModelSwitchRequest(BaseModel):
     route fallback after a billing or quota failure.
     """
 
-    model_instance_code: str = Field(min_length=2, max_length=64)
+    # Reuse the analysis-model multi-select for retries.  The first code is
+    # the preferred retry model and the remaining codes are retained in the
+    # request snapshot for an auditable, deterministic choice.
+    model_instance_code: str | None = Field(default=None, min_length=2, max_length=64)
+    model_instance_codes: list[str] = Field(default_factory=list, max_length=10)
     candidate_ids: list[int] = Field(default_factory=list, max_length=500)
 
     @model_validator(mode="after")
     def unique_candidate_ids(self) -> "SelectionModelSwitchRequest":
+        self.model_instance_codes = list(dict.fromkeys(
+            str(item).strip() for item in self.model_instance_codes if str(item).strip()
+        ))
+        if self.model_instance_code and self.model_instance_code not in self.model_instance_codes:
+            self.model_instance_codes.insert(0, self.model_instance_code)
+        if not self.model_instance_code and self.model_instance_codes:
+            self.model_instance_code = self.model_instance_codes[0]
+        if not self.model_instance_codes:
+            raise ValueError("请先在分析模型中至少勾选一个模型")
         self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
         return self
 

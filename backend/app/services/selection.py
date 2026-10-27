@@ -53,6 +53,56 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+_SELECTION_PHASES = ("DATA", "MODEL_PREFLIGHT", "ANALYSIS")
+
+
+def _phase_for_stage(stage: str, explicit_phase: str | None = None) -> str:
+    value = str(explicit_phase or stage or "").upper()
+    if value in {"DATA", "DATA_SYNC", "DATA_QUALITY_GATE", "SCREENING", "EVIDENCE"}:
+        return "DATA"
+    if value in {"MODEL_PREFLIGHT", "MODEL_PREFLIGHT_FAILED"}:
+        return "MODEL_PREFLIGHT"
+    if value in {
+        "MODEL", "MODEL_ANALYSIS", "RESULT_VALIDATION", "LLM_EVALUATION",
+        "COMPLETED", "PARTIAL", "FAILED", "RETRY_QUEUED", "RETRY_ANALYSIS",
+        "RETRY_COMPLETED", "RETRY_FAILED",
+    }:
+        return "ANALYSIS"
+    return "DATA"
+
+
+def _elapsed_between(started_at: str | None, completed_at: str | None = None) -> int:
+    if not started_at:
+        return 0
+    try:
+        start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(completed_at).replace("Z", "+00:00")) if completed_at else _now()
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        return max(0, int((end - start).total_seconds()))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _initial_progress(message: str, *, stage: str = "QUEUED") -> dict[str, Any]:
+    now = _now().isoformat()
+    return {
+        "stage": stage, "percent": 0, "message": message,
+        "started_at": now, "updated_at": now,
+        "process_steps": [{"at": now, "stage": stage, "percent": 0, "message": message}],
+        "phases": {
+            "DATA": {"status": "PENDING", "started_at": None, "completed_at": None,
+                     "elapsed_seconds": 0, "activities": []},
+            "MODEL_PREFLIGHT": {"status": "PENDING", "started_at": None, "completed_at": None,
+                                "elapsed_seconds": 0, "activities": []},
+            "ANALYSIS": {"status": "PENDING", "started_at": None, "completed_at": None,
+                         "elapsed_seconds": 0, "activities": []},
+        },
+    }
+
+
 class _SelectionProgressHeartbeat:
     """Persist activity while a provider request blocks the worker thread."""
 
@@ -554,6 +604,50 @@ def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message:
         return
     previous = dict((run.criteria_json or {}).get("progress") or {})
     now = _now().isoformat()
+    phases = dict(previous.get("phases") or {})
+    for phase_name in _SELECTION_PHASES:
+        phases.setdefault(phase_name, {"status": "PENDING", "started_at": None,
+                                       "completed_at": None, "elapsed_seconds": 0,
+                                       "activities": []})
+    phase_name = _phase_for_stage(stage, details.get("phase"))
+    if str(stage).upper() == "FAILED" and not details.get("phase"):
+        running_phase = next((name for name in reversed(_SELECTION_PHASES)
+                              if (phases.get(name) or {}).get("status") == "RUNNING"), None)
+        if running_phase:
+            phase_name = running_phase
+    phase_order = {name: index for index, name in enumerate(_SELECTION_PHASES)}
+    # Transitioning to a later phase closes the previous started phase. This
+    # makes the persisted timeline meaningful even when a worker raises before
+    # the next explicit checkpoint is written.
+    for prior_name, prior_phase_raw in phases.items():
+        if prior_name == phase_name or prior_name not in phase_order:
+            continue
+        prior_phase = dict(prior_phase_raw or {})
+        if phase_order[prior_name] < phase_order[phase_name] and prior_phase.get("status") == "RUNNING":
+            prior_phase["status"] = "SUCCESS"
+            prior_phase["completed_at"] = prior_phase.get("completed_at") or now
+            prior_phase["elapsed_seconds"] = _elapsed_between(prior_phase.get("started_at"), prior_phase.get("completed_at"))
+            phases[prior_name] = prior_phase
+    phase = dict(phases[phase_name])
+    if phase.get("status") == "PENDING":
+        phase["status"] = "RUNNING"
+        phase["started_at"] = phase.get("started_at") or now
+    activity = details.get("activity") or message
+    activities = [item for item in (phase.get("activities") or []) if isinstance(item, dict)]
+    if not activities or activities[-1].get("message") != activity:
+        activities.append({"at": now, "stage": stage, "percent": int(percent), "message": activity})
+    phase["activities"] = activities[-20:]
+    terminal = str(stage).upper() in {"COMPLETED", "PARTIAL", "FAILED", "MODEL_PREFLIGHT_FAILED",
+                                      "RETRY_COMPLETED", "RETRY_FAILED"}
+    if terminal:
+        # A terminal analysis stage closes the phases that have actually
+        # started. Pending phases remain pending so missing work is visible.
+        if phase_name == "ANALYSIS" and phase.get("started_at") is None:
+            phase["started_at"] = now
+        phase["status"] = "FAILED" if ("FAILED" in str(stage).upper() or str(stage).upper() == "PARTIAL") else "SUCCESS"
+        phase["completed_at"] = now
+    phase["elapsed_seconds"] = _elapsed_between(phase.get("started_at"), phase.get("completed_at"))
+    phases[phase_name] = phase
     # Keep a short, auditable activity trail for the UI.  This is a record of
     # completed backend stages, not model chain-of-thought.  Heartbeats update
     # the current activity separately and do not create noisy history rows.
@@ -562,7 +656,11 @@ def _progress(db: Session, run: SelectionRun, stage: str, percent: int, message:
         steps.append({"at": now, "stage": stage, "percent": int(percent), "message": message})
     steps = steps[-20:]
     previous.update({"stage": stage, "percent": percent, "message": message,
-        "updated_at": now, "process_steps": steps, **details})
+        "started_at": previous.get("started_at") or now,
+        "updated_at": now, "process_steps": steps, "phases": phases, **details})
+    if terminal:
+        previous["completed_at"] = now
+        previous["total_elapsed_seconds"] = _elapsed_between(previous.get("started_at"), now)
     run.criteria_json = {**(run.criteria_json or {}), "progress": previous}
     db.commit()
 
@@ -610,9 +708,7 @@ def queue_selection_run(
     run.status = "QUEUED"
     run.criteria_json = {**run.criteria_json, "request": payload.model_dump(),
         **({"retry_of_run_id": retry_of_run_id} if retry_of_run_id is not None else {}),
-        "progress": {"stage": "QUEUED", "percent": 0, "message": "已排队，等待后台执行",
-                      "process_steps": [{"at": _now().isoformat(), "stage": "QUEUED",
-                                         "percent": 0, "message": "已排队，等待后台执行"}]}}
+        "progress": _initial_progress("已排队，等待后台执行")}
     pipeline = PipelineRun(pipeline_type="selection_analysis", trigger_type="API", status="PENDING",
         idempotency_key=f"selection:{run.id}", input_json={"selection_run_id": run.id})
     db.add(pipeline)
@@ -700,6 +796,8 @@ def queue_failed_selection_reanalysis_with_model(
     run_id: int,
     model_instance_code: str,
     candidate_ids: list[int] | None = None,
+    *,
+    model_instance_codes: list[str] | None = None,
 ) -> SelectionRun:
     """Create an isolated retry batch using an explicitly selected model."""
     from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
@@ -735,12 +833,17 @@ def queue_failed_selection_reanalysis_with_model(
         raise ValueError("当前没有执行失败或引用待核对的待复选股票")
 
     original_criteria = deepcopy(original.criteria_json or {})
+    selected_codes = list(dict.fromkeys(model_instance_codes or [model_instance_code]))
+    # The healthy model selected by preflight becomes the retry primary; keep
+    # the remaining checked models as the auditable fallback order.
+    selected_codes = [model_instance_code, *[code for code in selected_codes if code != model_instance_code]]
     original_request = deepcopy(original_criteria.get("request") or {})
     original_request.update({
         "market": original.market,
         "symbols": [row.symbol for row in source_candidates],
         "candidate_limit": max(1, len(source_candidates)),
         "model_instance_code": model_instance_code,
+        "model_instance_codes": selected_codes,
         "use_model": True,
         "data_mode": original.data_mode,
         "knowledge_base_ids": list(original.knowledge_base_ids_json or []),
@@ -755,12 +858,14 @@ def queue_failed_selection_reanalysis_with_model(
         "model_switch": {
             "from_model_instance_code": original.model_instance_code,
             "to_model_instance_code": model_instance_code,
+            "model_instance_codes": selected_codes,
             "source_candidate_ids": [row.id for row in source_candidates],
             "status": "QUEUED",
         },
-        "progress": {"stage": "RETRY_QUEUED", "percent": 0,
-                     "message": f"已完成新模型预检，等待 {model_instance_code} 执行 {len(source_candidates)} 只失败股票",
-                     "updated_at": _now().isoformat()},
+        "progress": _initial_progress(
+            f"已按勾选顺序完成模型预检，等待 {model_instance_code} 执行 {len(source_candidates)} 只失败股票",
+            stage="RETRY_QUEUED",
+        ),
         "retry_progress": {"status": "QUEUED", "attempt": 1,
                             "candidate_count": len(source_candidates), "completed_count": 0,
                             "failed_count": len(source_candidates),
@@ -1236,6 +1341,8 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                     score_candidate(db, row, scoring_profile)
             db.flush()
 
+            evaluation_summary = _generate_run_llm_evaluations(db, run, candidates)
+
             all_candidates = list(db.scalars(select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)).all())
             total = len(all_candidates)
             success = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS" for row in all_candidates)
@@ -1244,14 +1351,18 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             passed = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS"
                          and (row.analysis_json or {}).get("analysis_validation_status") != "PARTIAL"
                          for row in all_candidates)
-            if failed == 0 and total and not citation_partial:
+            if failed == 0 and total and not citation_partial and not evaluation_summary.get("failed"):
                 run.analysis_mode = "MODEL_COMPLETED"
                 run.status = "REVIEW"
                 run.error_message = None
             elif success:
                 run.analysis_mode = "MODEL_PARTIAL"
                 run.status = "PARTIAL"
-                run.error_message = f"模型已返回 {success}/{total} 只；{failed} 只执行失败可重试，{citation_partial} 只引用核验后部分证据不足，需人工核对。"
+                run.error_message = (
+                    f"模型已返回 {success}/{total} 只；{failed} 只执行失败可重试，"
+                    f"{citation_partial} 只引用核验后部分证据不足，"
+                    f"{evaluation_summary.get('failed', 0)} 只 LLM 评价生成失败，需人工核对。"
+                )
             else:
                 run.analysis_mode = "MODEL_FAILED_FALLBACK_LOCAL"
                 run.status = "PARTIAL"
@@ -1500,11 +1611,31 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
             db, candidate, snapshot_kind="CANDIDATE", decision="PENDING",
             evidence=candidate.evidence_json, as_of=run.as_of,
         )
+    # LLM评价 is part of the analysis stage and is persisted before the run
+    # becomes reviewable. Failed/partial model outputs are explicitly skipped.
+    persisted_candidates = list(db.scalars(
+        select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)
+    ).all())
+    evaluation_summary = None
+    if run.data_mode == "REAL" and any((row.analysis_json or {}).get("model_output_status") == "SUCCESS"
+           for row in persisted_candidates):
+        evaluation_summary = _generate_run_llm_evaluations(db, run, persisted_candidates)
+        if evaluation_summary.get("failed"):
+            run.analysis_mode = "MODEL_PARTIAL"
+            run.error_message = (
+                f"分析结论已完成，但 {evaluation_summary['failed']} 只股票的 LLM 评价生成失败；"
+                "结论与证据已保留，可在详情中复核后重新生成评价。"
+            )
     run.candidate_count = min(len(candidates), run.candidate_limit)
     run.missing_data_json = sorted(set((run.missing_data_json or []) + missing))[:100]
     run.status = "REVIEW" if run.candidate_count and run.analysis_mode == "MODEL_COMPLETED" else "PARTIAL"
     run.completed_at = _now()
-    _progress(db, run, "COMPLETED" if run.analysis_mode != "MODEL_FAILED_FALLBACK_LOCAL" else "PARTIAL", 100,
+    terminal_stage = (
+        "MODEL_PREFLIGHT_FAILED" if run.analysis_mode == "MODEL_PREFLIGHT_FAILED"
+        else "PARTIAL" if run.analysis_mode != "MODEL_COMPLETED"
+        else "COMPLETED"
+    )
+    _progress(db, run, terminal_stage, 100,
               f"已完成 {run.candidate_count} 只，等待人工复核" if run.analysis_mode == "MODEL_COMPLETED" else "执行结束，请查看逐股模型状态及缺口")
     db.refresh(run)
     return run
@@ -2266,6 +2397,100 @@ def _build_local_multi_source_analysis(item: dict[str, Any]) -> dict[str, Any]:
             "positives": [], "risks": ["本次模型服务未返回有效结果，不能把本地证据汇总视为投资结论。"],
             "watch_conditions": ["模型服务恢复后重新执行七维语义研判。"],
             "report_type": "LOCAL_MULTI_SOURCE_EVIDENCE", "source_note": "仅统计本次实际载入的证据，不进行语义推断。"}
+
+
+def generate_candidate_llm_evaluation(db: Session, candidate: SelectionCandidate, *,
+                                      model_instance_code: str | None = None) -> dict[str, Any]:
+    """Generate and persist the human-facing LLM review during analysis.
+
+    The function is shared by the worker and the explicit review endpoint. It
+    never creates an evaluation for failed or citation-partial conclusions.
+    """
+    import json
+    from app.services.model_hub import ModelHubService
+
+    analysis = dict(candidate.analysis_json or {})
+    if analysis.get("model_output_status") != "SUCCESS" or analysis.get("analysis_validation_status") == "PARTIAL":
+        return {"status": "SKIPPED", "message": "模型结论未通过引用核验，暂不生成评价"}
+    run = db.get(SelectionRun, candidate.run_id)
+    selected_model = model_instance_code or analysis.get("actual_instance_code") or (run.model_instance_code if run else None)
+    if not selected_model:
+        return {"status": "SKIPPED", "message": "本次分析未记录可用模型"}
+    model = analysis.get("model") or {}
+    evidence = candidate.evidence_json or {}
+    documents = [row for row in (evidence.get("documents") or []) if isinstance(row, dict)][:12]
+    compact = {
+        "stock": {"market": candidate.market, "symbol": candidate.symbol, "name": candidate.name},
+        "conclusion": {key: model.get(key) for key in ("decision", "confidence", "headline", "reasoning", "positives", "risks", "watch_conditions")},
+        "dimensions": model.get("dimensions") or [], "events": model.get("events") or [],
+        "links": model.get("event_links") or [], "validation_findings": model.get("validation_findings") or [],
+        "evidence_titles": [row.get("title") for row in documents],
+        "analysis_period": evidence.get("analysis_period"),
+    }
+    prompt = (
+        "请基于以下已经通过证据引用校验的股票分析结果，写一段约800字的中文评价。"
+        "必须分清已知事实、基于事实的推断、主要风险和待验证事项，引用现有结论和证据标题，"
+        "不得编造数据或把推断写成事实。末尾给出明确建议：建议跟踪、暂不跟踪或证据不足。\n"
+        + json.dumps(compact, ensure_ascii=False)
+    )
+    log = ModelHubService(db).chat(
+        task_type="selection_llm_evaluation", instance_code=selected_model,
+        messages=[{"role": "system", "content": "你是证券研究复核员，只能使用输入证据。"},
+                  {"role": "user", "content": prompt}],
+        max_tokens=2200, temperature=0.2,
+        metadata_json={"strict_instance": True, "require_real_model": run.data_mode == "REAL" if run else True,
+                       "purpose": "SELECTION_LLM_EVALUATION", "candidate_id": candidate.id,
+                       "evidence_document_ids": [row.get("id") for row in documents]},
+    )
+    if log.status != "SUCCESS" or not str(log.response_text or "").strip():
+        from app.services.model_errors import classify_model_error
+        detail = classify_model_error(log.error_message or "LLM评价未返回有效内容")
+        result = {"status": "FAILED", "message": detail["summary"],
+                  "model_instance_code": selected_model, "model_call_log_id": log.id,
+                  "generated_at": _now().isoformat()}
+        candidate.analysis_json = {**analysis, "llm_evaluation": result}
+        db.flush()
+        return result
+    result = {"status": "SUCCESS", "text": log.response_text.strip(), "recommendation": model.get("decision"),
+              "model_instance_code": selected_model, "model_call_log_id": log.id,
+              "evidence_document_ids": [row.get("id") for row in documents],
+              "generated_at": _now().isoformat()}
+    candidate.analysis_json = {**analysis, "llm_evaluation": result}
+    db.flush()
+    return result
+
+
+def _generate_run_llm_evaluations(db: Session, run: SelectionRun,
+                                  candidates: list[SelectionCandidate]) -> dict[str, int]:
+    eligible = [row for row in candidates if
+                (row.analysis_json or {}).get("model_output_status") == "SUCCESS"
+                and (row.analysis_json or {}).get("analysis_validation_status") != "PARTIAL"]
+    result = {"eligible": len(eligible), "success": 0, "failed": 0, "skipped": len(candidates) - len(eligible)}
+    for index, candidate in enumerate(eligible, start=1):
+        _progress(
+            db, run, "LLM_EVALUATION", min(98, 90 + round(8 * index / max(1, len(eligible)))),
+            f"生成并保存 LLM 评价 {index}/{len(eligible)}：{candidate.name or candidate.symbol}",
+            phase="ANALYSIS", activity=f"正在生成 {candidate.symbol} 的 LLM 评价",
+            current_symbol=candidate.symbol, candidate_symbols=[candidate.symbol],
+        )
+        try:
+            evaluation = generate_candidate_llm_evaluation(db, candidate)
+        except Exception as exc:
+            detail = classify_model_error(exc)
+            evaluation = {"status": "FAILED", "message": detail["summary"],
+                          "model_instance_code": (candidate.analysis_json or {}).get("actual_instance_code") or run.model_instance_code,
+                          "generated_at": _now().isoformat()}
+            candidate.analysis_json = {**(candidate.analysis_json or {}), "llm_evaluation": evaluation}
+            db.flush()
+        if evaluation.get("status") == "SUCCESS":
+            result["success"] += 1
+        else:
+            result["failed"] += 1
+    run.criteria_json = {**(run.criteria_json or {}), "llm_evaluation_summary": {
+        **result, "completed_at": _now().isoformat(),
+    }}
+    db.commit()
+    return result
 
 
 def _parse_model_recommendations(response_text: str, expected_symbols: set[str]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
