@@ -35,6 +35,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const analysis = candidate.analysis_json;
   const model = (analysis.model || {}) as SelectionRecord;
   const modelFailed = analysis.model_output_status === "FAILED";
+  const dataBlocked = analysis.model_output_status === "NOT_RUN" || analysis.data_gate_status === "MISSING_DATA";
   const validationPartial = analysis.analysis_validation_status === "PARTIAL";
   const usage = (analysis.input_usage || {}) as SelectionRecord;
   const dimensions = array(model.dimensions), events = array(model.events);
@@ -55,6 +56,11 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     return <button type="button" className="analysis-reference" key={id} title={row?.title || `文档${id}`} onClick={() => onDocument?.(id)}>{scope}{row?.source_table === "stock_news" ? "新闻" : row?.source_table === "stock_notice" ? "公告" : "证据"} · {row?.title || `#${id}`}</button>;
   };
   const money = (value: unknown) => typeof value === "number" ? `${value.toFixed(2)} 元` : "证据不足";
+  if (dataBlocked) return <section className="selection-analysis">
+    <p className="batch-alert warning"><strong>{analysis.historical_model_output_status ? "数据不足，历史模型结果无效，未形成可用结论。" : "数据不足，未进入模型分析，未形成分析结论。"}</strong><br />当前证据不足，不能把缺失数据显示为“部分完成”或零值结论；请先补齐数据后重新分析。</p>
+    {!!analysis.model_failure_reason && <p className="batch-note">数据原因：{String(analysis.model_failure_reason)}</p>}
+    {!!analysis.local_multi_source && <div className="analysis-local-inventory"><h3>已保存的本地数据盘点</h3><p>系统仅保存了可追溯的本地事实，未将实时行情快照当作完整研究依据。请在“数据缺口”中补齐新闻、公告、财务或量价数据。</p></div>}
+  </section>;
   if (modelFailed) return <section className="selection-analysis">
     <p className="batch-alert error"><strong>模型分析失败，不能显示模型结论、方向、目标价或评分。</strong><br />请查看失败原因并重试。以下仅为本地证据盘点，不是模型分析结论，也不可用于确认跟踪。</p>
     {!!analysis.model_failure_reason && <p className="batch-note">失败原因：{String(analysis.model_failure_reason)}</p>}

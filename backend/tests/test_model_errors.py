@@ -80,6 +80,16 @@ def test_classified_failure_contains_targeted_recovery_actions():
     assert any("预检" in action for action in detail["recovery_actions"])
 
 
+@pytest.mark.parametrize("reason", [
+    "模型输出格式不符合分析契约：模型返回了不支持的字段取值：FINANCIAL。",
+    "None is not of type 'number'\nFailed validating 'type' in schema",
+])
+def test_historical_schema_errors_are_not_reported_as_provider_failures(reason):
+    detail = classify_model_error(reason)
+    assert detail["category"] == "MODEL_SCHEMA"
+    assert "契约" in detail["title"]
+
+
 def test_failure_log_keeps_upstream_reason_and_new_default_preserves_custom_model():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)

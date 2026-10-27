@@ -12,42 +12,30 @@
 1. 调用 `hard_filter_stock_candidates` 生成不超过 50 只的候选池，再调用 `load_candidate_research_context` 获取对应的有界证据。调度方只传候选摘要和相关片段，不让模型吞吐全市场原始数据。
 2. 校验筛选口径、证券代码、财报期、行情时点、来源可信度、缺失字段和是否存在前视偏差；外部信息须有可追溯来源，否则不得作为事实评分。
 3. 对每只候选分别分析基本面、业务布局、经营现状、发展前景和量价操作，列明看多/看空证据、风险触发条件及短中长线适用条件。排序依据必须可解释，不能仅凭模型印象给出买卖点。
-4. 若数据源失败、候选为空、证据冲突或关键财务/行情字段缺失，降低置信度并返回 `INSUFFICIENT_DATA` 或剔除无证据候选；说明所缺数据和重试条件，不补造数值。
+4. 若数据源失败、候选为空、证据冲突或关键字段缺失，说明所缺数据和重试条件，不补造数值。维度证据不足时使用 `status=INSUFFICIENT`，不可把缺失解释为利好；没有任何有效证据的股票应由数据门禁拦截，不生成评分。
 
 ## 严格输出契约
 
-返回且只返回严格的 JSON，不带 Markdown 或额外字段。顶层必含 `as_of`、`status`、`screening`、`candidates`、`overall_conclusion`、`missing_data`、`confidence`、`evidence_text`。每只候选须有 `stock_code`、`fundamental_view`、`business_view`、`operations_view`、`price_volume_view`、`horizons`、`bull_factors`、`bear_factors`、`risk_triggers`、`missing_data`、`confidence`、`evidence_text`；`horizons` 包含 `short`、`medium`、`long`。`status` 仅允许 `READY`、`INSUFFICIENT_DATA`，`confidence` 为 0 到 1，结论必须关联来源引用；后端应以 Pydantic 校验后落库。
+调用方传入的 JSON Schema 是本次任务唯一的字段契约，优先于历史格式与本说明中的文字示意；字段大小写须严格一致。不得另加顶层状态、筛选摘要或旧接口字段。
 
-```json
-{
-  "as_of": "2026-01-31",
-  "status": "READY",
-  "screening": {"filter_spec": "样例：财务与量价条件已由 Python/SQL 执行", "candidate_count": 1, "max_candidates": 50},
-  "candidates": [
-    {
-      "stock_code": "DEMO001",
-      "fundamental_view": "现有样例财报只支持观察盈利质量，尚不足以断言持续改善。",
-      "business_view": "样例公告披露一项业务进展，收入贡献仍待验证。",
-      "operations_view": "需要跟踪下一报告期的现金流和利润。",
-      "price_volume_view": "量价摘要未形成单独的确认信号。",
-      "horizons": {
-        "short": "仅在量价信号经后续数据确认时继续观察。",
-        "medium": "观察业务进展能否转化为财务表现。",
-        "long": "取决于连续报告期的经营兑现情况。"
-      },
-      "bull_factors": ["公告披露的业务进展"],
-      "bear_factors": ["收入贡献尚未验证"],
-      "risk_triggers": ["后续财报未体现预期改善"],
-      "missing_data": ["下一报告期现金流"],
-      "confidence": 0.61,
-      "evidence_text": "stock_financial_report#31；stock_notice#201；stock_kline 摘要#41"
-    }
-  ],
-  "overall_conclusion": "该样例候选只适合条件化跟踪，现有证据不足以给出确定性交易结论。",
-  "missing_data": ["下一报告期现金流"],
-  "confidence": 0.61,
-  "evidence_text": "stock_financial_report#31；stock_notice#201；stock_kline 摘要#41"
-}
-```
+选股工作台分析使用 `SelectionModelOutput`：只返回 `{"candidates":[股票结果]}`，不带 Markdown。每只股票必须包括：
 
-`DEMO001` 及引用 ID 仅为结构示例，不代表真实证券、行情或已存在的数据库记录。
+- `symbol`：本次原始证券代码字符串，不是 `stock_code`。
+- `decision`：`WATCH` 或 `PASS`。
+- `confidence`：0 到 1 的数字，不得为 null。
+- `reasoning`：基于本次证据的综合判断。
+- `target_price`、`stop_price`：有依据的正数或 null；缺证据时为 null。
+- `horizon_sessions`：固定为 10。
+- `evidence_document_ids`：引用本股白名单内的文档 ID；仅用结构化事实时允许空数组。
+- `headline`：简明结论。
+- `dimensions`：恰好七项，依次为 `NEWS`、`NOTICE`、`FINANCIAL`、`PRICE_VOLUME`、`FUND_FLOW`、`COMPANY`、`GRAPH`。每项含 `dimension`、`status`（`SUPPORTED` 或 `INSUFFICIENT`）、`direction`、`summary`、`evidence_document_ids`、`evidence_fact_ids`、`evidence_relation_ids`。
+
+`direction` 仅允许 `POSITIVE`、`NEGATIVE`、`MIXED`、`NEUTRAL`、`UNKNOWN`。有证据才填写 `SUPPORTED` 并引用对应 ID；缺少资金流等资料须明确标为 `INSUFFICIENT`，不得杜撰。财务、量价、资金流等数值及其解释放入相应 `dimensions`。
+
+证据类型必须与维度一致：`FINANCIAL` 使用 `financial_fact_ids`，`PRICE_VOLUME` 使用 `market_fact_ids`，`FUND_FLOW` 使用 `fund_flow_fact_ids`。不能用营收和净利润支撑股价或成交量趋势，不能将融资公告解释为二级市场资金流。即使 ID 属于本股白名单，类型不匹配也不构成该维度的有效证据。
+
+事件相关字段是 `events`、`event_timeline`、`event_links`、`validation_findings`，没有可靠事件时使用空数组。`events` 与 `event_timeline` 的 `source_type` **只能是 `NEWS` 或 `NOTICE`**，必须对应 `stock_news` 或 `stock_notice` 正文。`FINANCIAL` 等维度名称不能作为事件来源。财务事实本身不是新闻事件，不得为其虚构文档 ID。
+
+`analyzed_document_ids` 完整列出本轮实际阅读的正文 ID；看多因素、风险和跟踪条件使用 `positives`、`risks`、`watch_conditions`。所有引用均需来自本股输入白名单，原文引句必须连续、逐字可核验。`confidence_breakdown` 按调用方 Schema 输出，最终置信度由系统重算。
+
+其他调用（如文字评价）严格采用该调用显式要求的输出格式，不强制套用选股分析的 JSON 包装。Skill 不写数据库，结果仅由受控服务校验后保存。

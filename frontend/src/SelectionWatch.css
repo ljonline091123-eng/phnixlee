@@ -94,7 +94,7 @@
 .selection-phase-bar { height: 7px; margin: 9px 0; border-radius: 3px; background: #dfe4e0; overflow: hidden; }
 .selection-phase-bar i { display: block; width: 0; height: 100%; background: #78867d; }
 .selection-phase.running { border-color: #3a8260; background: #edf7f0; color: #245a40; box-shadow: 0 0 0 2px rgba(58,130,96,.12); }
-.selection-phase.running .selection-phase-bar i { width: 62%; background: #3a8260; animation: selection-phase-pulse 1.2s ease-in-out infinite alternate; }
+.selection-phase.running .selection-phase-bar i { background: #3a8260; }
 .selection-phase.success { border-color: #77a58b; background: #f0f8f2; color: #2d6749; }
 .selection-phase.success .selection-phase-bar i { width: 100%; background: #3f8a62; }
 .selection-phase.failed { border-color: #c96a62; background: #fff1f0; color: #99423b; }
@@ -105,7 +105,6 @@
 .selection-phase details { margin-top: 7px; font-size: 11px; }
 .selection-phase details summary { cursor: pointer; }
 .selection-phase-connector { position: absolute; top: 28px; right: -15px; width: 15px; height: 2px; background: #c9d2cc; }
-@keyframes selection-phase-pulse { from { width: 38%; } to { width: 78%; } }
 .batch-recovery-actions { margin: 8px 0; padding: 9px 11px; border-left: 3px solid #d29942; background: #fff8e9; color: #735727; font-size: 12px; }
 .batch-recovery-actions strong { display: block; margin-bottom: 4px; }
 .batch-recovery-actions ol { margin: 0; padding-left: 19px; line-height: 1.6; }
@@ -147,7 +146,7 @@
 .batch-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .batch-summary > div, .batch-summary > label { min-width: 0; display: grid; align-content: center; gap: 7px; padding: 13px 15px; border: 1px solid #dfe8e2; border-radius: 10px; background: white; }
 .batch-summary small { color: #708278; font-size: 12px; }
-.batch-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #224a39; font-size: 17px; }
+.batch-summary strong { overflow-wrap: anywhere; white-space: normal; color: #224a39; font-size: 17px; line-height: 1.5; }
 .batch-summary select, .batch-card-title select { width: 100%; border: 1px solid #d3dfd7; border-radius: 7px; padding: 8px; color: #2b4d3d; background: #fff; font: inherit; }
 .batch-note { margin: 0; color: #65796e; font-size: 13px; line-height: 1.65; }
 .batch-alert { margin: 0; padding: 11px 14px; border-radius: 8px; background: #eaf3ed; color: #235740; font-size: 14px; line-height: 1.6; }

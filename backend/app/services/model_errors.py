@@ -63,7 +63,7 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
             "等待服务恢复后重新执行预检；预检失败不会创建新的分析任务。",
             "仍不可用时切换到状态为“可用”的其他模型。",
         ]
-    elif any(token in lowered for token in ("json schema", "validationerror", "jsondecodeerror", "expecting property name", "有效 json", "model results", "不符合契约", "not one of", "required property", "additional properties", "缺少 candidates")):
+    elif any(token in lowered for token in ("json schema", "validationerror", "jsondecodeerror", "expecting property name", "有效 json", "model results", "不符合契约", "不符合分析契约", "not one of", "not of type", "failed validating", "required property", "additional properties", "缺少 candidates")):
         category, title = "MODEL_SCHEMA", "模型输出格式不符合分析契约"
         summary = "模型返回内容无法按选股分析契约解析，部分字段缺失或取值不受支持。"
         match = re.search(r"['\"]([^'\"]+)['\"]\s+is not one of", raw, re.IGNORECASE)

@@ -643,6 +643,15 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
 
 
 def score_candidate(db: Session, candidate: SelectionCandidate, profile: SelectionStrategyProfile | None = None) -> dict[str, Any]:
+    analysis = candidate.analysis_json or {}
+    if (analysis.get("model_output_status") in {"FAILED", "NOT_RUN"}
+            or analysis.get("data_gate_status") == "MISSING_DATA"
+            or analysis.get("analysis_validation_status") == "PARTIAL"):
+        analysis = dict(analysis)
+        analysis.pop("scoring", None)
+        analysis["scoring_available"] = False
+        candidate.analysis_json = analysis
+        return {"status": "BLOCKED", "reason": "数据门禁、模型分析或引用校验未通过，未生成研判评分", "dimensions": []}
     profile = profile or resolve_profile(db, market=candidate.market)
     rows = _score_dimensions(db, candidate, profile)
     run = db.get(SelectionRun, candidate.run_id)

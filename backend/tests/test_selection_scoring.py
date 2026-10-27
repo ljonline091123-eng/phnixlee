@@ -39,7 +39,7 @@ def db():
             run_id=run.id, market="CN_A", symbol="000001", name="评分样本",
             entry_price=10, entry_date="2026-01-02", hard_score=0,
             hard_rules_json={}, evidence_json={"structured_observations": {}},
-            analysis_json={"model_output_status": "FAILED"},
+            analysis_json={"model_output_status": "NOT_CALLED"},
         )
         session.add(candidate)
         session.commit()
@@ -98,6 +98,20 @@ def test_trusted_score_contracts_toward_neutral(db):
     assert abs(result["trusted_score"] - 50) <= abs(result["base_score"] - 50)
     price = next(row for row in result["dimensions"] if row["dimension_code"] == "PRICE_RISK")
     assert price["status"] == "SUPPORTED" and price["coverage"] == 1
+
+
+@pytest.mark.parametrize("analysis", [
+    {"model_output_status": "FAILED"},
+    {"model_output_status": "NOT_RUN", "data_gate_status": "MISSING_DATA"},
+    {"model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL"},
+])
+def test_unverified_model_result_cannot_produce_a_score(db, analysis):
+    candidate = db.get(SelectionCandidate, db.info["candidate_id"])
+    candidate.analysis_json = {**analysis, "scoring": {"trusted_score": 88}}
+    result = score_candidate(db, candidate, enabled_profile(db))
+    assert result["status"] == "BLOCKED" and result["dimensions"] == []
+    assert "scoring" not in candidate.analysis_json
+    assert candidate.analysis_json["scoring_available"] is False
 
 
 def test_candidate_graph_relations_do_not_become_scored_facts(db):

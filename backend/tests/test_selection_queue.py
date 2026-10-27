@@ -238,6 +238,7 @@ def test_partial_candidate_read_keeps_review_context_but_hides_unverified_score(
         db.flush()
         candidate = SelectionCandidate(
             run_id=run.id, market="CN_A", symbol="DEMO001", decision="PENDING",
+            evidence_json={"documents": [{"id": 123, "title": "待核验公告", "content": "公司发布经营进展公告，项目仍在推进，部分事项有待后续核实。"}]},
             analysis_json={
                 "model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL",
                 "model": {"headline": "初步研判，仅供核对"},
@@ -278,7 +279,7 @@ def test_valid_candidate_llm_evaluation_is_generated_and_persisted(isolated):
                 "model": {"decision": "WATCH", "confidence": .72, "headline": "证据已核验",
                           "target_price": 12, "reasoning": "基于已引用事实"},
             },
-            evidence_json={"documents": [{"id": 123, "title": "已核验公告"}]},
+            evidence_json={"documents": [{"id": 123, "title": "已核验公告", "content": "公司发布经营进展公告，项目已通过验收，收入确认仍以财务披露为准。"}]},
         )
         db.add(candidate)
         db.commit()
@@ -353,11 +354,25 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
         app.dependency_overrides[get_db] = lambda: db
         client = TestClient(app)
         calls = []
+        stages = []
+        refreshed_evidence = {"documents": [{"id": 124, "source_table": "stock_news",
+            "content": "公司新披露订单签约及项目交付安排，收入影响以最终履约进度为准。"}]}
+
+        def sync(_db, _run, **kwargs):
+            stages.append("DATA")
+            assert kwargs["symbols"] == ["DEMO001"]
+            _progress(_db, _run, "DATA_SYNC", 25, "隔离采集完成")
+
+        def probe(_db, _run):
+            stages.append("MODEL_PREFLIGHT")
+            _progress(_db, _run, "MODEL_PREFLIGHT", 42, "隔离模型测试完成")
+            return None
 
         def analyze(_db, _run, candidates, **kwargs):
+            stages.append("ANALYSIS")
             calls.extend(item["symbol"] for item, _score in candidates)
             for item, _score in candidates:
-                assert item["evidence_json"] == {"documents": [{"id": 123, "content": "原始证据"}]}
+                assert item["evidence_json"]["documents"] == refreshed_evidence["documents"]
                 item["analysis_json"] = {**item["analysis_json"], "model_output_status": "SUCCESS",
                                          "analysis_validation_status": "PARTIAL"}
 
@@ -368,14 +383,25 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
             assert client.post(f"/api/v1/selection/runs/{run.id}/retry-failed").status_code == 409
             job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed"))
             assert job.payload_json["candidate_ids"] == [failed.id]
-            with patch("app.services.selection._apply_model_analysis", side_effect=analyze):
+            with patch("app.services.selection._apply_model_analysis", side_effect=analyze), \
+                    patch("app.services.selection._prepare_selection_data", side_effect=sync), \
+                    patch("app.services.selection._preflight_selection_models", side_effect=probe), \
+                    patch("app.services.selection._evidence", return_value=refreshed_evidence), \
+                    patch("app.services.selection._load_disclosure_bodies"):
                 result = execute_failed_selection_reanalysis(job.payload_json)
             assert calls == ["DEMO001"] and result["failed_count"] == 0
+            assert stages == ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"]
             db.expire_all()
             assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"}
             assert good.evidence_json == {"documents": [{"id": 456}]}
-            assert failed.evidence_json == {"documents": [{"id": 123, "content": "原始证据"}]}
-            assert failed.analysis_json["scoring"]["contract_version"] == "SELECTION_SCORECARD_V1"
+            assert failed.evidence_json["documents"] == refreshed_evidence["documents"]
+            prior = db.scalar(select(SelectionDecisionSnapshot).where(
+                SelectionDecisionSnapshot.candidate_id == failed.id,
+                SelectionDecisionSnapshot.snapshot_kind == "BEFORE_REANALYSIS"))
+            assert prior is not None
+            assert "原始证据" in str(prior.evidence_json)
+            assert "scoring" not in failed.analysis_json
+            assert failed.analysis_json["scoring_available"] is False
             assert run.status == "PARTIAL" and run.analysis_mode == "MODEL_PARTIAL"
             assert result["passed_count"] == 1 and result["citation_partial_count"] == 1
             assert run.criteria_json["retry_progress"]["passed_count"] == 1

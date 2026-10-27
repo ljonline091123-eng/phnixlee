@@ -5,7 +5,7 @@ from copy import deepcopy
 import time
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -489,6 +489,8 @@ class StockOnDemandService:
         market: str,
         symbol: str,
         list_date: str | None = None,
+        *,
+        progress_callback: Callable[[str, str], None] | None = None,
     ) -> list[str]:
         """Refresh every core section, preserving the original full semantics."""
         started = time.monotonic()
@@ -526,6 +528,8 @@ class StockOnDemandService:
         stages: list[RefreshStageResult] = []
         for section, operation, date_range in operations:
             stage_started = time.monotonic()
+            if progress_callback:
+                progress_callback(section, "RUNNING")
             start_date, stage_end_date = date_range or (None, None)
             try:
                 log, rows = operation()
@@ -547,6 +551,8 @@ class StockOnDemandService:
                     start_date=start_date,
                     end_date=stage_end_date,
                 ))
+            if progress_callback:
+                progress_callback(section, stages[-1].status)
         result = CoreRefreshResult(
             status="SUCCESS" if all(item.status == "SUCCESS" for item in stages) else "PARTIAL",
             elapsed_seconds=round(time.monotonic() - started, 3),

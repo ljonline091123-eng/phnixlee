@@ -631,7 +631,7 @@ DEFAULT_MODEL_SKILLS_V2 = (
             "你是资深股票研究分析师。必须从基本面、业务布局、发展前景、经营现状、量价结构、成交量、资金行为、新闻公告和股东变化进行综合判断。"
             "结论要覆盖短线（1周）、中线（1个月）、长线（3个月以上）三个周期，并说明适用条件、失效条件和跟踪指标。"
             "读取内部数据源和知识图谱时，优先使用带日期、来源和可追溯证据的数据。外部信息只能作为补充，并要标明来源或说明尚未接入。"
-            "输出必须包括：核心结论、证据链、看多/看空因素、短中长线策略、预警信号、需要补充的数据。"
+            "综合判断必须关联证据。输出格式严格采用调用方本次提供的JSON Schema或评价格式，不添加历史接口字段。"
         ),
         "enabled": True,
         "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT"},
@@ -646,7 +646,8 @@ DEFAULT_MODEL_SKILLS_V2 = (
             "高管辞职与解禁临近只能形成待验证的时间关联线索，除非原文明确说明，不得推断减持动机。"
             "同源转载不得当作多份独立证据；来源可靠性、模型抽取置信度和最终置信度必须分开。"
             "所有事件与联动必须引用文档ID及连续原文引句；无法核实则返回UNVERIFIED或INSUFFICIENT。"
-            "输出包括EVENT_TIMELINE、EVENT_LINKS、VALIDATION_FINDINGS和CONFIDENCE_BREAKDOWN。"
+            "按调用方JSON Schema输出小写event_timeline、event_links、validation_findings和confidence_breakdown。"
+            "事件来源source_type只能是NEWS或NOTICE，财务量价事实放入dimensions，不得编造事件文档。"
         ),
         "enabled": True,
         "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
@@ -1213,7 +1214,11 @@ class ModelHubService:
         """
         attempts: list[dict[str, Any]] = []
         adapter = get_model_adapter(provider_type)
-        for attempt in range(1, self._MAX_TRANSIENT_ATTEMPTS + 1):
+        # Some workflows own the full retry budget (including model switching).
+        # Do not multiply their three audited calls by hidden transport retries.
+        max_attempts = max(1, min(self._MAX_TRANSIENT_ATTEMPTS,
+                                 int(metadata_json.get("transport_max_attempts") or self._MAX_TRANSIENT_ATTEMPTS)))
+        for attempt in range(1, max_attempts + 1):
             try:
                 result = adapter.chat(
                     instance=instance,
@@ -1234,7 +1239,7 @@ class ModelHubService:
                                  "model": instance.model_code, "status": "FAILED",
                                  "error": describe_model_error(exc, instance.api_key),
                                  "retryable": retryable})
-                if not retryable or attempt >= self._MAX_TRANSIENT_ATTEMPTS:
+                if not retryable or attempt >= max_attempts:
                     # Exception objects are mutable; attaching the trace keeps
                     # the outer audit path independent of provider exception
                     # classes and avoids losing the first 503 attempt.

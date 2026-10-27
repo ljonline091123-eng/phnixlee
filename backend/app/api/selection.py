@@ -33,6 +33,7 @@ from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
     probe_selection_model, refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
+    _evidence_data_gate, _elapsed_between,
 )
 from app.models.ai_hub import (
     KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
@@ -59,24 +60,57 @@ def _scoring_error(exc: Exception) -> HTTPException:
 def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCandidateRead:
     tracking = db.scalar(select(SelectionTracking).where(SelectionTracking.candidate_id == candidate.id))
     analysis_json = dict(candidate.analysis_json or {})
-    if analysis_json.get("model_output_status") == "FAILED" and not analysis_json.get("model_failure_detail"):
-        detail = classify_model_error(analysis_json.get("model_failure_reason"))
+    # Historical runs predate the data-gate field. Project the same gate on
+    # read so an old zero-evidence candidate cannot continue to look like a
+    # model-generated partial conclusion. The original audit row is untouched.
+    data_gate = analysis_json.get("data_gate")
+    evidence_payload = dict(candidate.evidence_json or {})
+    run = db.get(SelectionRun, candidate.run_id)
+    if (not isinstance(data_gate, dict) and run and run.data_mode == "REAL"
+            and (str(run.analysis_mode).startswith("MODEL") or run.analysis_mode == "DATA_INSUFFICIENT")):
+        data_gate = _evidence_data_gate(evidence_payload)
+        analysis_json["data_gate"] = data_gate
+        analysis_json["data_gate_status"] = data_gate.get("status")
+    if isinstance(data_gate, dict) and data_gate.get("status") == "MISSING_DATA":
+        if analysis_json.get("model_failure_detail"):
+            analysis_json["historical_model_failure_detail"] = analysis_json.pop("model_failure_detail")
+        analysis_json["historical_model_output_status"] = analysis_json.get("model_output_status")
+        analysis_json["model_output_status"] = "NOT_RUN"
+        analysis_json["conclusion_available"] = False
+        analysis_json["provisional_conclusion_available"] = False
+        analysis_json["conclusion_source"] = "DATA_GATE_BLOCKED"
+        analysis_json["scoring_available"] = False
+        analysis_json["model_failure_reason"] = data_gate.get("reason")
+        if analysis_json.get("historical_model_output_status") in {"SUCCESS", "FAILED"}:
+            analysis_json["model_failure_reason"] = "历史分析未通过当前数据门禁，结论无效。" + str(data_gate.get("reason") or "")
+        analysis_json["summary"] = analysis_json["model_failure_reason"]
+        analysis_json.pop("model", None)
+        analysis_json.pop("scoring", None)
+        analysis_json.pop("llm_evaluation", None)
+    if analysis_json.get("model_output_status") == "FAILED":
+        attempts = analysis_json.get("model_attempts") or []
+        reason = next((row.get("reason") for row in reversed(attempts) if isinstance(row, dict) and row.get("reason")), None)
+        prior_detail = analysis_json.get("model_failure_detail") or {}
+        detail = classify_model_error(reason or prior_detail.get("raw_error") or analysis_json.get("model_failure_reason"))
         analysis_json["model_failure_detail"] = detail
         analysis_json["model_failure_reason"] = detail["summary"]
-    elif analysis_json.get("model_output_status") == "FAILED" and isinstance(analysis_json.get("model_failure_detail"), dict):
-        # Backfill the actionable recovery contract for failures persisted by
-        # older versions, without changing the original raw error or status.
-        detail = dict(analysis_json["model_failure_detail"])
-        current = classify_model_error(detail.get("raw_error") or detail.get("summary") or analysis_json.get("model_failure_reason"))
-        for key in ("category", "title", "summary", "suggestion", "retryable", "recovery_actions"):
-            if not detail.get(key) and current.get(key) is not None:
-                detail[key] = current[key]
-        analysis_json["model_failure_detail"] = detail
     if analysis_json.get("model_output_status") == "FAILED":
         analysis_json["conclusion_available"] = False
+        analysis_json["provisional_conclusion_available"] = False
         analysis_json["conclusion_source"] = analysis_json.get("conclusion_source") or "LOCAL_EVIDENCE_ONLY"
         analysis_json["scoring_available"] = False
         analysis_json.pop("scoring", None)
+        analysis_json.pop("model", None)
+        analysis_json.pop("llm_evaluation", None)
+        analysis_json["summary"] = analysis_json.get("model_failure_reason") or "模型分析失败，未形成有效结论"
+    elif analysis_json.get("model_output_status") == "NOT_RUN" or analysis_json.get("data_gate_status") == "MISSING_DATA":
+        analysis_json["conclusion_available"] = False
+        analysis_json["provisional_conclusion_available"] = False
+        analysis_json["conclusion_source"] = "DATA_GATE_BLOCKED"
+        analysis_json["scoring_available"] = False
+        analysis_json.pop("scoring", None)
+        analysis_json.pop("model", None)
+        analysis_json.pop("llm_evaluation", None)
     elif (analysis_json.get("model_output_status") == "SUCCESS"
           and analysis_json.get("analysis_validation_status") == "PARTIAL"):
         analysis_json["conclusion_available"] = False
@@ -106,9 +140,9 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
     # contract at read time without rewriting historical records.
     if not isinstance(progress_snapshot.get("phases"), dict):
         phases = {
-            "DATA": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
-            "MODEL_PREFLIGHT": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
-            "ANALYSIS": {"status": "PENDING", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "activities": []},
+            "DATA": {"status": "NOT_RECORDED", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "percent": 0, "activities": []},
+            "MODEL_PREFLIGHT": {"status": "NOT_RECORDED", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "percent": 0, "activities": []},
+            "ANALYSIS": {"status": "NOT_RECORDED", "started_at": None, "completed_at": None, "elapsed_seconds": 0, "percent": 0, "activities": []},
         }
         phase_for_stage = lambda stage: "DATA" if str(stage or "").upper() in {"QUEUED", "DATA_SYNC", "DATA_QUALITY_GATE", "SCREENING", "EVIDENCE"} else (
             "MODEL_PREFLIGHT" if "PREFLIGHT" in str(stage or "").upper() else "ANALYSIS"
@@ -116,15 +150,53 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
         for step in progress_snapshot.get("process_steps") or []:
             if not isinstance(step, dict):
                 continue
+            if str(step.get("stage") or "").upper() in {"QUEUED", "RETRY_QUEUED"}:
+                continue
             phase_name = phase_for_stage(step.get("stage"))
             phase = phases[phase_name]
+            if phase["status"] == "NOT_RECORDED":
+                phase["status"] = "RUNNING"
             phase["started_at"] = phase["started_at"] or step.get("at")
             phase["activities"].append(step)
-            if str(step.get("stage") or "").upper() in {"COMPLETED", "PARTIAL", "FAILED", "MODEL_PREFLIGHT_FAILED"}:
-                phase["status"] = "FAILED" if str(step.get("stage") or "").upper() in {"FAILED", "MODEL_PREFLIGHT_FAILED", "PARTIAL"} else "SUCCESS"
+            phase["percent"] = int(step.get("percent") or phase.get("percent") or 0)
+            if str(step.get("stage") or "").upper() in {"COMPLETED", "PARTIAL", "FAILED", "MODEL_PREFLIGHT_FAILED", "MODEL_PREFLIGHT_SKIPPED", "DATA_GATE_BLOCKED", "RETRY_COMPLETED", "RETRY_FAILED"}:
+                phase["status"] = "FAILED" if str(step.get("stage") or "").upper() in {"FAILED", "MODEL_PREFLIGHT_FAILED", "PARTIAL", "RETRY_FAILED"} else "SKIPPED" if str(step.get("stage") or "").upper() in {"MODEL_PREFLIGHT_SKIPPED", "DATA_GATE_BLOCKED"} else "SUCCESS"
                 phase["completed_at"] = step.get("at")
-            elif phase["status"] == "PENDING":
-                phase["status"] = "RUNNING"
+                if step.get("stage") in {"PARTIAL", "RETRY_COMPLETED"} and run.analysis_mode == "MODEL_PARTIAL":
+                    phase["status"] = "PARTIAL"
+            elif str(step.get("stage") or "").upper() == "MODEL_PREFLIGHT_SKIPPED":
+                phase["status"] = "SKIPPED"
+                phase["completed_at"] = step.get("at")
+        # Older runs did not persist the data gate or model preflight. Do not
+        # present an inferred "not started" state as if the new workflow ran.
+        if isinstance(criteria_json.get("data_sync"), dict):
+            data_sync = criteria_json["data_sync"]
+            phases["DATA"].update({
+                "status": "SUCCESS" if data_sync.get("status") == "SUCCESS" else "FAILED" if data_sync.get("status") == "FAILED" else "PARTIAL",
+                "percent": 100,
+            })
+        if isinstance(criteria_json.get("model_preflight"), dict):
+            preflight = criteria_json["model_preflight"]
+            phases["MODEL_PREFLIGHT"].update({
+                "status": "SUCCESS" if preflight.get("status") == "SUCCESS" else "FAILED",
+                "percent": 100,
+            })
+        if criteria_json.get("model_preflight", {}).get("status") == "SKIPPED":
+            phases["MODEL_PREFLIGHT"]["status"] = "SKIPPED"
+            phases["MODEL_PREFLIGHT"]["percent"] = 0
+        if run.analysis_mode == "DATA_INSUFFICIENT":
+            phases["ANALYSIS"]["status"] = "SKIPPED"
+            phases["ANALYSIS"]["percent"] = 0
+        # Retry workers from the previous release updated the terminal
+        # progress snapshot directly and did not append a terminal
+        # process_step. A completed run must never be rendered as an endless
+        # ANALYSIS/RUNNING phase merely because that historical step is the
+        # last one present.
+        if run.completed_at is not None and phases["ANALYSIS"].get("status") == "RUNNING":
+            phases["ANALYSIS"]["status"] = "SUCCESS" if run.analysis_mode == "MODEL_COMPLETED" else "PARTIAL" if run.analysis_mode == "MODEL_PARTIAL" else "FAILED"
+            phases["ANALYSIS"]["completed_at"] = run.completed_at.isoformat() if hasattr(run.completed_at, "isoformat") else str(run.completed_at)
+            phases["ANALYSIS"]["percent"] = 100
+            phases["ANALYSIS"]["elapsed_seconds"] = _elapsed_between(phases["ANALYSIS"].get("started_at"), phases["ANALYSIS"].get("completed_at"))
         progress_snapshot["phases"] = phases
         criteria_json["progress"] = progress_snapshot
     # The worker writes a durable model-call log before it sends the request.
@@ -136,7 +208,7 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
         progress = dict(criteria_json.get("progress") or {})
         logs = list(db.scalars(
             select(ModelCallLog).where(
-                ModelCallLog.task_type == "stock_screening",
+                ModelCallLog.task_type.in_(("stock_screening", "selection_preflight", "selection_llm_evaluation")),
                 ModelCallLog.completed_at.is_(None),
             ).order_by(ModelCallLog.started_at.desc()).limit(20)
         ).all())
@@ -145,20 +217,6 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             request = log.request_json if isinstance(log.request_json, dict) else {}
             metadata = request.get("metadata_json") if isinstance(request.get("metadata_json"), dict) else {}
             if str(metadata.get("selection_run_id") or "") == str(run.id):
-                active = (log, metadata)
-                break
-            # Calls created before the run id was included are only eligible
-            # when they started after this run and use the selected instance.
-            started_at = log.started_at
-            created_at = run.created_at
-            if started_at and created_at:
-                if started_at.tzinfo is None and created_at.tzinfo is not None:
-                    started_at = started_at.replace(tzinfo=created_at.tzinfo)
-                elif started_at.tzinfo is not None and created_at.tzinfo is None:
-                    created_at = created_at.replace(tzinfo=started_at.tzinfo)
-            if started_at and created_at and started_at >= created_at and (
-                not run.model_instance_code or log.instance_code == run.model_instance_code
-            ):
                 active = (log, metadata)
                 break
         if active:
@@ -170,7 +228,6 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             batch_index = int(progress.get("batch_index") or metadata.get("batch_index") or 1)
             batch_total = max(1, int(progress.get("batch_total") or 1))
             stage_start = 40 + round(50 * max(0, batch_index - 1) / batch_total)
-            stage_end = 40 + round(50 * batch_index / batch_total) - 1
             progress.update({
                 "activity": progress.get("activity") or f"模型调用中：{log.provider_code or '模型服务'}/{log.instance_code or '自动路由'} · 正在等待模型返回",
                 "model_instance_code": log.instance_code or progress.get("model_instance_code") or run.model_instance_code,
@@ -180,13 +237,17 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
                 "purpose": metadata.get("purpose") or progress.get("purpose") or "STOCK_SELECTION_ANALYSIS",
                 "elapsed_seconds": max(int(progress.get("elapsed_seconds") or 0), elapsed_seconds),
                 "activity_started_at": (progress.get("activity_started_at") or started_at.isoformat()) if started_at else progress.get("activity_started_at"),
-                "last_activity_at": datetime.now(timezone.utc).isoformat(),
-                "heartbeat_at": datetime.now(timezone.utc).isoformat(),
-                "percent": min(stage_end, max(int(progress.get("percent") or stage_start), stage_start + elapsed_seconds // 5)),
+                # A GET must never manufacture a heartbeat. The worker thread
+                # is the only writer of heartbeat_at; otherwise a dead call
+                # appears alive forever and the UI progress bar keeps moving.
+                "last_activity_at": progress.get("last_activity_at") or (started_at.isoformat() if started_at else None),
+                "heartbeat_at": progress.get("heartbeat_at"),
+                "percent": int(progress.get("percent") or stage_start),
                 "batch_index": batch_index,
                 "batch_total": batch_total,
                 "candidate_symbols": progress.get("candidate_symbols") or metadata.get("candidate_symbols") or [],
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": progress.get("updated_at") or started_at.isoformat() if started_at else progress.get("updated_at"),
+                "heartbeat_stale": _elapsed_between(progress.get("heartbeat_at") or (started_at.isoformat() if started_at else None)) > 15,
             })
             criteria_json["progress"] = progress
     payload = {key: getattr(run, key) for key in (
@@ -211,6 +272,37 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             row.hard_score,
         ), reverse=True)
         payload["candidates"] = [_candidate_read(db, item) for item in candidates]
+        if (payload["candidates"] and run.status not in {"QUEUED", "RUNNING"} and run.data_mode == "REAL"
+                and (str(run.analysis_mode).startswith("MODEL") or run.analysis_mode == "DATA_INSUFFICIENT")):
+            # Old summaries counted empty, invalid conclusions as partial
+            # successes. Derive the display from the same projected rows the
+            # user sees, retaining all original database audit fields.
+            projected = [item.analysis_json for item in payload["candidates"]]
+            counts = {
+                "passed_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") != "PARTIAL" for row in projected),
+                "citation_partial_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") == "PARTIAL" for row in projected),
+                "failed_count": sum(row.get("model_output_status") == "FAILED" for row in projected),
+                "data_blocked_count": sum(row.get("model_output_status") == "NOT_RUN" or row.get("data_gate_status") == "MISSING_DATA" for row in projected),
+                "evaluation_failed_count": sum(row.get("model_output_status") == "SUCCESS" and (row.get("llm_evaluation") or {}).get("status") == "FAILED" for row in projected),
+            }
+            criteria_json["result_counts"] = counts
+            summary = (f"本轮已结束：通过 {counts['passed_count']} 只、待核对 {counts['citation_partial_count']} 只、"
+                       f"模型失败 {counts['failed_count']} 只、数据不足 {counts['data_blocked_count']} 只。")
+            if counts["evaluation_failed_count"]:
+                summary += f"另有 {counts['evaluation_failed_count']} 只股票的 LLM 评价生成失败。"
+            if counts["failed_count"] or counts["data_blocked_count"] or counts["citation_partial_count"] or counts["evaluation_failed_count"]:
+                summary += "请查看逐股原因；重试将重新检查同步数据、测试所选模型，再进行分析。"
+                payload["error_message"] = summary
+            else:
+                payload["error_message"] = None
+            for key in ("progress", "retry_progress"):
+                if not isinstance(criteria_json.get(key), dict):
+                    continue
+                state = dict(criteria_json[key])
+                if state.get("message") != summary:
+                    state["historical_message"] = state.get("historical_message") or state.get("message")
+                state.update({"message": summary, **counts})
+                criteria_json[key] = state
     return SelectionRunRead(**payload)
 
 
@@ -314,7 +406,7 @@ def candidate_scorecard(candidate_id: int, db: Session = Depends(get_db)) -> dic
     candidate = db.get(SelectionCandidate, candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="选股候选不存在")
-    scoring = (candidate.analysis_json or {}).get("scoring")
+    scoring = _candidate_read(db, candidate).analysis_json.get("scoring")
     if not scoring:
         raise HTTPException(status_code=404, detail="该历史候选尚未生成八维评分")
     evaluations = refresh_candidate_evaluations(db, candidate)
@@ -330,6 +422,8 @@ def rescore_candidate(candidate_id: int, db: Session = Depends(get_db)) -> dict:
     run = db.get(SelectionRun, candidate.run_id)
     requested_profile = int((((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0)) if run else 0
     try:
+        if _candidate_read(db, candidate).analysis_json.get("conclusion_available") is False:
+            raise ValueError("当前分析未通过数据或结果校验，不能生成有效评分")
         profile = resolve_profile(db, requested_profile or None, candidate.market)
         result = score_candidate(db, candidate, profile)
         evaluations = refresh_candidate_evaluations(db, candidate)
@@ -352,7 +446,9 @@ def rescore_run(run_id: int, db: Session = Depends(get_db)) -> dict:
     try:
         profile = resolve_profile(db, profile_id or None, run.market)
         results = [{"candidate_id": candidate.id, "symbol": candidate.symbol,
-                    "scoring": score_candidate(db, candidate, profile)} for candidate in candidates]
+                    "scoring": {"status": "BLOCKED", "reason": "当前分析未通过数据或结果校验"}
+                    if _candidate_read(db, candidate).analysis_json.get("conclusion_available") is False
+                    else score_candidate(db, candidate, profile)} for candidate in candidates]
         db.commit()
         return {"run_id": run.id, "profile": serialize_profile(db, profile),
                 "candidate_count": len(results), "results": results}
@@ -854,7 +950,10 @@ def get_llm_evaluation(candidate_id: int, db: Session = Depends(get_db)) -> dict
     candidate = db.get(SelectionCandidate, candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="selection candidate not found")
-    return dict((candidate.analysis_json or {}).get("llm_evaluation") or {
+    analysis = _candidate_read(db, candidate).analysis_json
+    if analysis.get("conclusion_available") is False:
+        return {"status": "SKIPPED", "message": "数据或模型结论未通过校验，不能提供有效 LLM 评价"}
+    return dict(analysis.get("llm_evaluation") or {
         "status": "NOT_GENERATED", "message": "尚未生成 LLM 评价"
     })
 
@@ -865,8 +964,8 @@ def create_llm_evaluation(candidate_id: int, payload: SelectionEvaluationRequest
     candidate = db.get(SelectionCandidate, candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="selection candidate not found")
-    analysis = candidate.analysis_json or {}
-    if analysis.get("model_output_status") != "SUCCESS" or analysis.get("analysis_validation_status") == "PARTIAL":
+    analysis = _candidate_read(db, candidate).analysis_json
+    if analysis.get("conclusion_available") is False or analysis.get("model_output_status") != "SUCCESS" or analysis.get("analysis_validation_status") == "PARTIAL":
         raise HTTPException(status_code=409, detail="只有模型分析成功且引用校验通过后才能生成 LLM 评价")
     run = db.get(SelectionRun, candidate.run_id)
     model_code = (payload.model_instance_code if payload else None) or analysis.get("actual_instance_code") or (run.model_instance_code if run else None)
