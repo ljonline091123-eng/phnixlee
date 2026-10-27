@@ -511,6 +511,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     try {
       const next = await selectionApi.retryFailedWithModel(sourceRunId, {
         model_instance_code: selectedModelCode,
+        model_instance_codes: [selectedModelCode],
         candidate_ids: failedModelCandidates.map(item => item.id),
       });
       setRun(next); await reload();
@@ -569,22 +570,11 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
               {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只失败或待核对股票`}</button>}
             </div>
             {failedModelCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试">
-              <label>更换模型
-                <select value={selectedModelCode} disabled={busy || retryActive || !availableSwitchModels.length} onChange={event => setForm(current => ({ ...current, model_instance_code: event.target.value }))}>
-                  {!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}
-                  {modelPickerOptions.map(item => {
-                    const provider = providers.find(row => row.id === item.provider_id);
-                    const current = item.instance_code === run?.model_instance_code;
-                    const selectable = availableSwitchModels.some(candidate => candidate.instance_code === item.instance_code);
-                    const reason = modelStatusReason(item);
-                    return <option className={modelStatusClass(item)} key={item.instance_code} value={item.instance_code} disabled={!selectable}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}{current ? "（当前模型，可再次重试）" : reason ? `（${reason}）` : ""}</option>;
-                  })}
-                </select>
-              </label>
+              <strong>重试模型</strong><span>{selectedModelCode ? `沿用分析模型：${selectedModelCode}` : "尚未选择可用分析模型"}</span>
               <button type="button" disabled={busy || retryActive || !selectedModelCode || !availableSwitchModels.length} onClick={() => void retryFailedWithModel()}>
-                {busy ? "正在检查模型…" : "使用所选模型重试"}
+                {busy ? "正在检查模型…" : "使用分析模型重试"}
               </button>
-              <small>当前模型也可在证据上下文修复后再次重试；系统会先发送最小探测请求，探测失败不会创建任务。</small>
+              <small>重试不再单独选择模型；系统沿用新建分析时的模型，并先发送最小探测请求，探测失败不会创建任务。</small>
             </div>}
             <p className="selection-help">重试只处理失败且尚未复选的股票，保留本轮证据和历史调用；整批异常则创建新批次，原记录保留。</p>
             {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}

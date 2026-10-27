@@ -107,6 +107,26 @@ def test_progress_keeps_compact_backend_activity_history(isolated):
         assert steps[-1]["message"] == "等待模型返回"
 
 
+def test_progress_persists_three_phase_timeline_and_timing(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="RUNNING", criteria_json={})
+        db.add(run)
+        db.commit()
+        _progress(db, run, "DATA_SYNC", 10, "同步行情", phase="DATA_SYNC")
+        _progress(db, run, "EVIDENCE", 35, "加载证据")
+        _progress(db, run, "MODEL_PREFLIGHT", 42, "测试模型")
+        _progress(db, run, "MODEL", 70, "执行分析")
+        _progress(db, run, "COMPLETED", 100, "分析完成")
+        db.expire_all()
+        progress = (db.get(SelectionRun, run.id).criteria_json or {})["progress"]
+        assert list(progress["phases"]) == ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"]
+        assert [progress["phases"][key]["status"] for key in ("DATA", "MODEL_PREFLIGHT", "ANALYSIS")] == ["SUCCESS", "SUCCESS", "SUCCESS"]
+        assert progress["phases"]["DATA"]["activities"][-1]["message"] == "加载证据"
+        assert progress["phases"]["MODEL_PREFLIGHT"]["completed_at"]
+        assert progress["phases"]["ANALYSIS"]["completed_at"]
+        assert progress["total_elapsed_seconds"] >= 0
+
+
 def test_run_read_exposes_active_model_call_when_heartbeat_is_delayed(isolated):
     with isolated() as db:
         run = SelectionRun(
@@ -211,6 +231,78 @@ def test_failed_real_model_cannot_be_approved(isolated):
         assert db.scalar(select(SelectionTracking)) is None
 
 
+def test_partial_candidate_read_keeps_review_context_but_hides_unverified_score(isolated):
+    with isolated() as db:
+        run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL")
+        db.add(run)
+        db.flush()
+        candidate = SelectionCandidate(
+            run_id=run.id, market="CN_A", symbol="DEMO001", decision="PENDING",
+            analysis_json={
+                "model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL",
+                "model": {"headline": "初步研判，仅供核对"},
+                "scoring": {"trusted_score": 70, "dimensions": [{"dimension_code": "NEWS"}]},
+            },
+        )
+        db.add(candidate)
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            item = client.get(f"/api/v1/selection/runs/{run.id}").json()["candidates"][0]
+            analysis = item["analysis_json"]
+            assert analysis["conclusion_available"] is False
+            assert analysis["provisional_conclusion_available"] is True
+            assert analysis["conclusion_source"] == "LLM_EVIDENCE_UNVERIFIED"
+            assert analysis["scoring_available"] is False
+            assert "scoring" not in analysis
+            assert analysis["model"]["headline"] == "初步研判，仅供核对"
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_valid_candidate_llm_evaluation_is_generated_and_persisted(isolated):
+    with isolated() as db:
+        run = SelectionRun(
+            market="CN_A", status="REVIEW", analysis_mode="MODEL_COMPLETED", data_mode="REAL",
+            model_instance_code="TEST_MODEL",
+        )
+        db.add(run)
+        db.flush()
+        candidate = SelectionCandidate(
+            run_id=run.id, market="CN_A", symbol="DEMO001", name="隔离样本", decision="PENDING",
+            analysis_json={
+                "model_output_status": "SUCCESS", "analysis_validation_status": "PASSED",
+                "actual_instance_code": "TEST_MODEL",
+                "model": {"decision": "WATCH", "confidence": .72, "headline": "证据已核验",
+                          "target_price": 12, "reasoning": "基于已引用事实"},
+            },
+            evidence_json={"documents": [{"id": 123, "title": "已核验公告"}]},
+        )
+        db.add(candidate)
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        evaluation_text = "评价" * 400
+        log = SimpleNamespace(id=801, status="SUCCESS", response_text=evaluation_text, error_message=None)
+        try:
+            with patch("app.services.model_hub.ModelHubService.chat", return_value=log) as chat:
+                response = client.post(f"/api/v1/selection/candidates/{candidate.id}/llm-evaluation", json={})
+            assert response.status_code == 200, response.text
+            result = response.json()
+            assert result["text"] == evaluation_text
+            assert result["model_instance_code"] == "TEST_MODEL"
+            assert result["model_call_log_id"] == 801
+            assert result["evidence_document_ids"] == [123]
+            assert chat.call_args.kwargs["metadata_json"]["evidence_document_ids"] == [123]
+            persisted = client.get(f"/api/v1/selection/candidates/{candidate.id}/llm-evaluation").json()
+            assert persisted == result
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
 def test_unprepared_acceptance_has_stable_empty_collections(isolated):
     with isolated() as db:
         app.dependency_overrides[get_db] = lambda: db
@@ -310,7 +402,9 @@ def _model_switch_fixture(db):
         ModelInstance(provider_id=provider.id, instance_code="BACKUP_MODEL", model_code="backup", model_name="备用模型", api_key="backup-key"),
     ])
     run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL",
-                       model_instance_code="ORIGINAL_MODEL", knowledge_base_ids_json=[], graph_ids_json=[])
+                       model_instance_code="ORIGINAL_MODEL", knowledge_base_ids_json=[], graph_ids_json=[],
+                       criteria_json={"request": {"model_instance_code": "ORIGINAL_MODEL",
+                                                   "model_instance_codes": ["ORIGINAL_MODEL", "BACKUP_MODEL"]}})
     db.add(run)
     db.flush()
     candidate = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001", decision="PENDING",
@@ -356,6 +450,8 @@ def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
             assert switched["model_instance_code"] == "BACKUP_MODEL"
             assert switched["criteria_json"]["retry_of_run_id"] == run.id
             assert switched["criteria_json"]["model_switch"]["preflight"]["call_log_id"] == 701
+            assert switched["criteria_json"]["request"]["model_instance_code"] == "BACKUP_MODEL"
+            assert switched["criteria_json"]["request"]["model_instance_codes"] == ["BACKUP_MODEL"]
             assert db.get(SelectionRun, run.id).model_instance_code == "ORIGINAL_MODEL"
             clone = db.scalar(select(SelectionCandidate).where(SelectionCandidate.run_id == switched["id"]))
             assert clone is not None and clone.symbol == "DEMO001"
@@ -364,6 +460,30 @@ def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
             assert job.payload_json["selection_run_id"] == switched["id"]
             assert job.payload_json["model_instance_code"] == "BACKUP_MODEL"
             assert job.payload_json["force_model_retry"] is True
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_model_switch_reuses_analysis_model_order_and_selects_first_healthy(isolated):
+    with isolated() as db:
+        run, candidate = _model_switch_fixture(db)
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            with patch("app.api.selection.probe_selection_model") as probe:
+                probe.side_effect = [ValueError("原模型不可用"), {"status": "SUCCESS", "call_log_id": 704}]
+                response = client.post(
+                    f"/api/v1/selection/runs/{run.id}/retry-failed-with-model",
+                    json={"model_instance_codes": ["ORIGINAL_MODEL", "BACKUP_MODEL"],
+                          "candidate_ids": [candidate.id]},
+                )
+            assert response.status_code == 202, response.text
+            retried = response.json()
+            assert retried["model_instance_code"] == "BACKUP_MODEL"
+            assert retried["criteria_json"]["request"]["model_instance_codes"] == ["BACKUP_MODEL", "ORIGINAL_MODEL"]
+            assert retried["criteria_json"]["model_switch"]["model_instance_codes"] == ["ORIGINAL_MODEL", "BACKUP_MODEL"]
+            assert [call.args[1] for call in probe.call_args_list] == ["ORIGINAL_MODEL", "BACKUP_MODEL"]
         finally:
             client.close()
             app.dependency_overrides.pop(get_db, None)

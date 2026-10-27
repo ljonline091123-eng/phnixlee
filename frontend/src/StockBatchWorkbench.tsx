@@ -52,6 +52,38 @@ const heartbeatAge = (value: unknown) => {
   const date = new Date(String(value));
   return Number.isFinite(date.getTime()) ? Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)) : null;
 };
+const phaseLabels: Record<string, string> = {
+  DATA: "数据检查及同步", MODEL_PREFLIGHT: "模型测试", ANALYSIS: "分析与结果校验",
+};
+const phaseStatusLabel: Record<string, string> = {
+  PENDING: "未开始", RUNNING: "进行中", SUCCESS: "已完成", FAILED: "失败",
+};
+const phaseTime = (value: unknown) => value ? timestamp(String(value)) : "—";
+const phaseElapsed = (phase: SelectionRecord, running: boolean) => {
+  const stored = Math.max(0, Number(phase.elapsed_seconds) || 0);
+  const started = phase.started_at;
+  if (!running || !started || phase.status !== "RUNNING") return elapsed(stored);
+  const parsed = Date.parse(String(started).endsWith("Z") ? String(started) : `${String(started)}Z`);
+  return Number.isFinite(parsed) ? elapsed(Math.max(stored, Math.floor((Date.now() - parsed) / 1000))) : elapsed(stored);
+};
+
+function SelectionPhaseTimeline({ progress, running }: { progress: SelectionRecord; running: boolean }) {
+  const raw = progress.phases && typeof progress.phases === "object" ? progress.phases as SelectionRecord : {};
+  const phases: Array<SelectionRecord & { code: string }> = ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"].map(code => {
+    const phase = (raw[code] && typeof raw[code] === "object") ? raw[code] as SelectionRecord : {};
+    return { ...phase, code };
+  });
+  return <section className="selection-phase-timeline" aria-label="后台处理三阶段">
+    <div className="selection-phase-track">{phases.map((phase, index) => <div key={phase.code} className={`selection-phase ${String(phase.status || "PENDING").toLowerCase()}`}>
+      <div className="selection-phase-title"><strong>{phaseLabels[phase.code]}</strong><span>{phaseStatusLabel[String(phase.status || "PENDING")] || "未开始"}</span></div>
+      <div className="selection-phase-bar"><i /></div>
+      <div className="selection-phase-times"><span>开始 {phaseTime(phase.started_at)}</span><span>结束 {phaseTime(phase.completed_at)}</span><b>耗时 {phaseElapsed(phase, running)}</b></div>
+      {rows(phase.activities).slice(-3).reverse().map((activity, activityIndex) => <p key={`${text(activity.at)}-${activityIndex}`}>{text(activity.message) || "处理中"}</p>)}
+      {rows(phase.activities).length > 3 && <details><summary>其余 {rows(phase.activities).length - 3} 项</summary>{rows(phase.activities).slice(0, -3).reverse().map((activity, activityIndex) => <p key={`${text(activity.at)}-old-${activityIndex}`}>{text(activity.message)} · {phaseTime(activity.at)}</p>)}</details>}
+      {index < phases.length - 1 && <span className="selection-phase-connector" aria-hidden="true" />}
+    </div>)}</div>
+  </section>;
+}
 const sourceUrl = (value: unknown) => { try { const url = new URL(text(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : null; } catch { return null; } };
 const labels: Record<string, string> = {
   REVIEW: "待复核", TRACKING: "跟踪中", COMPLETED: "已完成", PARTIAL: "部分完成", APPROVED: "已确认",
@@ -83,13 +115,13 @@ const financialFields: Array<[string, string, "money" | "yuan" | "percent"]> = [
 ];
 
 function ModelMultiPicker({
-  models, providers, selected, disabled, onChange,
-}: { models: ModelInstance[]; providers: ModelProvider[]; selected: string[]; disabled?: boolean; onChange: (codes: string[]) => void }) {
+  models, providers, selected, disabled, testingCode, onTest, onChange,
+}: { models: ModelInstance[]; providers: ModelProvider[]; selected: string[]; disabled?: boolean; testingCode?: string | null; onTest: (item: ModelInstance) => void; onChange: (codes: string[]) => void }) {
   const options = models.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const toggle = (code: string) => onChange(selected.includes(code) ? selected.filter(item => item !== code) : [...selected, code]);
   return <section className="model-multi-picker" aria-label="分析模型多选">
     <div className="model-multi-heading"><strong>分析模型（可多选）</strong><small>按勾选顺序作为首选与重试顺序；每小时后台测试只用于展示信号。</small></div>
-    <div className="model-multi-list">{options.map(item => { const provider = providers.find(row => row.id === item.provider_id); const selectable = modelIsSelectable(item); const bars = Math.max(0, Math.min(4, Number(item.signal_strength || 0))); return <label key={item.instance_code} className={!selectable ? "unavailable" : ""}><input type="checkbox" checked={selected.includes(item.instance_code)} disabled={disabled || !selectable} onChange={() => toggle(item.instance_code)} /><span className="model-multi-name"><b>{item.model_name || item.model_code}</b><small>{provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}</small></span><span className="model-signal" title={`信号强度：${item.signal_strength_label || "未知"}`}>{[1,2,3,4].map(level => <i key={level} className={level <= bars ? "on" : ""} />)}</span></label>; })}</div>
+    <div className="model-multi-list">{options.map(item => { const provider = providers.find(row => row.id === item.provider_id); const selectable = modelIsSelectable(item); const bars = Math.max(0, Math.min(4, Number(item.signal_strength || 0))); const testable = item.availability_status !== "AVAILABLE" && item.availability_status !== "CHECKING"; return <div key={item.instance_code} className={`model-option ${!selectable ? "unavailable" : ""}`}><label><input type="checkbox" checked={selected.includes(item.instance_code)} disabled={disabled || !selectable} onChange={() => toggle(item.instance_code)} /><span className="model-multi-name"><b>{item.model_name || item.model_code}</b><small>{provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}</small></span><span className={`model-signal strength-${bars}`} title={`信号强度：${item.signal_strength_label || "未知"}`}>{[1,2,3,4].map(level => <i key={level} className={level <= bars ? "on" : ""} />)}</span></label>{testable && <button type="button" className="model-test-button" disabled={disabled || testingCode === item.instance_code} onClick={() => onTest(item)}>{testingCode === item.instance_code ? "测试中…" : "测试"}</button>}</div>; })}</div>
     {!options.length && <p className="batch-note">暂无已配置的可用模型，请先在模型管理中配置。</p>}
   </section>;
 }
@@ -158,6 +190,8 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const [analysisModelCodes, setAnalysisModelCodes] = useState<string[]>(() => {
     try { const raw = window.localStorage.getItem("selection.analysisModelCodes"); const parsed = raw ? JSON.parse(raw) : []; return Array.isArray(parsed) ? parsed.filter(item => typeof item === "string") : []; } catch { return []; }
   });
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [testingModelCode, setTestingModelCode] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<SelectionRecord | null>(null);
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [activityTick, setActivityTick] = useState(0);
@@ -174,7 +208,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       .then(async ([data, nextRuns, nextTracking, nextInstances, nextProviders]) => {
         if (!valid) return;
         setAcceptance(data); setRuns(nextRuns); setTracking(nextTracking);
-        setModelInstances(nextInstances); setModelProviders(nextProviders);
+        setModelInstances(nextInstances); setModelProviders(nextProviders); setModelsLoaded(true);
         const latest = nextRuns[0];
         if (latest) { const full = await selectionApi.getRun(latest.id); if (valid) setRun(full); }
       }).catch(err => { if (valid) setError(message(err)); }).finally(() => { if (valid) setLoading(false); });
@@ -188,11 +222,12 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   }, [running]);
 
   useEffect(() => {
+    if (!modelsLoaded) return;
     const valid = analysisModelCodes.filter(code => modelInstances.some(item => item.instance_code === code));
     if (valid.length !== analysisModelCodes.length) setAnalysisModelCodes(valid);
     if (valid[0] && valid[0] !== analysisModelCode) setAnalysisModelCode(valid[0]);
     try { window.localStorage.setItem("selection.analysisModelCodes", JSON.stringify(valid)); } catch { /* browser storage may be disabled */ }
-  }, [analysisModelCodes, modelInstances]);
+  }, [analysisModelCodes, analysisModelCode, modelInstances, modelsLoaded]);
 
   useEffect(() => {
     if (!running || !run) return;
@@ -293,17 +328,19 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
     } catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
   async function retryWithModel() {
-    if (!run || running || !analysisModelCode || !unresolvedCandidates.length) return;
+    if (!run || running || !analysisModelCodes.length || !unresolvedCandidates.length) return;
     const sourceRunId = run.id;
-    const selected = availableSwitchModels.find(item => item.instance_code === analysisModelCode);
+    const retryCodes = analysisModelCodes.filter(code => availableSwitchModels.some(item => item.instance_code === code));
+    if (!retryCodes.length) { setError("当前勾选的分析模型均不可用，请先点击模型后的“测试”并通过后再重试。"); return; }
+    const selected = availableSwitchModels.find(item => item.instance_code === retryCodes[0]);
     setBusy(true); setError(""); setNotice("");
     try {
       const next = await selectionApi.retryFailedWithModel(sourceRunId, {
-        model_instance_code: analysisModelCode,
+        model_instance_code: retryCodes[0], model_instance_codes: retryCodes,
         candidate_ids: unresolvedCandidates.map(item => item.id),
       });
       setRun(next); setRuns(await selectionApi.listRuns());
-      setNotice(`已通过${selected?.model_name || analysisModelCode}预检，创建新批次 #${next.id}；原批次 #${sourceRunId} 保留。`);
+      setNotice(`已按分析模型勾选顺序通过${selected?.model_name || retryCodes[0]}预检，创建新批次 #${next.id}；原批次 #${sourceRunId} 保留。`);
     } catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
 
@@ -366,6 +403,17 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const unresolvedCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.model_output_status === "FAILED" || item.analysis_json.analysis_validation_status === "PARTIAL")) || [];
   const modelPickerOptions = modelInstances.filter(item => item.enabled && modelProviders.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const availableSwitchModels = modelPickerOptions.filter(modelIsSelectable);
+  async function testUnavailableModel(item: ModelInstance) {
+    setTestingModelCode(item.instance_code); setError(""); setNotice("");
+    try {
+      const result = await api.testModelInstance(item.id);
+      const refreshed = await api.listModelInstances();
+      setModelInstances(refreshed);
+      if (result.status === "SUCCESS") setNotice(`${item.model_name || item.instance_code} 测试通过，已转为可用。`);
+      else setError(`${item.model_name || item.instance_code} 测试未通过：${result.response_text || result.message || "模型未返回成功"}`);
+    } catch (err) { setError(`${item.model_name || item.instance_code} 测试失败：${message(err)}`); }
+    finally { setTestingModelCode(null); }
+  }
   const progress = (run?.criteria_json.progress || {}) as SelectionRecord;
   const progressHeartbeat = text(progress.heartbeat_at || progress.updated_at);
   const progressHeartbeatAge = heartbeatAge(progress.heartbeat_at);
@@ -384,6 +432,10 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const documentCount = new Set(run?.candidates.flatMap(item => rows(item.evidence_json.documents).map(doc => doc.id)) || []).size;
   const runTracking = tracking.filter(item => run?.candidates.some(candidate => candidate.id === item.candidate_id));
   const requestSymbols = (run?.criteria_json.request as SelectionRecord | undefined)?.symbols;
+  const requestModelCodes = Array.isArray((run?.criteria_json.request as SelectionRecord | undefined)?.model_instance_codes)
+    ? ((run?.criteria_json.request as SelectionRecord).model_instance_codes as unknown[]).map(text).filter(Boolean)
+    : run?.model_instance_code ? [run.model_instance_code] : [];
+  const requestModelNames = requestModelCodes.map(code => modelInstances.find(item => item.instance_code === code)?.model_name || code);
   const selectedCount = Math.max(run?.candidate_count || 0, Array.isArray(requestSymbols) ? requestSymbols.length : 0);
   useEffect(() => { setResultPage(1); }, [run?.id]);
   const evidence = detail?.evidence_json;
@@ -401,9 +453,8 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   if (advanced) return <><button className="batch-return" onClick={() => setAdvanced(false)}>← 返回选股工作台</button><AdvancedWorkbench mode={mode} initialCreate={newSelection} initialModelCode={analysisModelCode || run?.model_instance_code || ""} onCreated={created => {setRun(created); setRuns(current => [created, ...current]); setAdvanced(false); setNewSelection(false);}} /></>;
   return <main className="batch-workbench">
     {run && <button type="button" className="batch-scope-button" onClick={() => setShowRunScope(true)}>查看本次任务股票与参数</button>}
-    {run && <div className="selection-stage-banner" role="status"><strong>{text(progress.stage) === "DATA_SYNC" ? "第一阶段：同步股票数据" : text(progress.stage) === "DATA_QUALITY_GATE" ? "第二阶段：检查数据完整性" : ["MODEL_PREFLIGHT", "MODEL_PREFLIGHT_FAILED"].includes(text(progress.stage)) ? "第三阶段：测试模型可用性" : ["MODEL", "MODEL_ANALYSIS"].includes(text(progress.stage)) ? "第四阶段：模型分析" : text(progress.stage) === "COMPLETED" ? "第五阶段：校验分析引用" : "任务阶段"}</strong><span>数据同步 → 数据质量门禁 → 模型测试 → 模型分析 → 结果校验</span></div>}
-    {mode === "selection" && <ModelMultiPicker models={modelInstances} providers={modelProviders} selected={analysisModelCodes} disabled={busy || running} onChange={codes => { setAnalysisModelCodes(codes); setAnalysisModelCode(codes[0] || ""); }} />}
-    <header className="batch-heading"><div><p className="eyebrow">多源证据 · 可追溯分析</p><h1>选股分析工作台</h1><p>选择股票与知识范围 → 后台分析 → 核对结论与原文</p>{mode === "selection" && <label className="batch-model-picker">分析模型<select value={analysisModelCode} onChange={event => setAnalysisModelCode(event.target.value)} disabled={busy || running}><option value="">按路由选择（预检后锁定实际模型）</option>{modelPickerOptions.map(item => { const provider = modelProviders.find(row => row.id === item.provider_id); const status = modelStatusLabel(item); const reason = modelStatusReason(item); return <option key={item.instance_code} value={item.instance_code} disabled={!modelIsSelectable(item)}>{item.model_name || item.model_code} · {item.instance_code} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {status}{reason ? `（${reason}）` : ""}</option>; })}</select><small className="batch-model-picker-hint">“可用”表示连接成功；“选股契约”显示最近完整任务是否通过。任务运行期间才会锁定选择。</small></label>}</div><div className="batch-actions"><button onClick={() => {setNewSelection(false); setAdvanced(true);}}>高级工作台</button>
+    {mode === "selection" && <ModelMultiPicker models={modelInstances} providers={modelProviders} selected={analysisModelCodes} disabled={busy || running} testingCode={testingModelCode} onTest={item => void testUnavailableModel(item)} onChange={codes => { setAnalysisModelCodes(codes); setAnalysisModelCode(codes[0] || ""); }} />}
+    <header className="batch-heading"><div><p className="eyebrow">多源证据 · 可追溯分析</p><h1>选股分析工作台</h1><p>选择股票与知识范围 → 后台分析 → 核对结论与原文</p><small className="batch-model-picker-hint">分析模型请在上方多选；勾选顺序同时用于首选模型和失败重试顺序。</small></div><div className="batch-actions"><button onClick={() => {setNewSelection(false); setAdvanced(true);}}>高级工作台</button>
       {mode === "selection" ? <><button disabled={busy || loading || running || !acceptance?.prepared} onClick={() => void start()}>{preflightBusy ? "正在检查数据与模型…" : busy ? "提交中…" : "验证20股样本"}</button><button className="primary-button" onClick={() => {setNewSelection(true); setAdvanced(true);}}>新建选股</button></> : <button className="primary-button" disabled={busy || loading} onClick={() => void refreshTracking()}>刷新跟踪</button>}</div></header>
     {error && <p className="batch-alert error" role="alert">{error}</p>}{notice && <p className="batch-alert" role="status">{notice}</p>}
     {preflight && !run && <section className="batch-preflight" aria-label="分析前检查结果"><strong>分析前检查</strong><span>模型：{text((preflight.model || {}).title) || (preflight.model_ready ? "可用" : "不可用")}</span><span>数据：{preflight.data_ready ? "齐备" : `部分缺失（${Number((preflight.data as SelectionRecord)?.missing_symbols?.length || 0)} 只）`}</span>{(Array.isArray(preflight.blockers) ? preflight.blockers : []).map((item, index) => <p className="batch-alert error" key={index}>{text(item)}</p>)}{(Array.isArray(preflight.warnings) ? preflight.warnings : []).slice(0, 3).map((item, index) => <p className="batch-note" key={index}>{text(item)}</p>)}</section>}
@@ -419,12 +470,13 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
     {loading && <p className="batch-empty" role="status">正在读取20股数据与历史分析…</p>}
     {!loading && !run && <p className="batch-empty">{acceptance?.prepared ? "数据准备已通过，请点击“新建选股”或“验证20股样本”。" : "数据准备尚未完成，请查看验收状态。"}</p>}
     {run && <section className="batch-card"><div className="batch-card-title"><div><h2>{running ? "正在分析" : "本轮结果"} <span className="batch-badge">{label(run.status)}</span></h2><span>分析时间 {timestamp(run.as_of)}（北京时间）</span><div className="batch-model-status"><strong>实际执行模型：{actualModel?.model_name || actualModelCode || "尚未开始调用"}</strong><small>{actualModelCode ? `${actualModelCode} · ${actualProvider?.provider_name || actualProvider?.provider_code || "模型服务"}` : "预检后才会确定实际模型"}</small></div></div><select aria-label="历史分析批次" disabled={busy} value={run.id} onChange={event => { setError(""); void selectionApi.getRun(Number(event.target.value)).then(setRun).catch(err => setError(message(err))); }}>{fixedRuns.map(item => <option key={item.id} value={item.id}>第{item.id}轮 · {label(item.status)}</option>)}</select></div>
-      {(isRunning(run) || retryActive) && <div className={`batch-progress${progressStale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{text(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{text(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsedSeconds)}</span><span>实际模型：{text(progress.model_instance_code) || actualModelCode || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>{Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}{Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}<span>最近心跳：{progressHeartbeat ? `${heartbeatAge(progressHeartbeat) ?? 0} 秒前` : "尚未记录"}</span></div>{progressStale && <strong className="batch-progress-warning">最近 {progressHeartbeatAge} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>后台任务会持续记录当前阶段、调用编号和心跳；百分比表示阶段进度，不代表模型响应速度。</small>{rows(progress.process_steps).length > 0 && <div className="batch-process-steps"><strong>后台处理记录</strong><ol>{rows(progress.process_steps).slice(-8).reverse().map((step, index) => <li key={`${text(step.at)}-${index}`}><span>{text(step.message) || "处理中"}</span><small>{text(step.stage)} · {Number(step.percent || 0)}% · {text(step.at) ? timestamp(text(step.at)) : "刚刚"}</small></li>)}</ol></div>}</div>}
+      <SelectionPhaseTimeline progress={progress} running={running} />
+      {(isRunning(run) || retryActive) && <div className={`batch-progress${progressStale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{text(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{text(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsedSeconds)}</span><span>实际模型：{text(progress.model_instance_code) || actualModelCode || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>{Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}{Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}<span>最近心跳：{progressHeartbeat ? `${heartbeatAge(progressHeartbeat) ?? 0} 秒前` : "尚未记录"}</span></div>{progressStale && <strong className="batch-progress-warning">最近 {progressHeartbeatAge} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>后台任务会持续记录当前阶段、调用编号和心跳；百分比表示阶段进度，不代表模型响应速度。</small></div>}
       {backfillActive && <div className="batch-progress" role="status"><div><strong>{text(backfillProgress.message) || "正在补齐缺失数据"}</strong><span>{Number(backfillProgress.percent || 0)}%</span></div><progress aria-label="数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /><small>逐股票、逐板块记录成功、空数据和失败原因；旧分析保持不变。</small></div>}
       {run.error_message && <p className="batch-alert error">{run.error_message}</p>}
       {(unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
         <div className="selection-scope-heading"><strong>已通过引用校验 {modelCount} 只 · 待核对 {partialCount} 只 · 失败 {failedCandidates.length} 只</strong><button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在重试失败项…" : run.status === "FAILED" ? "重新执行此批次" : partialCount ? `重新分析 ${unresolvedCandidates.length} 只失败或待核对股票` : `重试 ${failedCandidates.length} 只失败股票`}</button></div>
-        {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="选择模型并重试"><label>重试模型<select value={analysisModelCode} disabled={busy || running || !availableSwitchModels.length} onChange={event => setAnalysisModelCode(event.target.value)}>{!availableSwitchModels.length && <option value="">暂无可用的已配置模型</option>}{modelPickerOptions.map(item => { const provider = modelProviders.find(row => row.id === item.provider_id); const current = item.instance_code === run?.model_instance_code; const selectable = availableSwitchModels.some(candidate => candidate.instance_code === item.instance_code); const reason = modelStatusReason(item); return <option key={item.instance_code} value={item.instance_code} disabled={!selectable}>{item.model_name} · {provider?.provider_name || provider?.provider_code || "模型服务"} · {modelStatusLabel(item)}{current ? "（当前模型，可再次重试）" : reason ? `（${reason}）` : ""}</option>; })}</select></label><button type="button" disabled={busy || running || !analysisModelCode || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "使用所选模型重试"}</button><small>上方“分析模型”和这里使用同一选择；可在上下文修复后使用当前模型再次重试。系统会先做最小连通探测，原批次和调用记录保持不变。</small></div>}
+        {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="使用分析模型重试"><strong>重试模型</strong><span>使用上方已勾选的分析模型，按顺序进行预检和重试：{analysisModelCodes.length ? analysisModelCodes.join(" → ") : "尚未勾选"}</span><button type="button" disabled={busy || running || !analysisModelCodes.length || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "使用已选模型重试"}</button><small>重试不再单独选择模型，避免上下两处配置不一致；原批次、证据和调用记录保持不变。</small></div>}
         <p className="batch-note">逐股重试保留成功结果、本轮证据及历史尝试；整批异常会创建新批次。</p>
         {retryProgress.message && <p role="status">{text(retryProgress.message)}</p>}
         {failedCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedCandidates.length}）</summary><div className="selection-failure-list">{failedCandidates.map(item => { const detail = (item.analysis_json.model_failure_detail || {}) as SelectionRecord; const actions = rows(detail.recovery_actions); return <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p><b>{text(detail.title) || "执行未完成"}</b>：{text(detail.summary) || text(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误，请重试。"}</p><p className="batch-note">建议：{text(detail.suggestion) || "请查看调用记录或更换模型后重试。"}</p>{actions.length > 0 && <div className="batch-recovery-actions"><strong>针对性处理步骤</strong><ol>{actions.map((action, index) => <li key={index}>{text(action)}</li>)}</ol></div>}<details><summary>查看技术详情</summary><pre>{text(detail.raw_error) || text(item.analysis_json.model_failure_reason) || "暂无原始错误"}</pre></details>{attemptsNewestFirst(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{attempt.at ? timestamp(text(attempt.at)) : ""} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {text(attempt.reason) || "已返回结果并经过引用校验"}</small>)}</article>; })}</div></details>}
@@ -444,12 +496,12 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       {detailTab === "facts" && <><h3>股票与公司</h3><p>{text(evidence?.identity?.company?.name) || "公司名称未提供"}</p><p className="batch-note">{text(evidence?.identity?.canonical_security_id)} · {text(evidence?.identity?.canonical_company_id)}</p><h3>数值与事实</h3><div className="batch-facts">{factList.slice(0, 35).map((fact, index) => <Fact key={`${fact.id}-${index}`} fact={fact} />)}</div></>}
       {detailTab === "documents" && <><p className="batch-note">模型引用 {citedIds.size} 篇文档 · 事实 {model.evidence_fact_ids?.length || 0} 条 · 切片 {model.evidence_chunk_ids?.length || 0} 条。展开文档可读取本次保存的原文快照。</p>{[...documentList].sort((a,b) => Number(Number(b.id) === focusDocument) - Number(Number(a.id) === focusDocument)).map(doc => <SourceDocument key={`${detail.id}-${doc.id}`} doc={doc} candidateId={detail.id} cited={citedIds.has(Number(doc.id))} selected={Number(doc.id) === focusDocument} />)}<h3>本次载入的切片</h3>{rows(evidence?.chunks).map((chunk, index) => <details key={index}><summary>{text(chunk.section_title) || `片段${index + 1}`} · 向量{label(text(chunk.embedding_status))}</summary><p>{text(chunk.text)}</p></details>)}</>}
       {detailTab === "trace" && <><h3>图谱关系</h3>{rows(evidence?.graph_paths).slice(0, 12).map((path, index) => <p key={index}>{text(path.subject_name)} → {label(text(path.predicate))} → {text(path.object_name)}<br /><small>证据文档 #{path.evidence_document_id} · {label(text(path.verification_status))}</small></p>)}<h3>血缘追踪</h3><p className="batch-note">{rows(evidence?.lineage).length} 条血缘记录 · {rows(evidence?.lakehouse_datasets).length} 个湖仓版本</p>{rows(evidence?.lineage).slice(0, 10).map((item, index) => <details key={index}><summary>{text(item.transformation)}</summary><p>{text(item.upstream_type)}:{text(item.upstream_id)} → {text(item.downstream_type)}:{text(item.downstream_id)}</p></details>)}<p className="batch-note">上下文版本：{text(evidence?.context_version)}<br />图谱版本：{text(evidence?.graph_version)}</p></>}
-      {detailTab === "llm" && <section className="llm-evaluation-panel"><div className="analysis-card-heading"><h3>LLM评价</h3><button type="button" disabled={llmEvaluationBusy || detail.analysis_json.model_output_status !== "SUCCESS" || detail.analysis_json.analysis_validation_status === "PARTIAL"} onClick={() => void generateLlmEvaluation(detail)}>{llmEvaluationBusy ? "正在生成…" : llmEvaluation?.status === "SUCCESS" ? "重新生成评价" : "生成约800字评价"}</button></div>{detail.analysis_json.model_output_status !== "SUCCESS" ? <p className="batch-alert warning">模型分析未成功，暂无可评价的有效结论。</p> : llmEvaluation?.status === "SUCCESS" ? <><p className="llm-evaluation-text">{text(llmEvaluation.text)}</p><p className="batch-note">模型：{text(llmEvaluation.model_instance_code)} · 生成时间：{text(llmEvaluation.generated_at)}</p><button type="button" className="primary-button" disabled={busy || detail.decision !== "PENDING"} onClick={() => void confirmFollowFromEvaluation(detail)}>确认跟踪</button></> : <p className="batch-note">评价会读取已通过引用校验的结论、新闻公告、财务、量价和图谱证据，不会生成新的事实。</p>}</section>}
+      {detailTab === "llm" && <section className="llm-evaluation-panel"><div className="analysis-card-heading"><h3>LLM评价</h3><small>评价在分析流程的第三阶段自动生成并保存；此处仅查看已保存结果。</small><button type="button" disabled={llmEvaluationBusy || detail.analysis_json.model_output_status !== "SUCCESS" || detail.analysis_json.analysis_validation_status === "PARTIAL"} onClick={() => void generateLlmEvaluation(detail)}>{llmEvaluationBusy ? "正在复核…" : "重新生成评价"}</button></div>{detail.analysis_json.model_output_status !== "SUCCESS" ? <p className="batch-alert warning">模型分析未成功，暂无可评价的有效结论。</p> : llmEvaluation?.status === "SUCCESS" ? <><p className="llm-evaluation-text">{text(llmEvaluation.text)}</p><p className="batch-note">模型：{text(llmEvaluation.model_instance_code)} · 生成时间：{text(llmEvaluation.generated_at)}</p><button type="button" className="primary-button" disabled={busy || detail.decision !== "PENDING"} onClick={() => void confirmFollowFromEvaluation(detail)}>确认跟踪</button></> : <p className="batch-note">本轮分析未生成评价或评价模型调用失败：{text(llmEvaluation?.message) || "请查看第三阶段记录后重试。"}</p>}</section>}
       {detail.decision === "PENDING" && <footer><label>确认目标价<input aria-label="确认目标价" type="number" min="0.000001" step="any" value={targetPrice} onChange={event => setTargetPrice(event.target.value)} /></label><button disabled={busy} onClick={() => void review("REJECTED")}>排除</button><button className="primary-button" disabled={busy || !(Number(targetPrice) > 0) || detail.analysis_json.model_output_status !== "SUCCESS" || detail.analysis_json.analysis_validation_status === "PARTIAL"} onClick={() => void review("APPROVED")}>确认并跟踪</button></footer>}
     </section></div>}
     {showRunScope && run && <div className="batch-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setShowRunScope(false); }}><section className="batch-detail batch-run-scope-dialog" role="dialog" aria-modal="true" aria-label="本次任务范围与参数">
       <header><div><h2>本次任务范围与参数</h2><span>批次 #{run.id} · 创建于 {timestamp(run.created_at)}</span></div><button type="button" onClick={() => setShowRunScope(false)}>关闭</button></header>
-      <div className="batch-scope-grid"><div><strong>股票</strong><p>{Array.isArray(requestSymbols) && requestSymbols.length ? requestSymbols.join("、") : "按筛选条件生成候选"}</p></div><div><strong>分析周期</strong><p>{Number(run.criteria_json.period_months || 3)} 个月 · {text(run.criteria_json.period_start) || "--"} 至 {text(run.criteria_json.period_end) || "--"}</p></div><div><strong>模型</strong><p>{actualModel?.model_name || actualModelCode || "自动路由"}</p></div><div><strong>知识库 / 图谱</strong><p>{run.knowledge_base_ids_json.join(", ") || "未指定"} / {run.graph_ids_json.join(", ") || "未指定"}</p></div><div><strong>筛选参数</strong><p>候选上限 {run.candidate_limit} · 涨跌幅阈值 {text((run.criteria_json.request as SelectionRecord | undefined)?.min_abs_change_pct) || "0"}% · 成交量比 {text((run.criteria_json.request as SelectionRecord | undefined)?.min_volume_ratio) || "0"}</p></div><div><strong>数据模式</strong><p>{run.data_mode} · 截止 {timestamp(run.as_of)}</p></div></div>
+      <div className="batch-scope-grid"><div><strong>股票</strong><p>{Array.isArray(requestSymbols) && requestSymbols.length ? requestSymbols.join("、") : "按筛选条件生成候选"}</p></div><div><strong>分析周期</strong><p>{Number(run.criteria_json.period_months || 3)} 个月 · {text(run.criteria_json.period_start) || "--"} 至 {text(run.criteria_json.period_end) || "--"}</p></div><div><strong>用户勾选模型</strong><p>{requestModelNames.length ? requestModelNames.join(" → ") : "历史任务未记录多模型顺序"}</p></div><div><strong>实际执行模型</strong><p>{actualModel?.model_name || actualModelCode || "尚未开始执行"}</p></div><div><strong>知识库 / 图谱</strong><p>{run.knowledge_base_ids_json.join(", ") || "未指定"} / {run.graph_ids_json.join(", ") || "未指定"}</p></div><div><strong>筛选参数</strong><p>候选上限 {run.candidate_limit} · 涨跌幅阈值 {text((run.criteria_json.request as SelectionRecord | undefined)?.min_abs_change_pct) || "0"}% · 成交量比 {text((run.criteria_json.request as SelectionRecord | undefined)?.min_volume_ratio) || "0"}</p></div><div><strong>数据模式</strong><p>{run.data_mode} · 截止 {timestamp(run.as_of)}</p></div></div>
     </section></div>}
   </main>;
 }
