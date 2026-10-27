@@ -73,10 +73,10 @@ function SelectionPhaseTimeline({ progress, running }: { progress: SelectionReco
     const phase = (raw[code] && typeof raw[code] === "object") ? raw[code] as SelectionRecord : {};
     return { ...phase, code };
   });
-   return <section className="selection-phase-timeline" aria-label="后台处理三阶段">
+  return <section className="selection-phase-timeline" aria-label="后台处理三阶段">
     <div className="selection-phase-track">{phases.map((phase, index) => <div key={phase.code} className={`selection-phase ${String(phase.status || "PENDING").toLowerCase()}`}>
       <div className="selection-phase-title"><strong>{phaseLabels[phase.code]}</strong><span>{phaseStatusLabel[String(phase.status || "PENDING")] || "未开始"}</span></div>
-       <div className="selection-phase-bar"><i style={{ width: `${Math.max(0, Math.min(100, Number(phase.percent || (phase.status === "SUCCESS" || phase.status === "FAILED" ? 100 : 0))))}%` }} /></div>
+      <div className="selection-phase-bar"><i style={{ width: `${Math.max(0, Math.min(100, Number(phase.percent || (phase.status === "SUCCESS" || phase.status === "FAILED" ? 100 : 0))))}%` }} /></div>
       <div className="selection-phase-times"><span>开始 {phaseTime(phase.started_at)}</span><span>结束 {phaseTime(phase.completed_at)}</span><b>耗时 {phaseElapsed(phase, running)}</b></div>
       {rows(phase.activities).slice(-3).reverse().map((activity, activityIndex) => <p key={`${text(activity.at)}-${activityIndex}`}>{text(activity.message) || "处理中"}</p>)}
       {rows(phase.activities).length > 3 && <details><summary>其余 {rows(phase.activities).length - 3} 项</summary>{rows(phase.activities).slice(0, -3).reverse().map((activity, activityIndex) => <p key={`${text(activity.at)}-old-${activityIndex}`}>{text(activity.message)} · {phaseTime(activity.at)}</p>)}</details>}
@@ -472,7 +472,27 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
     {!loading && !run && <p className="batch-empty">{acceptance?.prepared ? "数据准备已通过，请点击“新建选股”或“验证20股样本”。" : "数据准备尚未完成，请查看验收状态。"}</p>}
     {run && <section className="batch-card"><div className="batch-card-title"><div><h2>{running ? "正在分析" : "本轮结果"} <span className="batch-badge">{label(run.status)}</span></h2><span>分析时间 {timestamp(run.as_of)}（北京时间）</span><div className="batch-model-status"><strong>实际执行模型：{actualModel?.model_name || actualModelCode || "尚未开始调用"}</strong><small>{actualModelCode ? `${actualModelCode} · ${actualProvider?.provider_name || actualProvider?.provider_code || "模型服务"}` : "预检后才会确定实际模型"}</small></div></div><select aria-label="历史分析批次" disabled={busy} value={run.id} onChange={event => { setError(""); void selectionApi.getRun(Number(event.target.value)).then(setRun).catch(err => setError(message(err))); }}>{fixedRuns.map(item => <option key={item.id} value={item.id}>第{item.id}轮 · {label(item.status)}</option>)}</select></div>
       <SelectionPhaseTimeline progress={progress} running={running} />
-  {(isRunning(run) || retryActive) && <div className={`batch-progress${progressStale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{text(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{text(progress.activity || progress.message) || "等待工作线程启动"}</span><span>当前动作耗时：{elapsed(liveElapsedSeconds)}</span><span>实际模型：{text(progress.model_instance_code) || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>{Number(progress.attempt || 0) > 0 && <span>尝试：{Number(progress.attempt)} / 3</span>}{progress.active_model_call_id ? <span>调用记录：#{text(progress.active_model_call_id)}</span> : null}{Number(progress.total_stock_count || 0) > 0 && <span>已核验：{Number(progress.completed_stock_count || 0)} / {Number(progress.total_stock_count)} 只</span>}{Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}{Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}<span>最近心跳：{progressHeartbeat ? `${heartbeatAge(progressHeartbeat) ?? 0} 秒前` : "尚未记录"}</span></div>{(progress.last_validation_error || progress.last_call_error) ? <p className="batch-missing">最近一次未通过：{text(progress.last_validation_error || progress.last_call_error)}</p> : null}{progressStale && <strong className="batch-progress-warning">最近 {progressHeartbeatAge} 秒没有心跳更新，后台可能异常；系统不会把等待时间当作进度，模型调用超时后会按重试策略处理。</strong>}<small>进度按已完成工作记录；等待模型时百分比保持不变，耗时和心跳持续更新。</small></div>}
+      {(isRunning(run) || retryActive) && <div className={`batch-progress${progressStale ? " stale" : ""}`} role="status">
+        <div><strong>当前阶段：{text(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div>
+        <progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} />
+        <div className="batch-progress-meta">
+          <span className="batch-progress-activity">当前动作：{text(progress.activity || progress.message) || "等待工作线程启动"}</span>
+          <span>当前动作耗时：{elapsed(liveElapsedSeconds)}</span>
+          <span>实际模型：{text(progress.model_instance_code) || "预检后确定"}</span>
+          <span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>
+          {Number(progress.attempt || 0) > 0 && <span>尝试：{Number(progress.attempt)} / 3</span>}
+          {progress.active_model_call_id ? <span>调用记录：#{text(progress.active_model_call_id)}</span> : null}
+          {Number(progress.total_stock_count || 0) > 0 && <span>已处理：{Number(progress.completed_stock_count || 0)} / {Number(progress.total_stock_count)} 只</span>}
+          {progress.verified_stock_count != null && <span>有效返回：{Number(progress.verified_stock_count)} 只</span>}
+          {progress.failed_stock_count != null && <span>三次未通过：{Number(progress.failed_stock_count)} 只</span>}
+          {Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}
+          {Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}
+          <span>最近心跳：{progressHeartbeat ? `${heartbeatAge(progressHeartbeat) ?? 0} 秒前` : "尚未记录"}</span>
+        </div>
+        {(progress.last_validation_error || progress.last_call_error) ? <p className="batch-missing">最近一次未通过：{text(progress.last_validation_error || progress.last_call_error)}</p> : null}
+        {progressStale && <strong className="batch-progress-warning">最近 {progressHeartbeatAge} 秒没有心跳更新，后台可能异常；系统不会把等待时间当作进度，模型调用超时后会按重试策略处理。</strong>}
+        <small>进度按已完成工作记录；等待模型时百分比保持不变，耗时和心跳持续更新。</small>
+      </div>}
       {backfillActive && <div className="batch-progress" role="status"><div><strong>{text(backfillProgress.message) || "正在补齐缺失数据"}</strong><span>{Number(backfillProgress.percent || 0)}%</span></div><progress aria-label="数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /><small>逐股票、逐板块记录成功、空数据和失败原因；旧分析保持不变。</small></div>}
       {run.error_message && <p className="batch-alert error">{run.error_message}</p>}
       {(unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
@@ -484,8 +504,8 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       </section>}
       {run.missing_data_json.length > 0 && <details className="batch-missing"><summary>数据缺口与限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, index) => <li key={index}>{item}</li>)}</ul><button disabled={busy || running} onClick={() => void backfill()}>补齐全部缺失并重新分析</button></details>}
       <div className="batch-table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>模型判断</th><th>证据</th><th>确认状态</th><th>操作</th></tr></thead><tbody>{visibleCandidates.map(item => {
-         const dataBlocked = item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA";
-         const success = item.analysis_json.model_output_status === "SUCCESS" && !dataBlocked;
+        const dataBlocked = item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA";
+        const success = item.analysis_json.model_output_status === "SUCCESS" && !dataBlocked;
         const partial = item.analysis_json.analysis_validation_status === "PARTIAL";
         const local = !!item.analysis_json.local_multi_source;
          return <tr key={item.id}><td><strong>{item.name || item.symbol}</strong><small>{item.symbol}</small></td><td>{number(item.entry_price)} 元<small>{item.entry_date || "缺少日期"}</small></td><td><span className={`batch-badge ${success && !partial ? "" : "warning"}`}>{dataBlocked ? "数据不足 · 未分析" : partial ? "证据不足 · 待核对" : success ? label(text(item.analysis_json.recommendation)) : local ? "模型失败 · 本地证据盘点" : label(text(item.analysis_json.model_output_status))}</span><small className="batch-clamp">{dataBlocked ? text(item.analysis_json.model_failure_reason) || "未达到模型分析数据门槛" : success ? text((item.analysis_json.model as SelectionRecord)?.headline || item.analysis_json.summary) : local ? "模型未返回成功结果；仅保存证据盘点，不是模型结论" : "尚无有效模型结论"}</small></td><td>{rows(item.evidence_json.documents).length} 篇文档<small>{rows(item.evidence_json.facts).length} 条事实与观测</small></td><td>{label(item.decision)}</td><td><button onClick={() => { setDetail(item); setFocusDocument(null); setDetailTab("conclusion"); setTargetPrice(text(item.analysis_json.target_price)); }}>分析与证据</button></td></tr>;

@@ -33,7 +33,7 @@ from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
     probe_selection_model, refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
-    _evidence_data_gate, _elapsed_between,
+    _evidence_data_gate, _elapsed_between, _selection_result_counts,
 )
 from app.models.ai_hub import (
     KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
@@ -277,14 +277,7 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             # Old summaries counted empty, invalid conclusions as partial
             # successes. Derive the display from the same projected rows the
             # user sees, retaining all original database audit fields.
-            projected = [item.analysis_json for item in payload["candidates"]]
-            counts = {
-                "passed_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") != "PARTIAL" for row in projected),
-                "citation_partial_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") == "PARTIAL" for row in projected),
-                "failed_count": sum(row.get("model_output_status") == "FAILED" for row in projected),
-                "data_blocked_count": sum(row.get("model_output_status") == "NOT_RUN" or row.get("data_gate_status") == "MISSING_DATA" for row in projected),
-                "evaluation_failed_count": sum(row.get("model_output_status") == "SUCCESS" and (row.get("llm_evaluation") or {}).get("status") == "FAILED" for row in projected),
-            }
+            counts = _selection_result_counts(payload["candidates"], data_mode=run.data_mode)
             criteria_json["result_counts"] = counts
             summary = (f"本轮已结束：通过 {counts['passed_count']} 只、待核对 {counts['citation_partial_count']} 只、"
                        f"模型失败 {counts['failed_count']} 只、数据不足 {counts['data_blocked_count']} 只。")

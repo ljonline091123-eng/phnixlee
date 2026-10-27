@@ -893,6 +893,35 @@ def _needs_model_reanalysis(candidate: SelectionCandidate) -> bool:
     return analysis.get("model_output_status") in {"FAILED", "NOT_RUN"} or analysis.get("analysis_validation_status") == "PARTIAL" or analysis.get("data_gate_status") == "MISSING_DATA"
 
 
+def _selection_result_counts(candidates: list[SelectionCandidate], *, data_mode: str = "REAL") -> dict[str, int]:
+    """Use the same evidence gate for worker summaries and historical views.
+
+    A retry can cover only part of a batch. Count untouched historical rows
+    without rewriting them, and never count an empty old SUCCESS as a result.
+    The four result categories are mutually exclusive; evaluation failures
+    are an additional diagnostic for stocks whose analysis did return.
+    """
+    counts = {key: 0 for key in ("passed_count", "citation_partial_count", "failed_count",
+                               "data_blocked_count", "evaluation_failed_count")}
+    for candidate in candidates:
+        analysis = candidate.analysis_json or {}
+        gate = analysis.get("data_gate")
+        if not isinstance(gate, dict) and data_mode == "REAL":
+            gate = _evidence_data_gate(candidate.evidence_json or {})
+        status = analysis.get("model_output_status")
+        if (status == "NOT_RUN" or analysis.get("data_gate_status") == "MISSING_DATA"
+                or isinstance(gate, dict) and gate.get("status") == "MISSING_DATA"):
+            counts["data_blocked_count"] += 1
+        elif status == "FAILED":
+            counts["failed_count"] += 1
+        elif status == "SUCCESS":
+            key = "citation_partial_count" if analysis.get("analysis_validation_status") == "PARTIAL" else "passed_count"
+            counts[key] += 1
+            if (analysis.get("llm_evaluation") or {}).get("status") == "FAILED":
+                counts["evaluation_failed_count"] += 1
+    return counts
+
+
 def _selection_model_instance(db: Session, instance_code: str, *, data_mode: str = "REAL"):
     """Resolve a selectable model without allowing route fallback."""
     from app.services.model_hub import ModelHubService
@@ -1619,18 +1648,16 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                     capture_decision_snapshot(db, row, snapshot_kind="REANALYSIS", as_of=run.as_of)
             db.flush()
 
-            evaluation_summary = _generate_run_llm_evaluations(db, run, candidates)
+            _generate_run_llm_evaluations(db, run, candidates)
 
             all_candidates = list(db.scalars(select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)).all())
             total = len(all_candidates)
-            success = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS" for row in all_candidates)
-            failed = sum((row.analysis_json or {}).get("model_output_status") == "FAILED" for row in all_candidates)
-            blocked = sum((row.analysis_json or {}).get("data_gate_status") == "MISSING_DATA" for row in all_candidates)
-            citation_partial = sum((row.analysis_json or {}).get("analysis_validation_status") == "PARTIAL" for row in all_candidates)
-            passed = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS"
-                         and (row.analysis_json or {}).get("analysis_validation_status") != "PARTIAL"
-                         for row in all_candidates)
-            if passed == total and total and not evaluation_summary.get("failed"):
+            counts = _selection_result_counts(all_candidates, data_mode=run.data_mode)
+            retry_counts = _selection_result_counts(candidates, data_mode=run.data_mode)
+            passed, citation_partial = counts["passed_count"], counts["citation_partial_count"]
+            success = passed + citation_partial
+            failed, blocked = counts["failed_count"], counts["data_blocked_count"]
+            if passed == total and total and not counts["evaluation_failed_count"]:
                 run.analysis_mode = "MODEL_COMPLETED"
                 run.status = "REVIEW"
                 run.error_message = None
@@ -1640,7 +1667,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 run.error_message = (
                     f"模型已返回 {success}/{total} 只；{failed} 只执行失败可重试，"
                     f"{citation_partial} 只引用核验后部分证据不足，"
-                    f"{evaluation_summary.get('failed', 0)} 只 LLM 评价生成失败，需人工核对。"
+                    f"{counts['evaluation_failed_count']} 只 LLM 评价生成失败，需人工核对。"
                 )
             else:
                 run.analysis_mode = "DATA_INSUFFICIENT" if not model_items else "MODEL_PREFLIGHT_FAILED" if preflight_error else "MODEL_FAILED_FALLBACK_LOCAL"
@@ -1649,11 +1676,13 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             run.completed_at = _now()
             retry_state = (run.criteria_json or {}).get("retry_progress", {})
             message = f"重新分析结束：全批 {total} 只，引用校验通过 {passed} 只、待核对 {citation_partial} 只、执行失败 {failed} 只、数据不足 {blocked} 只"
+            if counts["evaluation_failed_count"]:
+                message += f"；{counts['evaluation_failed_count']} 只 LLM 评价生成失败"
             run.error_message = None if run.status == "REVIEW" else message
-            run.criteria_json = {**(run.criteria_json or {}), "retry_progress": {
+            run.criteria_json = {**(run.criteria_json or {}), "result_counts": counts, "retry_progress": {
                 **retry_state, "status": "COMPLETED", "candidate_count": len(candidates),
-                "completed_count": sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS" for row in candidates),
-                "failed_count": sum((row.analysis_json or {}).get("model_output_status") == "FAILED" for row in candidates),
+                "completed_count": retry_counts["passed_count"] + retry_counts["citation_partial_count"],
+                "failed_count": retry_counts["failed_count"],
                 "passed_count": passed, "citation_partial_count": citation_partial,
                 "data_blocked_count": blocked,
                 "message": message,
@@ -2963,15 +2992,29 @@ def _apply_model_analysis(
     }
     real_model = getattr(run, "data_mode", "REAL") == "REAL"
 
+    def analysis_progress() -> dict[str, int]:
+        failed = sum(symbol not in predictions and len(attempts) >= 3
+                     for symbol, attempts in attempts_by_symbol.items())
+        return {"completed_stock_count": len(predictions) + failed,
+                "verified_stock_count": len(predictions), "failed_stock_count": failed,
+                "total_stock_count": len(selected)}
+
+    def analysis_percent() -> int:
+        return 45 + round(40 * analysis_progress()["completed_stock_count"] / max(1, len(selected)))
+
     def record_attempt(symbol: str, status: str, purpose: str, reason: str | None = None, log: Any = None) -> None:
         attempts_by_symbol.setdefault(symbol, []).append({
             "at": _now().isoformat(), "status": status, "purpose": purpose,
             "reason": reason, "model_call_log_id": getattr(log, "id", None),
             "model_instance_code": getattr(log, "instance_code", None),
         })
-        _progress(db, run, "RESULT_VALIDATION", 45 + round(40 * len(predictions) / max(1, len(selected))),
-                  f"已核验 {len(predictions)}/{len(selected)} 只；{symbol} 第 {len(attempts_by_symbol[symbol])}/3 次{'通过' if status == 'SUCCESS' else '未通过'}",
-                  completed_stock_count=len(predictions), total_stock_count=len(selected),
+        counts = analysis_progress()
+        terminal_failure = status != "SUCCESS" and len(attempts_by_symbol[symbol]) >= 3
+        _progress(db, run, "RESULT_VALIDATION", analysis_percent(),
+                  f"已处理 {counts['completed_stock_count']}/{len(selected)} 只（有效返回 {len(predictions)}、失败 {counts['failed_stock_count']}）；"
+                  f"{symbol} 第 {len(attempts_by_symbol[symbol])}/3 次{'通过' if status == 'SUCCESS' else '未通过'}"
+                  + ("，本股已结束，请查看失败原因" if terminal_failure else ""),
+                  **counts,
                   attempt=len(attempts_by_symbol[symbol]), max_attempts=3,
                   last_validation_error=reason, active_model_call_id=getattr(log, "id", None))
 
@@ -3100,9 +3143,9 @@ def _apply_model_analysis(
         model_order = [code for code in model_order if code] or [None]
         active_model_code = model_order[(attempt_number - 1) % len(model_order)]
         activity = f"{activity} · {active_model_code or '当前模型'} · 第 {attempt_number}/3 次"
-        # Completion depends on verified stocks, never on elapsed time or the
-        # number of failed retries. Hold this checkpoint throughout a call.
-        percent = 45 + round(40 * len(predictions) / max(1, len(selected)))
+        # A stock is finished after a valid return or three failed attempts.
+        # Waiting and nonterminal retries never advance this checkpoint.
+        percent = analysis_percent()
         if attempt_number > 1:
             _progress(db, run, "MODEL", percent, f"第 {attempt_number}/3 次尝试，稍后重试 {active_model_code or '当前模型'}",
                       attempt=attempt_number, candidate_symbols=candidate_symbols, model_instance_code=active_model_code)
@@ -3118,7 +3161,7 @@ def _apply_model_analysis(
                   context_compacted=True,
                   activity_started_at=_now().isoformat(), heartbeat_at=None,
                   elapsed_seconds=0, attempt=attempt_number, max_attempts=3,
-                  completed_stock_count=len(predictions), total_stock_count=len(selected))
+                  **analysis_progress())
         heartbeat = None
         if db is not None and getattr(run, "id", None) is not None:
             heartbeat = _SelectionProgressHeartbeat(
@@ -3166,8 +3209,8 @@ def _apply_model_analysis(
                       attempt=attempt_number)
 
     for batch_index, batch in enumerate(batches):
-        _progress(db, run, "MODEL", 45 + round(40 * len(predictions) / max(1, len(selected))),
-                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已完成 {len(predictions)}/{len(selected)} 只")
+        _progress(db, run, "MODEL", analysis_percent(),
+                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已处理 {analysis_progress()['completed_stock_count']}/{len(selected)} 只")
         context = json.dumps(batch, ensure_ascii=False, separators=(",", ":"))
         system_prompt = "本次为选股盯盘工作流。沿用 SOP 的证据边界，输出采用本次 JSON Schema：" + json.dumps(schema, ensure_ascii=False)
         contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、analyzed_document_ids、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，并把每个已阅读正文ID完整列入analyzed_document_ids；先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；FINANCIAL引用financial_fact_ids，PRICE_VOLUME引用market_fact_ids，FUND_FLOW引用fund_flow_fact_ids。收入和净利润不能充当量价走势证据；融资公告不能充当交易资金流。缺相应类型证据须标INSUFFICIENT。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"

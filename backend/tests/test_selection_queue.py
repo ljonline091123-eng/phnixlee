@@ -346,9 +346,11 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
         failed = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001",
             analysis_json={"model_output_status": "FAILED", "model_attempts": [{"status": "FAILED"}]},
             evidence_json={"documents": [{"id": 123, "content": "原始证据"}]})
+        good_evidence = {"documents": [{"id": 456, "source_table": "stock_news",
+            "content": "公司已披露项目进展及交付计划，相关订单收入仍需依据实际履约进度确认。"}]}
         good = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO002",
             analysis_json={"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"},
-            evidence_json={"documents": [{"id": 456}]})
+            evidence_json=good_evidence)
         db.add_all([failed, good])
         db.commit()
         app.dependency_overrides[get_db] = lambda: db
@@ -393,7 +395,7 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
             assert stages == ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"]
             db.expire_all()
             assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"}
-            assert good.evidence_json == {"documents": [{"id": 456}]}
+            assert good.evidence_json == good_evidence
             assert failed.evidence_json["documents"] == refreshed_evidence["documents"]
             prior = db.scalar(select(SelectionDecisionSnapshot).where(
                 SelectionDecisionSnapshot.candidate_id == failed.id,
