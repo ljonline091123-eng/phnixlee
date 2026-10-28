@@ -98,7 +98,11 @@ export type RetrospectiveRepairFlow = {
 export type SelectionCandidate = {
   id: number; run_id: number; market: string; symbol: string; name: string | null;
   entry_price: number | null; entry_date: string | null; hard_score: number;
-  hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence; analysis_json: Record<string, unknown>;
+  hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence;
+  analysis_json: Record<string, unknown> & { publication?: {
+    status: "READY_REVIEW" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "NOT_ANALYZED";
+    reason: string; conclusion_available: boolean; scoring_available: boolean; retryable: boolean;
+  }};
   decision: string; review_notes: string | null; target_price: number | null; stop_price: number | null;
   target_return_pct: number | null; confidence: number | null; prediction_id: number | null;
   reviewed_at: string | null; created_at: string; tracking_id: number | null;
@@ -126,6 +130,7 @@ export type SelectionRunCreate = {
   period_months: number;
   strategy_profile_id?: number | null;
   model_instance_code: string | null; model_instance_codes?: string[]; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
+  preflight_data_action?: "UPDATE" | "CONTINUE_PARTIAL";
 };
 export type SelectionScoringDimension = {
   id: number; dimension_code: string; dimension_name: string; description: string;

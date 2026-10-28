@@ -43,7 +43,7 @@ from app.services.lakehouse import current_knowledge_document_chunks, knowledge_
 from app.services.news_identity import check_news_identity
 
 
-CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V4"
+CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V5"
 
 
 def _iso(value: Any) -> str | None:
@@ -248,6 +248,7 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
                              if metadata.get(key)), None),
         "published_at": next((metadata[key] for key in ("published_at", "news_time", "notice_date", "report_period", "trade_date") if metadata.get(key)), None),
         "url": metadata.get("url"),
+        "fetched_at": metadata.get("fetched_at"),
         "updated_at": _iso(row.updated_at),
     }
 
@@ -319,10 +320,22 @@ def _related_security_documents(
         status="ACCEPTED", entity_id=company_id, as_of=cutoff.date(), known_at=cutoff,
     ).limit(120)).all())
     related_fact_ids: dict[str, list[str]] = {}
+    related_fact_details: dict[str, list[dict[str, Any]]] = {}
     for fact in relation_facts:
         other_id = fact.object_entity_id if fact.subject_entity_id == company_id else fact.subject_entity_id
         if other_id and other_id != company_id:
             related_fact_ids.setdefault(other_id, []).append(fact.id)
+            related_fact_details.setdefault(other_id, []).append({
+                "fact_id": fact.id,
+                "fact_type": fact.fact_type,
+                "title": fact.title,
+                "subject_entity_id": fact.subject_entity_id,
+                "object_entity_id": fact.object_entity_id,
+                "properties": _compact(fact.properties_json or {}),
+                "status": "ACCEPTED",
+                "valid_from": _iso(fact.valid_from),
+                "valid_to": _iso(fact.valid_to),
+            })
     if not related_fact_ids:
         return [], []
 
@@ -355,6 +368,7 @@ def _related_security_documents(
             "name": master.name if master else listing.name,
             "company_id": entity_id,
             "related_via_fact_ids": sorted(set(related_fact_ids.get(entity_id, []))),
+            "related_via_facts": related_fact_details.get(entity_id, []),
         }
         pair_metadata[pair] = metadata
         securities.append(metadata)
@@ -405,6 +419,71 @@ def _related_security_documents(
     return securities, selected
 
 
+def _first_text(source: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = source.get(key)
+        if value not in (None, ""):
+            text = str(value).strip()
+            if text:
+                return text
+    return None
+
+
+def _business_profile_properties(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the stable, research-relevant part of a provider F10 profile.
+
+    Provider payloads can contain several hundred fields and long histories.
+    The original JSON stays in ``stock_f10_cache``; GraphRAG receives only the
+    fields needed to reason about the issuer's actual business.  Missing fields
+    remain missing and are never inferred from the security name or industry.
+    """
+    fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else payload
+    return _compact({
+        "section": "profile",
+        "source": payload.get("source"),
+        "company_name": _first_text(fields, "公司名称", "公司全称", "company_name", "name"),
+        "industry": _first_text(fields, "所属行业", "行业", "industry"),
+        "main_business": _first_text(fields, "主营业务", "主營業務", "main_business", "principal_business"),
+        "business_scope": _first_text(fields, "经营范围", "業務範圍", "business_scope"),
+        "company_overview": _first_text(fields, "公司简介", "公司介绍", "公司沿革", "company_overview", "introduction"),
+        "website": _first_text(fields, "官方网站", "公司网址", "website"),
+        "fact_only": True,
+        "inference_boundary": "公司概况仅代表来源披露；技术领先、国产替代、客户关系和市场份额必须另有原文证据。",
+    })
+
+
+def _business_composition_properties(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a bounded but numeric-preserving main-business composition."""
+    sections: list[dict[str, Any]] = []
+    for raw_section in payload.get("sections") or []:
+        if not isinstance(raw_section, dict):
+            continue
+        items = [item for item in (raw_section.get("items") or []) if isinstance(item, dict)]
+        items.sort(key=lambda item: float(item.get("revenue_ratio") or 0), reverse=True)
+        normalized_items = []
+        for item in items[:6]:
+            normalized_items.append({key: item.get(key) for key in (
+                "name", "revenue", "revenue_ratio", "cost", "cost_ratio",
+                "profit", "profit_ratio", "gross_margin",
+            ) if item.get(key) is not None})
+        if normalized_items:
+            sections.append({
+                "category": raw_section.get("category"),
+                "items": normalized_items,
+            })
+        if len(sections) >= 4:
+            break
+    return _compact({
+        "section": "business_composition",
+        "source": payload.get("source"),
+        "report_date": payload.get("report_date"),
+        "segments": sections,
+        "fact_only": True,
+        "ratio_basis": "来源披露比例；revenue_ratio/gross_margin 以 0—1 小数保存。",
+        "inference_boundary": "主营构成能证明收入结构，不能单独证明技术领先、市场份额或客户供应关系。",
+    })
+
+
 def _structured_observations(
     db: Session,
     market: str,
@@ -424,7 +503,7 @@ def _structured_observations(
     limit = max(1, min(int(limit or 1), 50))
     facts: list[dict[str, Any]] = []
     by_category: dict[str, list[dict[str, Any]]] = {
-        "financial": [], "market": [], "realtime": [], "shareholder": [], "fund_flow": [],
+        "business": [], "financial": [], "market": [], "realtime": [], "shareholder": [], "fund_flow": [],
     }
     source_record_refs: list[str] = []
     source_tables: set[str] = set()
@@ -478,6 +557,32 @@ def _structured_observations(
             "url": row.url,
             "fact_only": True,
         }, row.fetched_at)
+
+    # Company profile and main-business composition are long-horizon issuer
+    # facts.  They are selected as the latest source record known at cutoff,
+    # not filtered out merely because the user chose a short event window.
+    business_rows = list(db.scalars(select(StockF10Cache).where(
+        StockF10Cache.market == market,
+        StockF10Cache.symbol == symbol,
+        StockF10Cache.section.in_(("profile", "business_composition")),
+        StockF10Cache.fetched_at <= cutoff if cutoff is not None else StockF10Cache.id > 0,
+    ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()).limit(6)).all())
+    seen_business_sections: set[str] = set()
+    for row in business_rows:
+        if row.section in seen_business_sections or not _known(row.fetched_at, cutoff):
+            continue
+        seen_business_sections.add(row.section)
+        payload = row.payload_json if isinstance(row.payload_json, dict) else {}
+        if row.section == "profile":
+            properties = _business_profile_properties(payload)
+            has_content = any(properties.get(key) for key in ("main_business", "business_scope", "company_overview"))
+            fact_type, title = "BUSINESS_PROFILE", f"{symbol} 主营业务与公司概况"
+        else:
+            properties = _business_composition_properties(payload)
+            has_content = bool(properties.get("segments"))
+            fact_type, title = "BUSINESS_COMPOSITION", f"{symbol} 主营构成 · {properties.get('report_date') or '报告期未披露'}"
+        if has_content:
+            add("business", row, fact_type, title, properties, row.fetched_at)
 
     kline_query = select(StockKline).where(
         StockKline.market == market,
@@ -1232,6 +1337,7 @@ def build_selection_context(
     if any(item.get("embedding_status") != "AVAILABLE" for item in chunks):
         missing.append("部分切片尚未生成向量")
     category_labels = {
+        "business": "结构化主营业务与主营构成",
         "financial": "结构化财务观测",
         "market": "结构化量价观测",
         "realtime": "实时行情观测",

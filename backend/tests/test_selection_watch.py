@@ -108,16 +108,50 @@ def test_universe_scan_is_not_silently_limited_to_first_500(db):
 
 
 def test_auto_route_and_model_prediction_are_recorded(db):
+    # Routing success requires enough actual observations for a valid scorecard.
+    # Keep the short-history fixtures used by the other tracking tests unchanged.
+    day = datetime(2025, 1, 2).date()
+    history = []
+    while len(history) < 20:
+        if day.weekday() < 5:
+            history.append(day.isoformat())
+        day -= timedelta(days=1)
+    for index, trade_date in enumerate(reversed(history)):
+        bar(db, trade_date, 9 + index / 20)
     result = {"candidates": [{"symbol": "DEMO001", "decision": "WATCH", "confidence": .7,
         "reasoning": "Demo inference; limited evidence", "target_price": 12, "stop_price": 9,
         "horizon_sessions": 10, "evidence_document_ids": [], "dimensions": [
             {"dimension": key, "status": "INSUFFICIENT", "direction": "UNKNOWN", "summary": "Evidence unavailable"}
-            for key in ("NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH")]}]}
+            for key in ("NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH")],
+        "business_quality": {"status": "INSUFFICIENT", "main_business_summary": "No business evidence",
+            "products_services": [], "revenue_mix": [], "technology_level": "UNKNOWN",
+            "technology_assessment": "No evidence", "competitive_moat": "No evidence",
+            "commercialization": "No evidence", "market_position": "No evidence",
+            "market_share": {"verification_status": "MISSING", "explanation": "No evidence",
+                             "evidence_document_ids": [], "evidence_fact_ids": []},
+            "direction": "UNKNOWN", "impact_score": None, "confidence": 0,
+            "evidence_document_ids": [], "evidence_fact_ids": [], "risks": [], "watch_conditions": []},
+        "value_chain_analysis": {"status": "INSUFFICIENT", "summary": "No verified relation",
+                                 "impacts": [], "risks": [], "watch_conditions": []}}]}
     log = SimpleNamespace(id=99, status="SUCCESS", instance_code="DEMO_MODEL", response_text=json.dumps(result))
-    with patch("app.services.model_hub.ModelHubService.chat", return_value=log) as chat:
+
+    def respond(**kwargs):
+        content = kwargs["messages"][-1]["content"]
+        context = json.loads(content[content.index("["):])[0]
+        fact_id = context["evidence_json"]["citation_allowlist"]["market_fact_ids"][0]
+        recommendation = result["candidates"][0]
+        recommendation["evidence_fact_ids"] = [fact_id]
+        price = next(row for row in recommendation["dimensions"] if row["dimension"] == "PRICE_VOLUME")
+        price.update(status="SUPPORTED", direction="POSITIVE", summary="2025-01-06收盘11元，前收10元",
+            evidence_fact_ids=[fact_id], evidence_assessments=[{"reference_type": "FACT", "reference_id": fact_id,
+                "direction": "POSITIVE", "score": 25, "rationale": "实际收盘价格较前一交易日上涨"}])
+        log.response_text = json.dumps(result)
+        return log
+
+    with patch("app.services.model_hub.ModelHubService.chat", side_effect=respond) as chat:
         run, item = candidate(db, use_model=True)
     assert chat.call_args.kwargs["instance_code"] is None
-    assert run.analysis_mode == "MODEL_COMPLETED"
+    assert run.analysis_mode == "MODEL_COMPLETED", (run.error_message, item.analysis_json)
     assert item.analysis_json["target_price"] == 12
     assert item.analysis_json["summary"] == "Demo inference; limited evidence"
     assert run.model_instance_code == "DEMO_MODEL"

@@ -13,7 +13,7 @@ from app.models.selection import SelectionCandidate, SelectionRun
 from app.services.selection_scoring import seed_selection_scoring
 
 
-def test_scoring_profile_lifecycle_and_legacy_candidate_rescore_api():
+def test_scoring_profile_lifecycle_and_candidate_publication_gate():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with Session(engine) as db:
@@ -49,11 +49,27 @@ def test_scoring_profile_lifecycle_and_legacy_candidate_rescore_api():
             assert published.status_code == 200 and published.json()["enabled"] is True
 
             scorecard = client.post(f"/api/v1/selection/candidates/{candidate.id}/scorecard")
+            assert scorecard.status_code == 409
+            assert candidate.analysis_json == {}
+            assert client.get(f"/api/v1/selection/candidates/{candidate.id}/scorecard").status_code == 404
+
+            # A complete model conclusion may repair a missing score, using
+            # the actual observed price series, without fabricating coverage.
+            candidate.evidence_json = {"structured_observations": {"market": [{
+                "id": "market:1", "properties": {"recent_bars": [
+                    {"trade_date": f"2025-12-{day:02d}", "close_price": 10 + day * .1, "volume": 100 + day}
+                    for day in range(1, 21)
+                ]},
+            }]}}
+            candidate.analysis_json = {"model_output_status": "SUCCESS", "analysis_validation_status": "PASSED",
+                "model": {"reasoning": "依据已载入的量价序列进行研判", "confidence": .7}}
+            db.commit()
+            scorecard = client.post(f"/api/v1/selection/candidates/{candidate.id}/scorecard")
             assert scorecard.status_code == 200
             payload = scorecard.json()
             assert payload["contract_version"] == "SELECTION_SCORECARD_V1"
             assert len(payload["dimensions"]) == 8
-            assert payload["trusted_score"] is None
+            assert payload["trusted_score"] is not None
 
             read_back = client.get(f"/api/v1/selection/candidates/{candidate.id}/scorecard")
             assert read_back.status_code == 200 and len(read_back.json()["dimensions"]) == 8

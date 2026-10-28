@@ -134,6 +134,34 @@ def test_candidate_graph_relations_do_not_become_scored_facts(db):
     assert relation["evidence"]["relation_ids"] == []
 
 
+def test_verified_business_and_value_chain_analysis_feed_long_horizon_dimensions(db):
+    candidate = db.get(SelectionCandidate, db.info["candidate_id"])
+    candidate.evidence_json = {"structured_observations": {"business": [
+        {"id": "business-profile", "fact_type": "BUSINESS_PROFILE", "properties": {"main_business": "半导体测试设备"}},
+        {"id": "business-composition", "fact_type": "BUSINESS_COMPOSITION",
+         "properties": {"report_date": "2025-12-31", "segments": [{"items": [
+             {"name": "半导体测试设备", "revenue_ratio": .6, "gross_margin": .3},
+         ]}]}},
+    ]}}
+    candidate.analysis_json = {"model_output_status": "SUCCESS", "analysis_validation_status": "PASSED", "model": {
+        "business_quality": {"status": "SUPPORTED", "main_business_summary": "半导体测试设备已成为主要收入来源。",
+                             "impact_score": 60, "direction": "POSITIVE", "confidence": .8,
+                             "evidence_fact_ids": ["business-profile", "business-composition"]},
+        "value_chain_analysis": {"status": "SUPPORTED", "summary": "已审核客户扩产形成中期需求传导。", "impacts": [{
+            "relation_status": "VERIFIED", "impact_score": 40, "direction": "POSITIVE", "confidence": .8,
+            "relation_fact_ids": ["accepted-supply"],
+        }]},
+    }}
+    result = score_candidate(db, candidate, enabled_profile(db))
+    fundamental = next(row for row in result["dimensions"] if row["dimension_code"] == "FUNDAMENTAL_QUALITY")
+    relation = next(row for row in result["dimensions"] if row["dimension_code"] == "SUPPLY_CHAIN_RESILIENCE")
+    assert fundamental["status"] == "SUPPORTED" and fundamental["score"] == 80
+    assert fundamental["metrics"]["business_records"] == 2
+    assert relation["status"] == "SUPPORTED" and relation["score"] == 70
+    assert relation["metrics"]["verified_transmission_impacts"] == 1
+    assert relation["evidence"]["fact_ids"] == ["accepted-supply"]
+
+
 def test_scoring_skills_use_versioned_read_only_contract(db):
     seed_default_skills(db)
     skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == "RELATION_RISK_ANALYST"))
@@ -143,6 +171,14 @@ def test_scoring_skills_use_versioned_read_only_contract(db):
     assert skill.output_contract_json["properties"]["status"]["enum"] == ["SUPPORTED", "INSUFFICIENT"]
     assert skill.permission_policy_json["database_write"] is False
     assert skill.idempotency_policy == "REQUIRED"
+    special = list(db.scalars(select(ModelSkill).where(ModelSkill.skill_code.in_([
+        "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
+    ])).order_by(ModelSkill.skill_code)))
+    assert len(special) == 2
+    assert all(row.enabled and row.file_path and row.side_effect_level == "READ_ONLY" for row in special)
+    assert {row.config_json["managed_contract_version"] for row in special} == {
+        "BUSINESS_MOAT_V1", "VALUE_CHAIN_TRANSMISSION_V1",
+    }
 
 
 def test_t3_t5_t7_use_real_following_sessions(db):

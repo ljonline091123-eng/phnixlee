@@ -44,6 +44,20 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             market="CN_A", symbol="000001", section="主要股东", source_id=source.id,
             payload_json={"第一大股东": "测试集团", "持股比例": 0.25}, fetched_at=now,
         ))
+        db.add(StockF10Cache(
+            market="CN_A", symbol="000001", section="profile", source_id=source.id,
+            payload_json={"source": "测试公司资料", "fields": {
+                "公司名称": "测试银行股份有限公司", "主营业务": "企业金融与零售金融服务",
+                "所属行业": "银行业", "经营范围": "经监管批准的银行业务",
+            }}, fetched_at=now,
+        ))
+        db.add(StockF10Cache(
+            market="CN_A", symbol="000001", section="business_composition", source_id=source.id,
+            payload_json={"source": "测试主营构成", "report_date": "2026-06-30", "sections": [{
+                "category": "按业务", "items": [{"name": "零售金融", "revenue": 80.0,
+                    "revenue_ratio": 0.64, "profit": 20.0, "profit_ratio": 0.55, "gross_margin": 0.25}],
+            }]}, fetched_at=now,
+        ))
 
         kb = KnowledgeBase(kb_code="TEST_KB", kb_name="测试知识库", source_tables=["stock_news"])
         db.add(kb)
@@ -141,6 +155,13 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             db, "CN_A", "000001", as_of=now + timedelta(days=1), max_facts=10,
         )
 
+        assert context["context_version"] == "GRAPH_RAG_CONTEXT_V5"
+        business = context["structured_observations"]["business"]
+        assert {row["fact_type"] for row in business} == {"BUSINESS_PROFILE", "BUSINESS_COMPOSITION"}
+        composition = next(row for row in business if row["fact_type"] == "BUSINESS_COMPOSITION")
+        assert composition["properties"]["segments"][0]["items"][0]["name"] == "零售金融"
+        assert composition["properties"]["segments"][0]["items"][0]["revenue_ratio"] == 0.64
+
         assert context["structured_observations"]["financial"]
         assert context["structured_observations"]["market"]
         assert context["structured_observations"]["realtime"]
@@ -154,7 +175,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
         assert context["chunks"][0]["section_title"] == "测试章节"
         assert context["chunk_coverage"]["coverage_ratio"] == 1.0
         assert context["chunk_coverage"]["context_inclusion_ratio"] == 1.0
-        assert context["context_version"].endswith("V4")
+        assert context["context_version"].endswith("V5")
 
         empty = build_selection_context(db, "CN_A", "999999", as_of=now + timedelta(days=1))
         assert empty["chunk_coverage"]["coverage_status"] == "NO_DOCUMENTS"

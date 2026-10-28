@@ -582,7 +582,7 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
         universe_scope=payload.universe_scope,
         candidate_limit=payload.candidate_limit,
         criteria_json={"min_abs_change_pct": payload.min_abs_change_pct, "min_volume_ratio": payload.min_volume_ratio,
-                       "symbols": symbols, "analysis_contract": "MULTI_SOURCE_LINKAGE_V3",
+                       "symbols": symbols, "analysis_contract": "MULTI_SOURCE_VALUE_CHAIN_V5",
                        "period_months": payload.period_months,
                        "period_start": period_start.isoformat(), "period_end": period_end.isoformat(),
                        "strategy_profile": scoring_snapshot},
@@ -890,7 +890,39 @@ def queue_selection_run(
 
 def _needs_model_reanalysis(candidate: SelectionCandidate) -> bool:
     analysis = candidate.analysis_json or {}
-    return analysis.get("model_output_status") in {"FAILED", "NOT_RUN"} or analysis.get("analysis_validation_status") == "PARTIAL" or analysis.get("data_gate_status") == "MISSING_DATA"
+    from app.services.selection_evidence import conclusion_publication
+    return (analysis.get("model_output_status") in {"FAILED", "NOT_RUN"}
+            or conclusion_publication(analysis)["retryable"] or analysis.get("data_gate_status") == "MISSING_DATA")
+
+
+def _selection_result_counts(candidates: list[SelectionCandidate], *, data_mode: str = "REAL") -> dict[str, int]:
+    """Use the same evidence gate for worker summaries and historical views.
+
+    A retry can cover only part of a batch. Count untouched historical rows
+    without rewriting them, and never count an empty old SUCCESS as a result.
+    The four result categories are mutually exclusive; evaluation failures
+    are an additional diagnostic for stocks whose analysis did return.
+    """
+    counts = {key: 0 for key in ("passed_count", "citation_partial_count", "failed_count",
+                               "data_blocked_count", "evaluation_failed_count")}
+    for candidate in candidates:
+        analysis = candidate.analysis_json or {}
+        gate = analysis.get("data_gate")
+        if not isinstance(gate, dict) and data_mode == "REAL":
+            gate = _evidence_data_gate(candidate.evidence_json or {})
+        status = analysis.get("model_output_status")
+        if (status == "NOT_RUN" or analysis.get("data_gate_status") == "MISSING_DATA"
+                or isinstance(gate, dict) and gate.get("status") == "MISSING_DATA"):
+            counts["data_blocked_count"] += 1
+        elif status == "FAILED":
+            counts["failed_count"] += 1
+        elif status == "SUCCESS":
+            from app.services.selection_evidence import conclusion_publication
+            publication = conclusion_publication(analysis)
+            counts["passed_count" if publication["conclusion_available"] else "failed_count"] += 1
+            if (analysis.get("llm_evaluation") or {}).get("status") == "FAILED":
+                counts["evaluation_failed_count"] += 1
+    return counts
 
 
 def _selection_model_instance(db: Session, instance_code: str, *, data_mode: str = "REAL"):
@@ -1187,8 +1219,10 @@ def _candidate_missing_dimensions(candidate: SelectionCandidate) -> set[str]:
         dimensions.add("PRICE_VOLUME")
     if not observations.get("fund_flow"):
         dimensions.add("FUND_FLOW")
+    if not observations.get("business"):
+        dimensions.add("COMPANY")
     if not evidence.get("graph_paths"):
-        dimensions.update(("COMPANY", "GRAPH"))
+        dimensions.add("GRAPH")
     return dimensions
 
 
@@ -1210,7 +1244,7 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
     fact_rows = [row for row in evidence.get("facts") or [] if isinstance(row, dict)]
     facts = len(fact_rows)
     structured = evidence.get("structured_observations") or {}
-    structured_rows = [row for key in ("financial", "market", "shareholder", "fund_flow")
+    structured_rows = [row for key in ("business", "financial", "market", "shareholder", "fund_flow")
                        for row in structured.get(key) or [] if isinstance(row, dict)]
     structured_rows += [row for row in fact_rows if row.get("fact_type") in {
         "FINANCIAL_OBSERVATION", "MARKET_OBSERVATION", "SHAREHOLDER_OBSERVATION", "FUND_FLOW_OBSERVATION"}]
@@ -1330,6 +1364,16 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
         months = max(1, min(int(payload.get("period_months") or 3), 60))
         dimensions_by_candidate = payload.get("dimensions_by_candidate") or {}
         results: list[dict[str, Any]] = []
+        def report(message: str, **details: Any) -> None:
+            current = (run.criteria_json or {}).get("backfill_progress", {})
+            run.criteria_json = {**(run.criteria_json or {}), "backfill_progress": {
+                **current, "status": "RUNNING", "message": message,
+                "started_at": current.get("started_at") or _now().isoformat(),
+                "updated_at": _now().isoformat(), **details,
+            }}
+            db.commit()
+
+        report("补齐任务已开始，正在检查股票及所需数据源", current_operation="CHECK")
         company_results: dict[tuple[str, str], dict[str, Any]] = {}
         company_candidates = [row for row in candidates
                               if "COMPANY" in set(dimensions_by_candidate.get(str(row.id)) or [])]
@@ -1347,6 +1391,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             db.commit()
             for start in range(0, len(supported), 30):
                 batch = supported[start:start + 30]
+                report(f"正在采集公司、股权及经营资料：{start + 1}—{start + len(batch)} 只", current_operation="COMPANY")
                 try:
                     company_output = CompanyGovernanceWorkflow().execute({
                         "stock_symbol_ids": [row[0] for row in batch],
@@ -1389,11 +1434,19 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                 )
 
             def collect(code: str, operation) -> None:
+                operation_names = {"QUOTE": "实时行情", "KLINE": "历史量价", "NEWS": "新闻",
+                                   "NOTICE": "公告", "FINANCIAL": "财务", "F10_FUND_FLOW": "资金流向",
+                                   "F10_BUSINESS": "主营业务与主营构成"}
+                report(f"正在补齐 {candidate.name or candidate.symbol}（{index + 1}/{total_steps}）：{operation_names.get(code, code)}",
+                       current_candidate_id=candidate.id, current_operation=code,
+                       percent=round(70 * index / total_steps), results=results)
                 try:
                     operations[code] = operation()
                 except Exception as exc:
                     db.rollback()
                     operations[code] = {"status": "FAILED", "error": f"{type(exc).__name__}: {str(exc)[:400]}"}
+                report(f"{candidate.symbol} {operation_names.get(code, code)}采集已返回，正在校验入库结果",
+                       current_operations=operations)
 
             days = months * 31 + 15
             if "PRICE_VOLUME" in dimensions:
@@ -1407,8 +1460,40 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                         db, market=candidate.market, symbol=candidate.symbol, data_type=data_type,
                         kline_days=days, disclosure_days=days,
                     ))
+            if "COMPANY" in dimensions:
+                collect("F10_BUSINESS", lambda: _run_f10_refresh(db, candidate.market, candidate.symbol))
+                f10_result = operations["F10_BUSINESS"]
+                if f10_result.get("status") != "FAILED":
+                    available_sections = set(f10_result.get("sections") or [])
+                    persisted_business_rows = list(db.scalars(select(StockF10Cache).where(
+                        StockF10Cache.market == candidate.market,
+                        StockF10Cache.symbol == candidate.symbol,
+                        StockF10Cache.section.in_(("profile", "business_composition")),
+                    )).all())
+                    persisted_sections = set()
+                    for persisted in persisted_business_rows:
+                        stored = persisted.payload_json if isinstance(persisted.payload_json, dict) else {}
+                        if (persisted.section == "profile" and isinstance(stored.get("fields"), dict) and stored["fields"]
+                                or persisted.section == "business_composition" and bool(stored.get("sections"))):
+                            persisted_sections.add(persisted.section)
+                    required_sections = {"profile", "business_composition"}
+                    complete = required_sections.issubset(available_sections | persisted_sections)
+                    operations["F10_BUSINESS"] = {
+                        **f10_result,
+                        "status": "SUCCESS" if complete else "MISSING",
+                        "required_sections": sorted(required_sections),
+                        "available_sections": sorted(available_sections | persisted_sections),
+                        "message": ("主营概况与主营构成已采集入库" if complete else
+                                    "来源未返回完整的主营概况和主营构成；保留数据缺口，不伪造技术或市场份额结论"),
+                    }
             if "FUND_FLOW" in dimensions:
                 collect("F10_FUND_FLOW", lambda: _run_f10_refresh(db, candidate.market, candidate.symbol))
+                fund_result = operations["F10_FUND_FLOW"]
+                if fund_result.get("status") != "FAILED":
+                    available = "fund_flow" in (fund_result.get("sections") or [])
+                    operations["F10_FUND_FLOW"] = {**fund_result,
+                        "status": "SUCCESS" if available else "MISSING",
+                        "message": "资金流向已采集入库" if available else "来源已返回，但没有有效资金流向数据；保留缺口，不能认定补齐成功"}
             status_values = [str(row.get("status") or "FAILED") for row in operations.values()]
             status = "SUCCESS" if status_values and all(value == "SUCCESS" for value in status_values) else (
                 "FAILED" if status_values and all(value == "FAILED" for value in status_values) else "PARTIAL"
@@ -1432,6 +1517,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             for row in candidates
         )
         if needs_documents and run.graph_ids_json:
+            report("数据源采集结束，正在更新知识文档与图谱投影", percent=75, current_operation="GRAPH")
             try:
                 from app.services.knowledge_pipeline import run_stock_pipeline
                 pipeline_result = run_stock_pipeline(
@@ -1465,6 +1551,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
 
         rerun_id = None
         if payload.get("rerun_analysis"):
+            report("正在创建重新分析批次，原批次证据与历史结论保留", percent=90, current_operation="RERUN")
             request_data = dict((run.criteria_json or {}).get("request") or {
                 "market": run.market, "universe_scope": run.universe_scope,
                 "candidate_limit": run.candidate_limit,
@@ -1493,8 +1580,8 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             "completed_count": len(results), "success_count": success_count,
             "failed_count": failed_count, "projection_graph_id": projection_id,
             "projection_error": projection_error, "rerun_id": rerun_id,
-            "message": (f"数据补齐完成，已创建重新分析批次 #{rerun_id}" if rerun_id
-                        else "数据补齐完成；旧分析证据快照保持不变"),
+            "message": (f"补齐任务结束：成功 {success_count}/{len(results)} 只，仍有 {len(results) - success_count} 只存在缺口或错误；"
+                        + (f"已创建重新分析批次 #{rerun_id}" if rerun_id else "旧分析证据快照保持不变")),
             "updated_at": _now().isoformat(),
         }}
         db.commit()
@@ -1547,6 +1634,9 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             # refresh. Successful stocks in the batch are never rewritten.
             for row in candidates:
                 capture_decision_snapshot(db, row, snapshot_kind="BEFORE_REANALYSIS", as_of=run.as_of)
+            # New attempts use the signed-item contract; saved snapshots retain
+            # the original response and evidence from older contracts.
+            run.criteria_json = {**(run.criteria_json or {}), "analysis_contract": "MULTI_SOURCE_VALUE_CHAIN_V5"}
             db.commit()
             _prepare_selection_data(db, run, symbols=[row.symbol for row in candidates])
             months = int((run.criteria_json or {}).get("period_months") or 3)
@@ -1619,18 +1709,16 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                     capture_decision_snapshot(db, row, snapshot_kind="REANALYSIS", as_of=run.as_of)
             db.flush()
 
-            evaluation_summary = _generate_run_llm_evaluations(db, run, candidates)
+            _generate_run_llm_evaluations(db, run, candidates)
 
             all_candidates = list(db.scalars(select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)).all())
             total = len(all_candidates)
-            success = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS" for row in all_candidates)
-            failed = sum((row.analysis_json or {}).get("model_output_status") == "FAILED" for row in all_candidates)
-            blocked = sum((row.analysis_json or {}).get("data_gate_status") == "MISSING_DATA" for row in all_candidates)
-            citation_partial = sum((row.analysis_json or {}).get("analysis_validation_status") == "PARTIAL" for row in all_candidates)
-            passed = sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS"
-                         and (row.analysis_json or {}).get("analysis_validation_status") != "PARTIAL"
-                         for row in all_candidates)
-            if passed == total and total and not evaluation_summary.get("failed"):
+            counts = _selection_result_counts(all_candidates, data_mode=run.data_mode)
+            retry_counts = _selection_result_counts(candidates, data_mode=run.data_mode)
+            passed, citation_partial = counts["passed_count"], counts["citation_partial_count"]
+            success = passed + citation_partial
+            failed, blocked = counts["failed_count"], counts["data_blocked_count"]
+            if passed == total and total and not counts["evaluation_failed_count"]:
                 run.analysis_mode = "MODEL_COMPLETED"
                 run.status = "REVIEW"
                 run.error_message = None
@@ -1640,7 +1728,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 run.error_message = (
                     f"模型已返回 {success}/{total} 只；{failed} 只执行失败可重试，"
                     f"{citation_partial} 只引用核验后部分证据不足，"
-                    f"{evaluation_summary.get('failed', 0)} 只 LLM 评价生成失败，需人工核对。"
+                    f"{counts['evaluation_failed_count']} 只 LLM 评价生成失败，需人工核对。"
                 )
             else:
                 run.analysis_mode = "DATA_INSUFFICIENT" if not model_items else "MODEL_PREFLIGHT_FAILED" if preflight_error else "MODEL_FAILED_FALLBACK_LOCAL"
@@ -1648,12 +1736,14 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 run.error_message = f"模型分析仍有 {failed}/{total} 只股票失败，请检查逐股错误原因与模型调用记录。"
             run.completed_at = _now()
             retry_state = (run.criteria_json or {}).get("retry_progress", {})
-            message = f"重新分析结束：全批 {total} 只，引用校验通过 {passed} 只、待核对 {citation_partial} 只、执行失败 {failed} 只、数据不足 {blocked} 只"
+            message = f"重新分析结束：全批 {total} 只，有效结论 {passed} 只、模型/结论/评分失败 {failed} 只、数据不足 {blocked} 只"
+            if counts["evaluation_failed_count"]:
+                message += f"；{counts['evaluation_failed_count']} 只 LLM 评价生成失败"
             run.error_message = None if run.status == "REVIEW" else message
-            run.criteria_json = {**(run.criteria_json or {}), "retry_progress": {
+            run.criteria_json = {**(run.criteria_json or {}), "result_counts": counts, "retry_progress": {
                 **retry_state, "status": "COMPLETED", "candidate_count": len(candidates),
-                "completed_count": sum((row.analysis_json or {}).get("model_output_status") == "SUCCESS" for row in candidates),
-                "failed_count": sum((row.analysis_json or {}).get("model_output_status") == "FAILED" for row in candidates),
+                "completed_count": retry_counts["passed_count"] + retry_counts["citation_partial_count"],
+                "failed_count": retry_counts["failed_count"],
                 "passed_count": passed, "citation_partial_count": citation_partial,
                 "data_blocked_count": blocked,
                 "message": message,
@@ -1720,7 +1810,15 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     run.error_message = None
     market = run.market
     symbols = list(run.criteria_json.get("symbols") or [])
-    _prepare_selection_data(db, run)
+    if payload.preflight_data_action == "CONTINUE_PARTIAL":
+        _progress(
+            db, run, "DATA_PARTIAL_CONFIRMED", 25,
+            "用户已确认使用当前部分数据继续分析；未执行远程数据更新，缺口将在结果中保留",
+            phase="DATA", data_sync_status="SKIPPED_BY_USER",
+            preflight_data_action="CONTINUE_PARTIAL",
+        )
+    else:
+        _prepare_selection_data(db, run)
     graphs = list(db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(payload.graph_ids))).all())
     model_requested = run.analysis_mode == "MODEL_REQUESTED"
     analysis_graph_ids = [row.id for row in graphs if row.governance_status in {"GOVERNED", "LOCKED"}] if model_requested else payload.graph_ids
@@ -1840,7 +1938,10 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     # Make the Skill/model boundary explicit in the persisted evidence.  The
     # immutable audit row below repeats these values so a later Skill edit
     # cannot change the interpretation of this run.
-    skill_codes = ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"]
+    skill_codes = [
+        "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
+        "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
+    ]
     skill_rows = list(db.scalars(select(ModelSkill).where(ModelSkill.skill_code.in_(skill_codes))).all())
     skill_by_code = {row.skill_code: row for row in skill_rows}
     skill_chain = [{"skill_code": code,
@@ -1894,6 +1995,13 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
                 "结论与证据已保留，可在详情中复核后重新生成评价。"
             )
     run.candidate_count = min(len(candidates), run.candidate_limit)
+    if model_requested:
+        counts = _selection_result_counts(persisted_candidates, data_mode=run.data_mode)
+        run.criteria_json = {**(run.criteria_json or {}), "result_counts": counts}
+        if counts["failed_count"] or counts["data_blocked_count"]:
+            run.analysis_mode = "MODEL_PARTIAL" if counts["passed_count"] else "MODEL_FAILED_FALLBACK_LOCAL" if counts["failed_count"] else "DATA_INSUFFICIENT"
+            run.error_message = (f"有效结论 {counts['passed_count']} 只；结论/模型/评分失败 {counts['failed_count']} 只；"
+                                 f"数据不足 {counts['data_blocked_count']} 只。请查看逐股失败原因并重新分析。")
     run.missing_data_json = sorted(set((run.missing_data_json or []) + missing))[:100]
     data_blocked_count = sum(
         (item.get("analysis_json") or {}).get("data_gate_status") == "MISSING_DATA"
@@ -1956,7 +2064,8 @@ def _load_disclosure_bodies(db: Session, evidence: dict, market: str, symbol: st
         work.append((doc, source, body, refresh))
     def read(entry):
         doc, source, body, refresh = entry
-        metadata = {"retrieved_at": _now().isoformat(), "source_url": source.url}
+        metadata = {"retrieved_at": _now().isoformat(), "source_url": source.url,
+                    "source_fetched_at": source.fetched_at.isoformat() if source.fetched_at else None}
         error = None
         if refresh:
             try:
@@ -2052,7 +2161,10 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
                 "EPSJB", "EPSKCJB", "BPS", "MGJYXJJE", "TOTALOPERATEREVETZ",
                 "PARENTNETPROFITTZ", "ROEJQ", "XSMLL", "XSJLL",
                 "REPORT_DATE", "CURRENCY", "REPORT_TYPE",
-                "section", "source", "major", "holder_count", "capital_structure",
+                "section", "source", "report_date", "main_business", "business_scope",
+                "company_overview", "industry", "segments", "revenue", "revenue_ratio",
+                "profit", "profit_ratio", "gross_margin", "market_share", "market_share_scope",
+                "major", "holder_count", "capital_structure",
             )
             keys = [key for key in priority if key in value]
             keys.extend(key for key in value if key not in keys)
@@ -2086,17 +2198,19 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         if str(fact.get("id")) in required_relation_fact_ids or type_counts.get(kind, 0) < 2:
             fact_rows.append(fact)
             type_counts[kind] = type_counts.get(kind, 0) + 1
-    observation_kinds = {"financial": "FINANCIAL_OBSERVATION", "market": "MARKET_OBSERVATION",
+    observation_kinds = {"business": "BUSINESS_PROFILE", "financial": "FINANCIAL_OBSERVATION", "market": "MARKET_OBSERVATION",
                          "realtime": "REALTIME_QUOTE", "shareholder": "SHAREHOLDER_OBSERVATION",
                          "fund_flow": "FUND_FLOW_OBSERVATION"}
     for category, observations in (evidence.get("structured_observations") or {}).items():
-        for fact in observations[:1] if isinstance(observations, list) else []:
+        category_limit = 2 if category == "business" else 1
+        for fact in observations[:category_limit] if isinstance(observations, list) else []:
             if isinstance(fact, dict) and fact.get("id") not in {row.get("id") for row in fact_rows}:
                 fact_rows.append({**fact, "fact_type": fact.get("fact_type") or observation_kinds.get(category)})
     visible_facts = [{
         key: compact_fact_value(row[key], 1_800) if key == "properties" else clip(row[key], 240)
         for key in (
-            "id", "fact_type", "title", "properties", "status", "observed_at", "source_table", "evidence",
+            "id", "fact_type", "title", "subject_entity_id", "object_entity_id", "properties",
+            "status", "valid_from", "valid_to", "observed_at", "source_table", "evidence",
         ) if key in row
     } for row in fact_rows[:16]]
     # Reserve reading space for disclosures, not just metadata titles.
@@ -2166,6 +2280,22 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     compact_evidence["model_document_ids"] = sorted(visible_document_ids)
     compact_evidence["document_ids"] = sorted(visible_document_ids)
     dimension_fact_ids = _dimension_fact_allowlists(compact_evidence)
+    business_fact_ids = sorted(
+        str(row["id"]) for row in visible_facts
+        if str(row.get("fact_type") or "").upper() in {
+            "BUSINESS_PROFILE", "BUSINESS_COMPOSITION", "BUSINESS_POSITION", "TECHNOLOGY_CLAIM",
+        } and row.get("id") is not None
+    )
+    verified_relation_types = {
+        "SUPPLIES_TO", "PARTNERS_WITH", "CONTRACT", "COMPETES_WITH", "HOLDS_EQUITY",
+        "CONTROLS", "IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION",
+    }
+    verified_relation_fact_ids = sorted(
+        str(row["id"]) for row in visible_facts
+        if str(row.get("status") or "").upper() == "ACCEPTED"
+        and str(row.get("fact_type") or "").upper() in verified_relation_types
+        and row.get("id") is not None
+    )
     compact_evidence["citation_allowlist"] = {
         "symbol": str(item.get("symbol") or ""),
         "document_ids": compact_evidence["model_document_ids"],
@@ -2179,6 +2309,8 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         "financial_fact_ids": sorted(dimension_fact_ids["FINANCIAL"]),
         "market_fact_ids": sorted(dimension_fact_ids["PRICE_VOLUME"]),
         "fund_flow_fact_ids": sorted(dimension_fact_ids["FUND_FLOW"]),
+        "business_fact_ids": business_fact_ids,
+        "verified_relation_fact_ids": verified_relation_fact_ids,
         "chunk_ids": [row.get("id") for row in compact_evidence["chunks"] if row.get("id")],
         "relation_ids": [row.get("id") for row in compact_evidence["graph_paths"] if row.get("id")],
         "related_security_document_ids": [row["id"] for row in selected_docs
@@ -2253,6 +2385,158 @@ def _typed_dimension_has_evidence(row: dict[str, Any], documents: dict[int, dict
     )
 
 
+def _validate_signed_impact(direction: str, score: Any, label: str) -> None:
+    valid = (
+        direction == "UNKNOWN" and score is None
+        or direction == "POSITIVE" and isinstance(score, (int, float)) and not isinstance(score, bool) and score > 0
+        or direction == "NEGATIVE" and isinstance(score, (int, float)) and not isinstance(score, bool) and score < 0
+        or direction in {"NEUTRAL", "MIXED"} and score == 0
+    )
+    if not valid:
+        raise ValueError(f"{label}影响方向与影响分不一致：利好为正、利空为负、中性/交织为0、未知为null")
+
+
+def _validate_business_value_chain_output(output: dict[str, Any], item: dict[str, Any], *, required: bool) -> None:
+    """Fail closed on unsupported moat, market-share and transmission claims."""
+    evidence = item.get("evidence_json") or {}
+    facts = {str(row.get("id")): row for row in evidence.get("facts") or []
+             if isinstance(row, dict) and row.get("id") is not None}
+    documents = {int(row["id"]): row for row in evidence.get("documents") or []
+                 if isinstance(row, dict) and str(row.get("id", "")).isdigit()}
+    business_kinds = {"BUSINESS_PROFILE", "BUSINESS_COMPOSITION", "BUSINESS_POSITION", "TECHNOLOGY_CLAIM"}
+    relation_kinds = {"SUPPLIES_TO", "PARTNERS_WITH", "CONTRACT", "COMPETES_WITH", "HOLDS_EQUITY",
+                      "CONTROLS", "IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION"}
+    business = output.get("business_quality")
+    value_chain = output.get("value_chain_analysis")
+    if required and not isinstance(business, dict):
+        raise ValueError("V5分析必须返回主营业务与竞争壁垒分析；数据不足时也要明确返回INSUFFICIENT")
+    if required and not isinstance(value_chain, dict):
+        raise ValueError("V5分析必须返回产业链事件传导分析；没有已核验关系时返回INSUFFICIENT")
+
+    if isinstance(business, dict):
+        fact_ids = {str(value) for value in business.get("evidence_fact_ids") or []}
+        document_ids = {_normalize_document_reference(value) for value in business.get("evidence_document_ids") or []}
+        if None in document_ids or not fact_ids.issubset(facts) or not document_ids.issubset(documents):
+            raise ValueError("主营与壁垒分析引用了本次上下文之外的事实或文档")
+        typed_business_ids = {fact_id for fact_id in fact_ids
+                              if str(facts[fact_id].get("fact_type") or "").upper() in business_kinds}
+        if business.get("status") == "SUPPORTED" and not typed_business_ids:
+            raise ValueError("主营与壁垒分析标为SUPPORTED时必须引用BUSINESS_PROFILE或BUSINESS_COMPOSITION事实")
+        _validate_signed_impact(str(business.get("direction")), business.get("impact_score"), "主营与壁垒")
+
+        composition_rows: dict[tuple[str, str], dict[str, Any]] = {}
+        for fact_id in typed_business_ids:
+            fact = facts[fact_id]
+            if str(fact.get("fact_type") or "").upper() != "BUSINESS_COMPOSITION":
+                continue
+            properties = fact.get("properties") or {}
+            for section in properties.get("segments") or []:
+                for segment in section.get("items") or []:
+                    if isinstance(segment, dict) and segment.get("name"):
+                        composition_rows[(fact_id, str(segment["name"]).strip())] = {
+                            **segment, "report_date": properties.get("report_date"),
+                        }
+        for segment in business.get("revenue_mix") or []:
+            fact_id = str(segment.get("evidence_fact_id") or "")
+            source = composition_rows.get((fact_id, str(segment.get("name") or "").strip()))
+            if source is None:
+                raise ValueError("主营构成条目未在引用的BUSINESS_COMPOSITION事实中找到")
+            for key in ("revenue", "revenue_ratio", "profit", "profit_ratio", "gross_margin"):
+                value = segment.get(key)
+                if value is None:
+                    continue
+                source_value = source.get(key)
+                tolerance = max(1e-8, abs(float(source_value or 0)) * 1e-8)
+                if source_value is None or abs(float(value) - float(source_value)) > tolerance:
+                    raise ValueError(f"主营构成{segment.get('name')}的{key}与来源事实不一致")
+            if segment.get("report_date") and str(segment["report_date"]) != str(source.get("report_date")):
+                raise ValueError("主营构成报告期与来源事实不一致")
+
+        technology_level = str(business.get("technology_level") or "UNKNOWN")
+        has_technology_source = any(
+            str(facts[fact_id].get("fact_type") or "").upper() == "TECHNOLOGY_CLAIM"
+            for fact_id in fact_ids
+        ) or any(
+            documents[document_id].get("content_state") != "METADATA_ONLY"
+            and bool(documents[document_id].get("content") or documents[document_id].get("excerpt"))
+            for document_id in document_ids
+        )
+        if technology_level in {"HIGH", "LEADING"} and not has_technology_source:
+            raise ValueError("高技术含量或领先判断必须引用技术声明事实或可阅读全文，主营名称本身不能证明技术领先")
+
+        market_share = business.get("market_share") or {}
+        share_status = market_share.get("verification_status")
+        share_value = market_share.get("value")
+        share_docs = {_normalize_document_reference(value) for value in market_share.get("evidence_document_ids") or []}
+        share_facts = {str(value) for value in market_share.get("evidence_fact_ids") or []}
+        if None in share_docs or not share_docs.issubset(documents) or not share_facts.issubset(facts):
+            raise ValueError("市场占有率引用越出本次证据范围")
+        if share_status == "SOURCE_VERIFIED":
+            if share_value is None or not all(market_share.get(key) for key in ("unit", "scope", "as_of", "source")):
+                raise ValueError("已验证市场占有率必须同时给出数值、单位、统计范围、日期和来源")
+            if not (share_docs or share_facts):
+                raise ValueError("已验证市场占有率必须引用文档或结构化事实")
+        elif share_value is not None:
+            raise ValueError("未验证或缺失的市场占有率不得展示具体数值")
+
+    if isinstance(value_chain, dict):
+        impacts = value_chain.get("impacts") or []
+        if value_chain.get("status") == "SUPPORTED" and not impacts:
+            raise ValueError("产业链传导标为SUPPORTED时必须至少返回一条可核验传导")
+        for impact in impacts:
+            relation_ids = {str(value) for value in impact.get("relation_fact_ids") or []}
+            current_ids = {_normalize_document_reference(value) for value in impact.get("current_security_document_ids") or []}
+            related_ids = {_normalize_document_reference(value) for value in impact.get("related_security_document_ids") or []}
+            if (None in current_ids or None in related_ids or not current_ids.issubset(documents)
+                    or not related_ids.issubset(documents) or not relation_ids.issubset(facts)):
+                raise ValueError("产业链传导引用了本次上下文之外的关系或事件文档")
+            _validate_signed_impact(str(impact.get("direction")), impact.get("impact_score"), "产业链传导")
+            if impact.get("relation_status") == "VERIFIED":
+                verified = {fact_id for fact_id in relation_ids
+                            if str(facts[fact_id].get("status") or "").upper() == "ACCEPTED"
+                            and str(facts[fact_id].get("fact_type") or "").upper() in relation_kinds}
+                if not verified:
+                    raise ValueError("VERIFIED产业链关系必须引用已审核ACCEPTED的FoundationFact")
+                if not related_ids:
+                    raise ValueError("产业链事件影响必须引用关联公司在分析周期内的新闻或公告")
+                if any(documents[document_id].get("relation_scope") != "RELATED_SECURITY" for document_id in related_ids):
+                    raise ValueError("关联公司事件必须引用RELATED_SECURITY文档")
+                linked = {str(fact_id) for document_id in related_ids
+                          for fact_id in documents[document_id].get("related_via_fact_ids") or []}
+                if not (verified & linked):
+                    raise ValueError("关联公司事件文档与已审核关系事实不属于同一条传导路径")
+                target_company_id = str((evidence.get("identity") or {}).get("company_id") or "")
+                related_company_ids = {
+                    str((documents[document_id].get("related_security") or {}).get("company_id") or "")
+                    for document_id in related_ids
+                } - {""}
+                expected_types: set[str] = set()
+                for fact_id in verified & linked:
+                    fact = facts[fact_id]
+                    fact_type = str(fact.get("fact_type") or "").upper()
+                    subject_id = str(fact.get("subject_entity_id") or "")
+                    object_id = str(fact.get("object_entity_id") or "")
+                    if fact_type == "SUPPLIES_TO":
+                        if subject_id == target_company_id and object_id in related_company_ids:
+                            expected_types.add("CUSTOMER")
+                        elif object_id == target_company_id and subject_id in related_company_ids:
+                            expected_types.add("SUPPLIER")
+                    elif fact_type in {"PARTNERS_WITH", "CONTRACT"}:
+                        expected_types.add("PARTNER")
+                    elif fact_type == "COMPETES_WITH":
+                        expected_types.add("COMPETITOR")
+                    elif fact_type in {"HOLDS_EQUITY", "CONTROLS"}:
+                        expected_types.add("EQUITY_CONTROL")
+                if expected_types and impact.get("relationship_type") not in expected_types:
+                    raise ValueError(
+                        f"产业链关系方向与已审核事实不一致；当前关系应为{sorted(expected_types)}，"
+                        f"不能标为{impact.get('relationship_type')}"
+                    )
+            else:
+                if impact.get("direction") != "UNKNOWN" or impact.get("impact_score") is not None:
+                    raise ValueError("候选或未验证关系只能展示线索，不得计入方向影响分")
+
+
 def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, Any]) -> None:
     """Remove unverifiable model citations and withdraw conclusions that used them."""
     evidence = item.get("evidence_json") or {}
@@ -2308,9 +2592,15 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
             invalid = True
         if not _typed_dimension_has_evidence(row, documents, dimension_fact_ids):
             invalid = True
-        row["evidence_document_ids"] = sorted(document_ids & valid_document_ids)
-        row["evidence_fact_ids"] = sorted(raw_facts & valid_fact_ids)
-        row["evidence_relation_ids"] = sorted(raw_relations & valid_relation_ids)
+        from app.services.selection_evidence import typed_references
+        typed = typed_references(row, evidence)
+        if ({str(value) for value in typed["evidence_document_ids"]} != {str(value) for value in document_ids}
+                or set(typed["evidence_fact_ids"]) != raw_facts
+                or set(typed["evidence_relation_ids"]) != raw_relations):
+            invalid = True
+        row.update(typed)
+        if row.get("status") == "SUPPORTED" and not any(typed.values()):
+            invalid = True
         if invalid:
             row["status"] = "INSUFFICIENT"
             row["direction"] = "UNKNOWN"
@@ -2769,6 +3059,8 @@ def generate_candidate_llm_evaluation(db: Session, candidate: SelectionCandidate
         "conclusion": {key: model.get(key) for key in ("decision", "confidence", "headline", "reasoning", "positives", "risks", "watch_conditions")},
         "dimensions": model.get("dimensions") or [], "events": model.get("events") or [],
         "links": model.get("event_links") or [], "validation_findings": model.get("validation_findings") or [],
+        "business_quality": model.get("business_quality"),
+        "value_chain_analysis": model.get("value_chain_analysis"),
         "evidence_titles": [row.get("title") for row in documents],
         "analysis_period": evidence.get("analysis_period"),
     }
@@ -2958,10 +3250,25 @@ def _apply_model_analysis(
         [str(code).strip() for code in (((getattr(run, "criteria_json", {}) or {}).get("request") or {}).get("model_instance_codes") or []) if str(code).strip()]
         + ([str(run.model_instance_code).strip()] if run.model_instance_code else [])
     )) or [str(run.model_instance_code or "")]
-    required = (getattr(run, "criteria_json", {}) or {}).get("analysis_contract") in {
-        "MULTI_SOURCE_V2", "MULTI_SOURCE_LINKAGE_V3",
+    analysis_contract = (getattr(run, "criteria_json", {}) or {}).get("analysis_contract")
+    analysis_skill_codes = [
+        "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
+        "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
+    ]
+    required = analysis_contract in {
+        "MULTI_SOURCE_V2", "MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5",
     }
     real_model = getattr(run, "data_mode", "REAL") == "REAL"
+
+    def analysis_progress() -> dict[str, int]:
+        failed = sum(symbol not in predictions and len(attempts) >= 3
+                     for symbol, attempts in attempts_by_symbol.items())
+        return {"completed_stock_count": len(predictions) + failed,
+                "verified_stock_count": len(predictions), "failed_stock_count": failed,
+                "total_stock_count": len(selected)}
+
+    def analysis_percent() -> int:
+        return 45 + round(40 * analysis_progress()["completed_stock_count"] / max(1, len(selected)))
 
     def record_attempt(symbol: str, status: str, purpose: str, reason: str | None = None, log: Any = None) -> None:
         attempts_by_symbol.setdefault(symbol, []).append({
@@ -2969,9 +3276,13 @@ def _apply_model_analysis(
             "reason": reason, "model_call_log_id": getattr(log, "id", None),
             "model_instance_code": getattr(log, "instance_code", None),
         })
-        _progress(db, run, "RESULT_VALIDATION", 45 + round(40 * len(predictions) / max(1, len(selected))),
-                  f"已核验 {len(predictions)}/{len(selected)} 只；{symbol} 第 {len(attempts_by_symbol[symbol])}/3 次{'通过' if status == 'SUCCESS' else '未通过'}",
-                  completed_stock_count=len(predictions), total_stock_count=len(selected),
+        counts = analysis_progress()
+        terminal_failure = status != "SUCCESS" and len(attempts_by_symbol[symbol]) >= 3
+        _progress(db, run, "RESULT_VALIDATION", analysis_percent(),
+                  f"已处理 {counts['completed_stock_count']}/{len(selected)} 只（有效返回 {len(predictions)}、失败 {counts['failed_stock_count']}）；"
+                  f"{symbol} 第 {len(attempts_by_symbol[symbol])}/3 次{'通过' if status == 'SUCCESS' else '未通过'}"
+                  + ("，本股已结束，请查看失败原因" if terminal_failure else ""),
+                  **counts,
                   attempt=len(attempts_by_symbol[symbol]), max_attempts=3,
                   last_validation_error=reason, active_model_call_id=getattr(log, "id", None))
 
@@ -2993,10 +3304,13 @@ def _apply_model_analysis(
             raise ValueError(f"模型引用了本股证据白名单之外的切片 ID：{sorted(cited_chunks - allowed_chunks)}")
         if sanitize:
             _sanitize_model_evidence_references(output, item)
+        from app.services.selection_evidence import validate_assessments
+        contract = analysis_contract
+        validate_assessments(output, evidence, required=contract in {"MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"})
         try:
             _validate_multi_source_output(
                 output, item, required=required,
-                enforce_document_coverage=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_LINKAGE_V3",
+                enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
             )
         except ValueError as validation_error:
             # Event linkage is an optional semantic enrichment.  A model may
@@ -3035,15 +3349,17 @@ def _apply_model_analysis(
             output["stop_price"] = None
             _validate_multi_source_output(
                 output, item, required=required,
-                enforce_document_coverage=(getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_LINKAGE_V3",
+                enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
             )
+        _validate_business_value_chain_output(
+            output, item, required=contract == "MULTI_SOURCE_VALUE_CHAIN_V5",
+        )
 
         if real_model and required and not any(
             row.get("status") == "SUPPORTED" for row in output.get("dimensions") or []
         ):
             raise ValueError("模型结果没有任何通过证据核验的分析维度，不能作为部分完成结论")
-        if (real_model and output.get("validation_status") == "PARTIAL"
-                and len(attempts_by_symbol.get(str(item["symbol"]), [])) < 2):
+        if real_model and output.get("validation_status") == "PARTIAL":
             raise ValueError("引用核验未通过，请修复后重新返回完整结果：" + "；".join(
                 output.get("evidence_validation_warnings") or ["部分引用无法核验"]))
 
@@ -3100,9 +3416,9 @@ def _apply_model_analysis(
         model_order = [code for code in model_order if code] or [None]
         active_model_code = model_order[(attempt_number - 1) % len(model_order)]
         activity = f"{activity} · {active_model_code or '当前模型'} · 第 {attempt_number}/3 次"
-        # Completion depends on verified stocks, never on elapsed time or the
-        # number of failed retries. Hold this checkpoint throughout a call.
-        percent = 45 + round(40 * len(predictions) / max(1, len(selected)))
+        # A stock is finished after a valid return or three failed attempts.
+        # Waiting and nonterminal retries never advance this checkpoint.
+        percent = analysis_percent()
         if attempt_number > 1:
             _progress(db, run, "MODEL", percent, f"第 {attempt_number}/3 次尝试，稍后重试 {active_model_code or '当前模型'}",
                       attempt=attempt_number, candidate_symbols=candidate_symbols, model_instance_code=active_model_code)
@@ -3118,7 +3434,7 @@ def _apply_model_analysis(
                   context_compacted=True,
                   activity_started_at=_now().isoformat(), heartbeat_at=None,
                   elapsed_seconds=0, attempt=attempt_number, max_attempts=3,
-                  completed_stock_count=len(predictions), total_stock_count=len(selected))
+                  **analysis_progress())
         heartbeat = None
         if db is not None and getattr(run, "id", None) is not None:
             heartbeat = _SelectionProgressHeartbeat(
@@ -3166,11 +3482,22 @@ def _apply_model_analysis(
                       attempt=attempt_number)
 
     for batch_index, batch in enumerate(batches):
-        _progress(db, run, "MODEL", 45 + round(40 * len(predictions) / max(1, len(selected))),
-                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已完成 {len(predictions)}/{len(selected)} 只")
+        _progress(db, run, "MODEL", analysis_percent(),
+                  f"真实模型分析第 {batch_index + 1}/{len(batches)} 批，已处理 {analysis_progress()['completed_stock_count']}/{len(selected)} 只")
         context = json.dumps(batch, ensure_ascii=False, separators=(",", ":"))
         system_prompt = "本次为选股盯盘工作流。沿用 SOP 的证据边界，输出采用本次 JSON Schema：" + json.dumps(schema, ensure_ascii=False)
         contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、analyzed_document_ids、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，并把每个已阅读正文ID完整列入analyzed_document_ids；先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；FINANCIAL引用financial_fact_ids，PRICE_VOLUME引用market_fact_ids，FUND_FLOW引用fund_flow_fact_ids。收入和净利润不能充当量价走势证据；融资公告不能充当交易资金流。缺相应类型证据须标INSUFFICIENT。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"
+        if analysis_contract == "MULTI_SOURCE_VALUE_CHAIN_V5":
+            contract_prompt += (
+                "还必须返回business_quality和value_chain_analysis。business_quality要先结合BUSINESS_PROFILE与最新"
+                "BUSINESS_COMPOSITION识别真实主营、产品服务、收入占比和毛利率，再评价技术含量、竞争壁垒、商业化能力、"
+                "市场地位及中长线价值；主营描述与最新收入构成冲突时明确指出。技术领先、填补空白、国产替代、客户验证和"
+                "市场占有率不得凭常识补写，必须引用business_fact_ids或可阅读全文；市场份额没有数值、统计范围、日期、来源时"
+                "返回MISSING且value为null。value_chain_analysis只能沿已载入关系分析关联公司重大事件的传导；VERIFIED必须引用"
+                "verified_relation_fact_ids和related_security_document_ids，写明关系、事件、传导机制、短中长期、置信度、假设和"
+                "失效条件。候选/未验证关系只能展示线索，direction=UNKNOWN且impact_score=null。所有impact_score范围-100到100，"
+                "它表示研究影响强弱，不是目标涨跌幅。"
+            )
         batch_allowlists = {str(row["symbol"]): row["evidence_json"]["citation_allowlist"] for row in batch}
         contract_prompt += "本批各股白名单（键为股票代码，严禁跨股票引用）：" + json.dumps(batch_allowlists, ensure_ascii=False, separators=(",", ":"))
         contract_prompt += "事件quote请复制正文中连续的15至80个字符；禁止拼接不同句子、改写、添加省略号或将标题当正文。找不到连续原句时不生成该事件。仅有标题/链接的公告应为INSUFFICIENT，禁止引用新闻ID作为公告证据。"
@@ -3179,6 +3506,8 @@ def _apply_model_analysis(
         contract_prompt += "events与event_timeline的source_type只能是NEWS或NOTICE，并且必须与引用文档的source_table一致；FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH只属于dimensions，禁止作为事件source_type。"
         contract_prompt += "FINANCIAL只能解读已提供的财务观测，须在summary写明指标数值与报告期，不得把合同新闻当作财务业绩；PRICE_VOLUME须写明已提供的价格、涨跌幅或成交量及观察日期，不得用无数值的‘走势稳定’代替分析。未提供对应数值时返回INSUFFICIENT。"
         contract_prompt += "所有JSON字段名大小写敏感，必须逐字使用Schema中的小写字段名；禁止输出EVENT_TIMELINE、EVENT_LINKS、VALIDATION_FINDINGS、CONFIDENCE_BREAKDOWN等大写别名。"
+        contract_prompt += "每个dimension只引用该类型证据，禁止把相同新闻公告ID复制到财务、量价、资金、公司和图谱板块。COMPANY只引用公司/股东观测；GRAPH只引用graph_paths关系。每个SUPPORTED维度的每一条引用均须提供evidence_assessments，字段reference_type(DOCUMENT/FACT/RELATION)、reference_id(字符串)、direction、score、rationale。score为-100至100影响分：POSITIVE严格正分、NEGATIVE严格负分、NEUTRAL或MIXED为0、UNKNOWN为null。rationale简述该数据具体作用，不得按整个板块方向批量复制评分。不得重复引用凑分；不能判断时明确UNKNOWN和原因。板块权重由系统已发布评价方案计算，模型不要自行编造权重。"
+        contract_prompt += '逐条评分示例（ID必须替换为真实白名单ID）：{"reference_type":"FACT","reference_id":"实际事实ID","direction":"NEGATIVE","score":-35,"rationale":"具体负面作用"}。若综合影响为负须用NEGATIVE和负分，为正须用POSITIVE和正分；MIXED只用于正负难以净额化的0分项。UNKNOWN时score必须是JSON null，禁止字符串。'
         contract_prompt += "关联证券资料仅来自已审核公司关系，标记relation_scope=RELATED_SECURITY。只有RELATED_SECURITY_IMPACT可引用related_security_document_ids，且必须同时引用当前股票文档、关联股票文档，并在evidence_fact_ids中引用related_security_fact_ids；其余维度、事件与联动不得把关联股票文档当作当前股票事实。事件联动source_document_ids必须早于或等于target_document_ids。"
         # List the required scalar fields explicitly as well as in JSON Schema.
         # Smaller models otherwise follow the semantic SOP and return only
@@ -3204,7 +3533,7 @@ def _apply_model_analysis(
                           {"role": "user", "content": user_prompt}],
                 max_tokens=12288,
                 metadata_json={"candidate_count": len(batch), "batch_index": batch_index,
-                    "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
+                    "skill_codes": analysis_skill_codes,
                     "require_skills": True,
                     "purpose": "STOCK_SELECTION_ANALYSIS",
                     "strict_instance": bool(run.model_instance_code),
@@ -3237,7 +3566,7 @@ def _apply_model_analysis(
                                       {"role": "user", "content": user_prompt.split("候选上下文：", 1)[0] + "候选上下文：" + single_context}],
                             max_tokens=8192,
                             metadata_json={"candidate_count": 1, "batch_index": batch_index,
-                                "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
+                                "skill_codes": analysis_skill_codes,
                                 "require_skills": True,
                                 "purpose": "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                                 "strict_instance": bool(run.model_instance_code),
@@ -3301,7 +3630,7 @@ def _apply_model_analysis(
                         {"role": "user", "content": "仅分析并返回该股票，严格遵守正文引句及七维度约束：" + retry_context}],
                     max_tokens=12288,
                     metadata_json={"candidate_count": 1, "batch_index": batch_index,
-                        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
+                        "skill_codes": analysis_skill_codes,
                         "require_skills": True,
                         "purpose": "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
                         "strict_instance": bool(run.model_instance_code),
@@ -3364,7 +3693,7 @@ def _apply_model_analysis(
                     metadata_json={
                         "candidate_count": 1,
                         "batch_index": 0,
-                        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"],
+                        "skill_codes": analysis_skill_codes,
                         "require_skills": True,
                         "purpose": "STOCK_SELECTION_PER_STOCK_RETRY",
                         "strict_instance": bool(run.model_instance_code),
@@ -3426,8 +3755,9 @@ def _apply_model_analysis(
                 "model_failure_reason": None, "model_attempts": history})
             visible = next(row["evidence_json"] for row in selected if row["symbol"] == symbol)
             item["analysis_json"]["analysis_contract"] = (
-                "MULTI_SOURCE_LINKAGE_V3"
-                if output.get("dimensions") and required and (getattr(run, "criteria_json", {}) or {}).get("analysis_contract") == "MULTI_SOURCE_LINKAGE_V3"
+                "MULTI_SOURCE_VALUE_CHAIN_V5" if analysis_contract == "MULTI_SOURCE_VALUE_CHAIN_V5" else
+                "MULTI_SOURCE_SCORED_V4" if analysis_contract == "MULTI_SOURCE_SCORED_V4" else "MULTI_SOURCE_LINKAGE_V3"
+                if output.get("dimensions") and required and analysis_contract == "MULTI_SOURCE_LINKAGE_V3"
                 else "MULTI_SOURCE_V2" if output.get("dimensions") else "LEGACY"
             )
             item["analysis_json"]["input_usage"] = {
@@ -3493,6 +3823,11 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
     if (payload.decision == "APPROVED" and run and run.data_mode == "REAL"
             and run.analysis_mode.startswith("MODEL") and candidate.analysis_json.get("model_output_status") != "SUCCESS"):
         raise ValueError("真实模型尚未完成研判，不能确认入选；请先重新分析")
+    if payload.decision == "APPROVED" and run and run.analysis_mode.startswith("MODEL"):
+        from app.services.selection_evidence import conclusion_publication
+        publication = conclusion_publication(candidate.analysis_json or {})
+        if not publication["conclusion_available"]:
+            raise ValueError(publication["reason"])
     if (payload.decision == "APPROVED" and run and run.data_mode == "REAL"
             and _evidence_data_gate(candidate.evidence_json or {}).get("status") == "MISSING_DATA"):
         raise ValueError("当前股票未通过数据门禁，请先同步并补齐研究数据，不能确认跟踪")

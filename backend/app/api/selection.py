@@ -32,8 +32,9 @@ from app.schemas.selection import (
 from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
-    probe_selection_model, refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
-    _evidence_data_gate, _elapsed_between,
+    refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
+    probe_selection_model, _selection_model_instance,
+    _evidence_data_gate, _elapsed_between, _selection_result_counts,
 )
 from app.models.ai_hub import (
     KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
@@ -43,6 +44,7 @@ from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.model_errors import classify_model_error
 from app.services.selection_audit import retrospective_read, snapshot_read
+from app.services.selection_evidence import build_evidence_sections, conclusion_publication
 from app.services.selection_scoring import (
     clone_profile, create_profile, evaluation_summary, list_profiles,
     publish_profile, refresh_candidate_evaluations, resolve_profile,
@@ -122,6 +124,11 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
         analysis_json["conclusion_available"] = True
         analysis_json["conclusion_source"] = "LLM_EVIDENCE_VALIDATED"
         analysis_json["scoring_available"] = bool(analysis_json.get("scoring"))
+    publication = conclusion_publication(analysis_json)
+    analysis_json["publication"] = publication
+    analysis_json["conclusion_available"] = publication["conclusion_available"]
+    analysis_json["scoring_available"] = publication["scoring_available"]
+    analysis_json["evidence_sections"] = build_evidence_sections(analysis_json, evidence_payload)
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
@@ -277,17 +284,10 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             # Old summaries counted empty, invalid conclusions as partial
             # successes. Derive the display from the same projected rows the
             # user sees, retaining all original database audit fields.
-            projected = [item.analysis_json for item in payload["candidates"]]
-            counts = {
-                "passed_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") != "PARTIAL" for row in projected),
-                "citation_partial_count": sum(row.get("model_output_status") == "SUCCESS" and row.get("analysis_validation_status") == "PARTIAL" for row in projected),
-                "failed_count": sum(row.get("model_output_status") == "FAILED" for row in projected),
-                "data_blocked_count": sum(row.get("model_output_status") == "NOT_RUN" or row.get("data_gate_status") == "MISSING_DATA" for row in projected),
-                "evaluation_failed_count": sum(row.get("model_output_status") == "SUCCESS" and (row.get("llm_evaluation") or {}).get("status") == "FAILED" for row in projected),
-            }
+            counts = _selection_result_counts(payload["candidates"], data_mode=run.data_mode)
             criteria_json["result_counts"] = counts
-            summary = (f"本轮已结束：通过 {counts['passed_count']} 只、待核对 {counts['citation_partial_count']} 只、"
-                       f"模型失败 {counts['failed_count']} 只、数据不足 {counts['data_blocked_count']} 只。")
+            summary = (f"本轮已结束：有效结论 {counts['passed_count']} 只、"
+                       f"模型/结论/评分失败 {counts['failed_count']} 只、数据不足 {counts['data_blocked_count']} 只。")
             if counts["evaluation_failed_count"]:
                 summary += f"另有 {counts['evaluation_failed_count']} 只股票的 LLM 评价生成失败。"
             if counts["failed_count"] or counts["data_blocked_count"] or counts["citation_partial_count"] or counts["evaluation_failed_count"]:
@@ -406,9 +406,12 @@ def candidate_scorecard(candidate_id: int, db: Session = Depends(get_db)) -> dic
     candidate = db.get(SelectionCandidate, candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="选股候选不存在")
-    scoring = _candidate_read(db, candidate).analysis_json.get("scoring")
+    analysis = _candidate_read(db, candidate).analysis_json
+    scoring = analysis.get("scoring")
     if not scoring:
         raise HTTPException(status_code=404, detail="该历史候选尚未生成八维评分")
+    if not analysis["publication"]["scoring_available"]:
+        raise HTTPException(status_code=409, detail=analysis["publication"]["reason"])
     evaluations = refresh_candidate_evaluations(db, candidate)
     db.commit()
     return {**scoring, "evaluations": evaluations}
@@ -422,7 +425,7 @@ def rescore_candidate(candidate_id: int, db: Session = Depends(get_db)) -> dict:
     run = db.get(SelectionRun, candidate.run_id)
     requested_profile = int((((run.criteria_json or {}).get("strategy_profile") or {}).get("id") or 0)) if run else 0
     try:
-        if _candidate_read(db, candidate).analysis_json.get("conclusion_available") is False:
+        if _candidate_read(db, candidate).analysis_json["publication"]["status"] not in {"READY_REVIEW", "SCORE_FAILED"}:
             raise ValueError("当前分析未通过数据或结果校验，不能生成有效评分")
         profile = resolve_profile(db, requested_profile or None, candidate.market)
         result = score_candidate(db, candidate, profile)
@@ -447,7 +450,7 @@ def rescore_run(run_id: int, db: Session = Depends(get_db)) -> dict:
         profile = resolve_profile(db, profile_id or None, run.market)
         results = [{"candidate_id": candidate.id, "symbol": candidate.symbol,
                     "scoring": {"status": "BLOCKED", "reason": "当前分析未通过数据或结果校验"}
-                    if _candidate_read(db, candidate).analysis_json.get("conclusion_available") is False
+                    if _candidate_read(db, candidate).analysis_json["publication"]["status"] not in {"READY_REVIEW", "SCORE_FAILED"}
                     else score_candidate(db, candidate, profile)} for candidate in candidates]
         db.commit()
         return {"run_id": run.id, "profile": serialize_profile(db, profile),
@@ -712,10 +715,11 @@ def scope_preview(payload: SelectionScopePreview, db: Session = Depends(get_db))
 
 @router.post("/preflight")
 def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depends(get_db)) -> dict:
-    """Check evidence coverage and model connectivity before creating a run.
+    """Check evidence coverage and local model configuration before queuing.
 
-    No SelectionRun or ScheduledJob is created here.  The model probe is a
-    small auditable connectivity call; all stock evidence checks are read-only.
+    No SelectionRun or ScheduledJob is created here. External model calls are
+    deliberately deferred to the worker's MODEL_PREFLIGHT phase so this HTTP
+    request cannot hold the create dialog open on a slow provider.
     """
     scope = scope_preview(SelectionScopePreview.model_validate(payload.model_dump()), db)
     from app.services.graph_rag import selection_period_bounds
@@ -767,8 +771,18 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
             for candidate_code in requested_codes:
                 requested_code = candidate_code
                 try:
-                    probe = probe_selection_model(db, requested_code, data_mode=payload.data_mode)
-                    model_info = {**probe, "status": "READY", "instance_code": requested_code, "tested_models": requested_codes}
+                    routed = _selection_model_instance(db, requested_code, data_mode=payload.data_mode)
+                    model_info = {
+                        "status": "CONFIGURED",
+                        "instance_code": requested_code,
+                        "model_name": routed.instance.model_name,
+                        "provider_code": routed.provider.provider_code,
+                        "provider_type": routed.provider.provider_type,
+                        "tested_models": [],
+                        "configured_models": requested_codes,
+                        "live_probe_deferred": True,
+                        "summary": "模型配置可用；真实连通性将在后台任务的模型测试阶段检查",
+                    }
                     model_ready = True
                     break
                 except Exception as exc:

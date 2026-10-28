@@ -33,8 +33,8 @@ from app.schemas.selection import SelectionProfileCreate, SelectionProfileUpdate
 
 DIMENSIONS: tuple[dict[str, Any], ...] = (
     {"code": "FUNDAMENTAL_QUALITY", "name": "基本面与盈利质量", "method": "HYBRID", "order": 10,
-     "description": "衡量收入、利润、现金流、资本回报和财务稳定性。",
-     "interpretation": "高分表示盈利质量和持续性相对较好；缺少财务期次时不评分。"},
+     "description": "衡量收入、利润、现金流、资本回报，并结合主营收入结构、毛利率和商业化持续性。",
+     "interpretation": "高分表示盈利质量、主营结构和商业化持续性相对较好；缺少财务或主营构成证据时不补值。"},
     {"code": "VALUATION_EXPECTATION", "name": "估值与盈利预期", "method": "RULE", "order": 20,
      "description": "衡量估值水平、股息率、盈利预测及预期变化。",
      "interpretation": "高分表示估值与现有盈利预期更匹配；不同行业不可只比较绝对倍数。"},
@@ -54,8 +54,8 @@ DIMENSIONS: tuple[dict[str, Any], ...] = (
      "description": "衡量控制权、增减持、回购、解禁、质押及高管变化。",
      "interpretation": "高分表示治理和股东行为相对稳定；时点接近不自动证明行为动机。"},
     {"code": "SUPPLY_CHAIN_RESILIENCE", "name": "产业链与外部韧性", "method": "HYBRID", "order": 80,
-     "description": "衡量上下游、经营往来、客户依赖、司法和外部事件风险。",
-     "interpretation": "高分表示已知外部关系与风险相对可控；候选图谱关系不会直接计为事实。"},
+     "description": "衡量上下游、客户验证、技术替代、经营往来、依赖程度及关联公司重大事件的传导。",
+     "interpretation": "高分表示有已审核关系支撑且外部传导相对有利；候选关系、同题材或关键词提及不会直接计为事实。"},
 )
 
 SHORT_TERM_WEIGHTS = {
@@ -464,12 +464,15 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     analysis = candidate.analysis_json or {}
     legacy = _legacy_dimensions(analysis)
     observations = evidence.get("structured_observations") or {}
+    business_observations = _records(observations.get("business"))
     financial = _records(observations.get("financial"))
     shareholder = _records(observations.get("shareholder"))
     fund_flow = _records(observations.get("fund_flow"))
     bars = _bars(evidence)
     bar_metrics = _bar_metrics(bars)
     model = analysis.get("model") or {}
+    business_quality = model.get("business_quality") if isinstance(model.get("business_quality"), dict) else {}
+    value_chain = model.get("value_chain_analysis") if isinstance(model.get("value_chain_analysis"), dict) else {}
     model_confidence = model.get("confidence_breakdown") or {}
     event_confidence = float(model_confidence.get("final_confidence") or 0)
     result: dict[str, dict[str, Any]] = {}
@@ -486,14 +489,42 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     financial_score = 50 + sum(financial_adjustments) / max(1, len(financial_adjustments))
     if financial_direction is not None:
         financial_score = 0.7 * financial_score + 0.3 * financial_direction
+    business_impact = business_quality.get("impact_score")
+    business_score = (
+        _clamp(50 + float(business_impact) / 2)
+        if business_quality.get("status") == "SUPPORTED" and isinstance(business_impact, (int, float))
+        and not isinstance(business_impact, bool) else None
+    )
+    if business_score is not None:
+        financial_score = 0.7 * financial_score + 0.3 * business_score if financial or financial_direction is not None else business_score
+    fundamental_coverage = min(1.0,
+        0.25 * len(financial) + 0.15 * len(financial_adjustments)
+        + min(0.4, 0.2 * len(business_observations))
+        + (0.2 if business_score is not None else 0)
+    )
+    business_confidence = float(business_quality.get("confidence") or 0) if business_score is not None else 0
+    fundamental_confidence = (
+        max(0.8 if financial_adjustments else 0.5 if financial_direction is not None else 0,
+            min(0.85, business_confidence))
+    )
     result["FUNDAMENTAL_QUALITY"] = {
-        "score": _clamp(financial_score) if financial or financial_direction is not None else None,
-        "coverage": min(1.0, 0.25 * len(financial) + 0.15 * len(financial_adjustments)),
-        "confidence": 0.8 if financial_adjustments else 0.5 if financial_direction is not None else 0,
-        "direction": legacy.get("FINANCIAL", {}).get("direction", "UNKNOWN"), "method": "HYBRID",
-        "summary": _summary(legacy.get("FINANCIAL"), fallback="根据结构化财务指标计算盈利质量；缺失指标不会补写。"),
-        "metrics": {"revenue_growth": revenue_growth, "profit_growth": profit_growth, "roe": roe, "records": len(financial)},
-        "evidence": {"fact_ids": [row.get("id") for row in financial]}, "warnings": [],
+        "score": _clamp(financial_score) if financial or financial_direction is not None or business_score is not None else None,
+        "coverage": fundamental_coverage,
+        "confidence": fundamental_confidence,
+        "direction": str(business_quality.get("direction") or legacy.get("FINANCIAL", {}).get("direction") or "UNKNOWN"),
+        "method": "HYBRID",
+        "summary": " ".join(filter(None, [
+            _summary(legacy.get("FINANCIAL"), fallback="根据结构化财务指标计算盈利质量；缺失指标不会补写。"),
+            str(business_quality.get("main_business_summary") or ""),
+        ]))[:800],
+        "metrics": {"revenue_growth": revenue_growth, "profit_growth": profit_growth, "roe": roe,
+                    "financial_records": len(financial), "business_records": len(business_observations),
+                    "business_impact_score": business_impact, "business_score": business_score},
+        "evidence": {"fact_ids": list(dict.fromkeys([
+            *[row.get("id") for row in financial], *[row.get("id") for row in business_observations],
+            *[str(value) for value in business_quality.get("evidence_fact_ids") or []],
+        ]))},
+        "warnings": ([] if business_score is not None else ["主营结构已读取，但技术壁垒或中长线影响尚未通过专项证据校验"]),
     }
 
     pe = (_numbers(financial_payload, ("PE", "PETTM", "pe_ratio", "市盈率")) or [None])[0]
@@ -609,14 +640,34 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     risk_count = sum(any(term in str(row.get("predicate") or "").upper() for term in risk_terms) for row in verified_paths)
     if relation_score is not None:
         relation_score = _clamp(relation_score - min(20, risk_count * 5))
+    verified_impacts = [row for row in _records(value_chain.get("impacts"))
+                        if row.get("relation_status") == "VERIFIED"
+                        and isinstance(row.get("impact_score"), (int, float))
+                        and not isinstance(row.get("impact_score"), bool)]
+    chain_impact = (sum(float(row["impact_score"]) for row in verified_impacts) / len(verified_impacts)
+                    if verified_impacts else None)
+    chain_score = _clamp(50 + chain_impact / 2) if chain_impact is not None else None
+    if chain_score is not None:
+        relation_score = (0.35 * relation_score + 0.65 * chain_score) if relation_score is not None else chain_score
+    chain_confidence = (sum(float(row.get("confidence") or 0) for row in verified_impacts) / len(verified_impacts)
+                        if verified_impacts else 0)
+    relation_fact_ids = list(dict.fromkeys(
+        str(value) for row in verified_impacts for value in row.get("relation_fact_ids") or []
+    ))
     result["SUPPLY_CHAIN_RESILIENCE"] = {
-        "score": relation_score, "coverage": min(1.0, len(verified_paths) / 5),
-        "confidence": 0.72 if verified_paths else 0,
-        "direction": str((graph or {}).get("direction") or ("NEUTRAL" if verified_paths else "UNKNOWN")),
-        "method": "HYBRID", "summary": _summary(graph, fallback="图谱存在关系线索，但仅已核验且具业务含义的关系参与覆盖计算。"),
-        "metrics": {"verified_business_relations": len(verified_paths), "candidate_business_relations": len(business_paths) - len(verified_paths), "risk_relations": risk_count},
-        "evidence": {"relation_ids": [row.get("id") for row in verified_paths]},
-        "warnings": [] if verified_paths else ["缺少已核验的产业链、经营往来或外部风险关系；候选关系不参与评分"],
+        "score": relation_score,
+        "coverage": min(1.0, len(verified_paths) / 5 + len(verified_impacts) / 2),
+        "confidence": max(0.72 if verified_paths else 0, min(0.9, chain_confidence)),
+        "direction": str((verified_impacts[0].get("direction") if len(verified_impacts) == 1 else None)
+                         or (graph or {}).get("direction") or ("NEUTRAL" if verified_paths else "UNKNOWN")),
+        "method": "HYBRID", "summary": str(value_chain.get("summary") or _summary(
+            graph, fallback="图谱存在关系线索，但仅已核验且具业务含义的关系参与覆盖计算。"))[:800],
+        "metrics": {"verified_business_relations": len(verified_paths),
+                    "verified_transmission_impacts": len(verified_impacts),
+                    "candidate_business_relations": len(business_paths) - len(verified_paths),
+                    "risk_relations": risk_count, "average_transmission_impact": chain_impact},
+        "evidence": {"relation_ids": [row.get("id") for row in verified_paths], "fact_ids": relation_fact_ids},
+        "warnings": [] if verified_paths or verified_impacts else ["缺少已核验的产业链关系及关联公司事件；候选关系不参与评分"],
     }
 
     profile_items = {row.dimension_code: row for row in _profile_items(db, profile.id)}

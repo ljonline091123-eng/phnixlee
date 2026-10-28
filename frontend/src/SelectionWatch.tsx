@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider, type StockSymbol } from "./api";
 import { SelectionAnalysis, type AnalysisDimension } from "./SelectionAnalysis";
-import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionPreflight, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionRunCreate, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 
 const labels: Record<string, string> = {
@@ -336,6 +336,10 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const [detailRetrospectives, setDetailRetrospectives] = useState<SelectionRetrospective[]>([]);
   const [detailAuditError, setDetailAuditError] = useState("");
   const [activityTick, setActivityTick] = useState(0);
+  const [pendingSelection, setPendingSelection] = useState<SelectionRunCreate | null>(null);
+  const [preparation, setPreparation] = useState<SelectionPreflight | null>(null);
+  const [preparationBusy, setPreparationBusy] = useState(false);
+  const [preparationError, setPreparationError] = useState("");
   const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, strategy_profile_id: null as number | null, model_instance_code: initialModelCode, use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
@@ -384,7 +388,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
         const rerun = await selectionApi.getRun(rerunId);
         if (!valid) return;
         setRun(rerun); await reload();
-        setNotice(`缺失数据补齐完成，已自动进入新分析批次 #${rerunId}；原批次 #${next.id} 保留。`);
+        setNotice(`${textOf(progress.message) || "补齐任务结束，请核对剩余缺口"}；已进入新分析批次 #${rerunId}，原批次 #${next.id} 保留。`);
         return;
       }
       setRun(next);
@@ -399,36 +403,60 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     return () => window.clearInterval(timer);
   }, [run?.id, run?.status, run?.criteria_json.progress, run?.criteria_json.retry_progress]);
   async function selectRun(id: number) { setBusy(true); setError(""); try { setRun(await selectionApi.getRun(id)); } catch (err) { setError(errorOf(err)); } finally { setBusy(false); } }
+  async function checkPendingSelection(payload = pendingSelection) {
+    if (!payload) return;
+    setPreparationBusy(true); setPreparationError("");
+    try {
+      const result = await selectionApi.preflight({
+        market: payload.market, symbols: payload.symbols,
+        knowledge_base_ids: payload.knowledge_base_ids, graph_ids: payload.graph_ids,
+        period_months: payload.period_months, model_instance_code: payload.model_instance_code,
+        model_instance_codes: payload.model_instance_codes, use_model: payload.use_model, data_mode: payload.data_mode,
+      });
+      setPreparation(result);
+      const routedCode = textOf(result.model?.instance_code);
+      if (routedCode) setPendingSelection(current => current ? { ...current, model_instance_code: routedCode } : current);
+    } catch (err) {
+      setPreparation(null); setPreparationError(errorOf(err));
+    } finally { setPreparationBusy(false); }
+  }
+  async function startPendingSelection(action?: "UPDATE" | "CONTINUE_PARTIAL") {
+    if (!pendingSelection || !preparation) return;
+    if (pendingSelection.use_model && !preparation.model_ready) {
+      setPreparationError("当前模型配置未通过，请更换模型并重新检查。"); return;
+    }
+    setPreparationBusy(true); setPreparationError(""); setError(""); setNotice("");
+    try {
+      const result = await selectionApi.startRun({
+        ...pendingSelection,
+        model_instance_code: textOf(preparation.model?.instance_code) || pendingSelection.model_instance_code,
+        ...(action ? { preflight_data_action: action } : {}),
+      });
+      setRun(result); await reload();
+      setPendingSelection(null); setPreparation(null);
+      setNotice(`选股批次 #${result.id} 已提交后台，数据同步、真实模型测试和分析进度将在下方持续更新。`);
+      onCreated?.(result);
+    } catch (err) { setPreparationError(errorOf(err)); }
+    finally { setPreparationBusy(false); }
+  }
+  function cancelPendingSelection() {
+    setPendingSelection(null); setPreparation(null); setPreparationError("");
+    setNotice("已取消分析，本次没有创建任务。");
+  }
   async function create(event: FormEvent) {
-    event.preventDefault(); setError(""); setNotice(""); setBusy(true);
+    event.preventDefault(); setError(""); setNotice("");
     try {
       if (stockQuery.trim() && !chosenStocks.length) throw new Error("请勾选搜索结果中的股票，或清空搜索框后按本地市场筛选。");
       const modelReady = Boolean(form.use_model && form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
-      const symbols = chosenStocks.map(item => item.symbol);
-      let actualModelCode = form.model_instance_code || null;
-      if (modelReady) {
-        const gate = await selectionApi.preflight({
-          market: form.market, symbols, knowledge_base_ids: form.knowledge_base_ids,
-          graph_ids: form.graph_ids, period_months: form.period_months,
-          model_instance_code: actualModelCode, use_model: true, data_mode: "REAL",
-        });
-        if (!gate.model_ready) {
-          const model = gate.model || {};
-          throw new Error(`${textOf(model.title) || "模型不可用"}：${textOf(model.summary) || "无法完成连通性检查"} ${textOf(model.suggestion)}`);
-        }
-        actualModelCode = textOf((gate.model || {}).instance_code) || actualModelCode;
-        if (!gate.data_ready) {
-          const missing = Number((gate.data || {}).missing_symbols?.length || 0);
-          if (!window.confirm(`分析前检查发现 ${missing} 只股票存在数据缺口。建议先更新数据；是否继续以部分数据分析？`)) {
-            setNotice("已取消分析，请先补齐数据后再开始。");
-            return;
-          }
-        }
-      }
-      const result = await selectionApi.startRun({ ...form, use_model: modelReady, symbols, model_instance_code: actualModelCode, data_mode: "REAL" });
-      setRun(result); await reload(); setCreateOpen(false);
-      setNotice(`选股批次 #${result.id} 已提交后台${form.use_model && !modelReady ? "；所选知识库/图谱暂不可用，本次按规则生成候选，未调用模型" : ""}。`); onCreated?.(result);
-    } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
+      const payload: SelectionRunCreate = {
+        ...form, symbols: chosenStocks.map(item => item.symbol),
+        use_model: modelReady, model_instance_code: form.model_instance_code || null, data_mode: "REAL",
+      };
+      setPendingSelection(payload); setPreparation(null); setPreparationError("");
+      setCreateOpen(false);
+      setNotice("选股参数已保存，请在下方“分析准备”中核对数据与模型后开始分析。");
+      void checkPendingSelection(payload);
+    } catch (err) { setError(errorOf(err)); }
   }
   function openReview(item: SelectionCandidate) {
     setCandidate(item); setCandidateAudit(null); setAuditError(""); setError("");
@@ -457,14 +485,18 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const selectableMatches = stockMatches.filter(item => !chosenStocks.some(stock => stock.market === item.market && stock.symbol === item.symbol));
   const allMatchesSelected = stockMatches.length > 0 && selectableMatches.length === 0;
   const selectedMatchCount = stockMatches.length - selectableMatches.length;
-  const failedModelCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (["FAILED", "NOT_RUN"].includes(String(item.analysis_json.model_output_status)) || item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.analysis_validation_status === "PARTIAL")) ?? [];
+  const failedModelCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.publication?.retryable || item.analysis_json.publication?.status === "DATA_INSUFFICIENT")) ?? [];
   const retryProgress = (run?.criteria_json.retry_progress as SelectionRecord | undefined) ?? {};
   const retryActive = ["QUEUED", "RUNNING"].includes(String(retryProgress.status || ""));
-  const submitBlockReason = busy ? "正在提交选股任务。" : "";
   const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
-  const successfulModelCount = run?.candidates.filter(item => item.analysis_json.model_output_status === "SUCCESS" && item.analysis_json.data_gate_status !== "MISSING_DATA" && item.analysis_json.analysis_validation_status !== "PARTIAL").length ?? 0;
+  const successfulModelCount = run?.candidates.filter(item => item.analysis_json.publication?.conclusion_available).length ?? 0;
   const modelPickerOptions = instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const availableSwitchModels = modelPickerOptions.filter(modelIsSelectable);
+  const preparationData = (preparation?.data || {}) as SelectionRecord;
+  const preparationModel = (preparation?.model || {}) as SelectionRecord;
+  const preparationMissingSymbols = strings(preparationData.missing_symbols);
+  const preparationDataReady = Boolean(preparation?.data_ready || (pendingSelection && pendingSelection.symbols.length === 0));
+  const preparationModelBlocked = Boolean(pendingSelection?.use_model && preparation && !preparation.model_ready);
   const updateChosenStocks = (next: StockSymbol[]) => {
     setChosenStocks(next);
     setForm(current => ({ ...current, candidate_limit: Math.max(current.candidate_limit, next.length) }));
@@ -530,8 +562,14 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
   }
+  const backfillProgress = (run?.criteria_json.backfill_progress || {}) as SelectionRecord;
+  const backfillActive = ["QUEUED", "RUNNING"].includes(textOf(backfillProgress.status));
+  useEffect(() => {
+    setCandidate(current => current && run ? run.candidates.find(row => row.id === current.id) || null : current);
+  }, [run]);
   async function backfill(candidateIds: number[] = [], dimensions: AnalysisDimension[] = []) {
-    if (!run) return;
+    if (!run) { setError("请先选择分析批次。"); return; }
+    if (busy || backfillActive || ["QUEUED", "RUNNING"].includes(run.status)) { setError("后台任务正在执行，请查看进度后继续。"); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       const next = await selectionApi.backfill(run.id, { candidate_ids: candidateIds, dimensions, period_months: Number(run.criteria_json.period_months || 3), rerun_analysis: true });
@@ -543,10 +581,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   async function rescore(item: SelectionCandidate) {
     setBusy(true); setError("");
     try {
-      const scoring = await selectionApi.rescoreCandidate(item.id);
-      const next = {...item, analysis_json: {...item.analysis_json, scoring}};
-      setCandidate(next);
-      setRun(current => current ? {...current, candidates: current.candidates.map(row => row.id === next.id ? next : row)} : current);
+      await selectionApi.rescoreCandidate(item.id);
+      if (run) setRun(await selectionApi.getRun(run.id));
       setNotice("八维评分已生成，原分析证据和历史结论未被覆盖。");
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
@@ -559,6 +595,28 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       </div>
       <p className="selection-steps">规则筛选 → 知识库与图谱综合分析 → 人工复选并确认预测 → 至少 10 个交易日跟踪 → 检验偏差与复盘</p>
       {mode === "selection" ? <>
+        {pendingSelection && <section className="selection-preparation" aria-label="分析准备">
+          <div className="selection-preparation-heading"><div><p className="eyebrow">ANALYSIS PREPARATION</p><h3>分析准备</h3></div><span>{pendingSelection.symbols.length ? `${pendingSelection.symbols.length} 只指定股票` : "按市场规则筛选"} · {pendingSelection.period_months} 个月</span></div>
+          <div className="selection-preparation-flow" aria-label="分析准备流程">
+            <div className={preparationBusy ? "active" : preparation ? preparationDataReady ? "done" : "warning" : "pending"}><strong>1. 数据检查</strong><small>{preparationBusy ? "正在核对本地数据" : !preparation ? "等待检查" : preparationDataReady ? "数据满足分析条件" : `${preparationMissingSymbols.length} 只存在缺口`}</small></div>
+            <div className={preparationBusy ? "pending" : preparation ? preparationModelBlocked ? "failed" : "done" : "pending"}><strong>2. 模型配置</strong><small>{!pendingSelection.use_model ? "本次不调用模型" : preparationBusy ? "等待数据检查" : !preparation ? "等待检查" : preparationModelBlocked ? "配置未通过" : "配置可用，实时连通性由后台复测"}</small></div>
+            <div className="pending"><strong>3. 创建分析</strong><small>经您确认后才创建任务</small></div>
+          </div>
+          <div className="selection-preparation-summary"><span>市场：{nameOf(pendingSelection.market)}</span><span>候选上限：{pendingSelection.candidate_limit}</span><span>知识库：{pendingSelection.knowledge_base_ids.length} 个</span><span>图谱：{pendingSelection.graph_ids.length} 张</span></div>
+          {pendingSelection.symbols.length > 0 && <details><summary>查看本次股票（{pendingSelection.symbols.length}）</summary><p className="selection-data-gap-symbols">{pendingSelection.symbols.map(symbol => <span key={symbol}>{symbol}</span>)}</p></details>}
+          {preparationBusy && <p className="selection-help" role="status">正在检查本地数据完整性和模型配置，此处不会调用远程模型，也不会创建分析任务…</p>}
+          {preparation && <>
+            <p className={preparationDataReady ? "selection-preparation-ok" : "selection-preparation-warning"}>{preparationDataReady ? "数据检查通过。" : `发现 ${preparationMissingSymbols.length || "部分"} 只股票存在数据缺口。`}{textOf(preparationData.start) && ` 检查周期：${textOf(preparationData.start).slice(0, 10)} 至 ${textOf(preparationData.end).slice(0, 10)}。`}</p>
+            {pendingSelection.use_model && <div className="selection-model-switch"><label>分析模型<select value={pendingSelection.model_instance_code || ""} onChange={event => { const code = event.target.value || null; setPendingSelection(current => current ? { ...current, model_instance_code: code } : current); setPreparation(null); setPreparationError(""); }}><option value="">按选股任务自动路由</option>{modelPickerOptions.map(item => <option className={modelStatusClass(item)} key={item.id} value={item.instance_code} disabled={!modelIsSelectable(item)}>{item.model_name} · {item.instance_code} · {modelStatusLabel(item)}</option>)}</select></label><small>{preparationModelBlocked ? `${textOf(preparationModel.title) || "模型配置未通过"}：${textOf(preparationModel.summary) || "请选择其他可用模型"}` : textOf(preparationModel.summary) || "模型配置已通过；后台开始分析前仍会执行真实连通性测试。"}</small></div>}
+            {preparation.warnings.length > 0 && <details><summary>查看准备提示（{preparation.warnings.length}）</summary><ul>{preparation.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul></details>}
+          </>}
+          {preparationError && <p className="form-error" role="alert">{preparationError}</p>}
+          <div className="selection-preparation-actions">
+            {(!preparation || preparationModelBlocked) && <button type="button" disabled={preparationBusy} onClick={() => void checkPendingSelection()}>{preparationBusy ? "检查中…" : preparationModelBlocked ? "更换模型后重新检查" : "重新检查"}</button>}
+            {preparation && !preparationModelBlocked && (preparationDataReady ? <button type="button" className="primary-button" disabled={preparationBusy} onClick={() => void startPendingSelection()}>{preparationBusy ? "正在创建…" : "开始分析"}</button> : <><button type="button" className="primary-button" disabled={preparationBusy} onClick={() => void startPendingSelection("UPDATE")}>补全数据并分析</button><button type="button" className="partial-button" disabled={preparationBusy} onClick={() => void startPendingSelection("CONTINUE_PARTIAL")}>使用部分数据分析</button></>)}
+            <button type="button" disabled={preparationBusy} onClick={cancelPendingSelection}>取消</button>
+          </div>
+        </section>}
         <div className="selection-toolbar"><label>历史选股批次 <select aria-label="选股批次" value={run?.id ?? ""} disabled={busy} onChange={event => void selectRun(Number(event.target.value))}><option value="" disabled>暂无选股批次</option>{runs.map(item => <option key={item.id} value={item.id}>#{item.id} · {nameOf(item.market)} · {dateOf(item.created_at)} · {item.candidate_count} 只</option>)}</select></label>{run && <div><Badge value={run.analysis_mode} /> <Badge value={run.status} /></div>}</div>
         {run ? <>
           <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 3)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
@@ -567,8 +625,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
           {(failedModelCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
-            <div className="selection-scope-heading"><strong>引用校验通过 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
-              {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只失败或待核对股票`}</button>}
+            <div className="selection-scope-heading"><strong>有效结论 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
+              {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只未通过股票`}</button>}
             </div>
             {failedModelCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试">
               <strong>重试模型</strong><span>{selectedModelCode ? `沿用分析模型：${selectedModelCode}` : "尚未选择可用分析模型"}</span>
@@ -580,12 +638,12 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
             <p className="selection-help">重试只处理失败且尚未复选的股票，保留本轮证据和历史调用；整批异常则创建新批次，原记录保留。</p>
             {!!retryProgress.status && <p role="status">{textOf(retryProgress.message)}{retryActive ? "，下方进度会自动更新。" : ""}</p>}
             {failedModelCandidates.length > 0 && <details><summary>查看逐股失败原因与尝试记录（{failedModelCandidates.length}）</summary><div className="selection-failure-list">{failedModelCandidates.map(item => <article key={item.id}>
-              <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).length > 0 && <div className="batch-recovery-actions"><strong>针对性处理步骤</strong><ol>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).map((action, index) => <li key={index}>{textOf(action)}</li>)}</ol></div>}
+              <strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.publication?.reason) || textOf(item.analysis_json.model_failure_reason) || run.error_message || "历史批次未记录逐股错误；请重试生成可追溯分析。"}</p>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).length > 0 && <div className="batch-recovery-actions"><strong>针对性处理步骤</strong><ol>{records((item.analysis_json.model_failure_detail as SelectionRecord | undefined)?.recovery_actions).map((action, index) => <li key={index}>{textOf(action)}</li>)}</ol></div>}
               {attemptsNewestFirst(item.analysis_json.model_attempts).map((attempt, index) => <small key={index}>{dateOf(textOf(attempt.at) || null)} · {attempt.status === "SUCCESS" ? "调用完成" : "未通过"}{attempt.model_call_log_id ? ` · 调用 #${attempt.model_call_log_id}` : ""} · {textOf(attempt.reason) || "结果已返回并经过证据校验"}</small>)}
             </article>)}</div></details>}
           </section>}
           {run.missing_data_json.length > 0 && <details className="selection-evidence"><summary>数据与分析限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, i) => <li key={i}>{item}</li>)}</ul><button type="button" disabled={busy || ["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status))} onClick={() => void backfill()}>补齐全部缺失并重新分析</button></details>}
-          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>分析状态 / 结论</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><strong>{item.name || item.symbol}</strong><br /><code>{item.symbol}</code> <small>{nameOf(item.market)}</small></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}><span className={`selection-analysis-state ${item.analysis_json.model_output_status === "FAILED" || item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.analysis_validation_status === "PARTIAL" ? "warning" : ""}`}>{item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN" ? "数据不足 · 未进行模型分析" : item.analysis_json.model_output_status === "SUCCESS" ? item.analysis_json.analysis_validation_status === "PARTIAL" ? "部分证据不足 · 待核对" : "模型分析已完成" : item.analysis_json.model_output_status === "FAILED" ? "模型分析失败 · 可重试" : "规则预选 · 未形成模型结论"}</span>{textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) || "查看资料后复选"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
+          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>分析状态 / 结论</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><strong>{item.name || item.symbol}</strong><br /><code>{item.symbol}</code> <small>{nameOf(item.market)}</small></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}><span className={`selection-analysis-state ${!item.analysis_json.publication?.conclusion_available ? "warning" : ""}`}>{item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN" ? "数据不足 · 未进行模型分析" : item.analysis_json.publication?.status === "CONCLUSION_FAILED" ? "结论校验失败" : item.analysis_json.publication?.status === "SCORE_FAILED" ? "评分生成失败" : item.analysis_json.publication?.conclusion_available ? "有效结论 · 待复核" : item.analysis_json.model_output_status === "FAILED" ? "模型分析失败 · 可重试" : "规则预选 · 未形成模型结论"}</span>{item.analysis_json.publication?.conclusion_available ? textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) : textOf(item.analysis_json.publication?.reason) || "尚无有效结论"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
         </> : <p className="selection-empty">新建选股，从已有数据中筛出候选，再结合知识证据进行人工复选。</p>}
       </> : <>
         <p className="selection-help">仅计算人工确认后、同一复权口径的有效交易日行情。周末、节假日或缺行情不会充当跟踪天数。后台 Scheduler 与 Worker 运行时会定期更新，也可手动更新。</p>
@@ -637,11 +695,12 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       <label>分析模型<select disabled={!form.use_model} value={form.model_instance_code} onChange={event => setForm({ ...form, model_instance_code: event.target.value })}><option value="">按选股任务自动路由</option>{instances.filter(item => item.enabled && providers.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK")).map(item => { const reason = modelStatusReason(item); return <option className={modelStatusClass(item)} key={item.id} value={item.instance_code} disabled={!modelIsSelectable(item)}>{item.model_name} · {item.instance_code} · {modelStatusLabel(item)}{reason ? `（${reason}）` : ""}</option>; })}</select></label>
       <p className="selection-help">只向模型发送筛选后的候选和有限证据。取消模型分析时保存为规则预选，供人工核验；数据不足或模型失败会明确记录。</p>
       <p className="selection-submit-mode" role="status">本次将：{form.use_model && modelScopeSelected ? `生成候选池并进行多源模型分析${scopeBusy ? "（覆盖统计进行中，不影响提交）" : ""}` : "生成规则候选，不调用模型"}{form.use_model && !modelScopeSelected ? "。若需模型分析，请勾选知识库及其已治理图谱。" : ""}</p>
-      {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">{submitBlockReason}</span><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={!!submitBlockReason}>{busy ? "正在提交…" : "生成候选池"}</button></footer>
+      {error && <p className="form-error" role="alert">{error}</p>}<footer><span className="selection-submit-reason" role="status">提交后将在主界面检查数据与模型，不会在弹窗中等待。</span><button type="button" onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button">进入分析准备</button></footer>
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
-      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} onRescore={() => void rescore(candidate)} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
-      {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price || candidate.analysis_json.analysis_validation_status === "PARTIAL" || ["FAILED", "NOT_RUN"].includes(String(candidate.analysis_json.model_output_status)) || candidate.analysis_json.data_gate_status === "MISSING_DATA"}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
+      <div className="batch-dialog-feedback" aria-live="polite">{error && <p className="form-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{busy && <p>正在提交，请稍候…</p>}{backfillActive && <><strong>{textOf(backfillProgress.message)}</strong><progress aria-label="弹窗数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /></>}</div>
+      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} backfillDisabled={busy || backfillActive || ["QUEUED", "RUNNING"].includes(run?.status || "")} onBackfillAll={() => void backfill([candidate.id])} onRescore={() => void rescore(candidate)} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
+      {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price || !candidate.analysis_json.publication?.conclusion_available}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
     </Dialog>}
     {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<RetrospectiveTrail rows={detailRetrospectives} error={detailAuditError} /><div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}
   </div>;

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
+from tests.selection_samples import valid_scorecard
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -17,7 +18,7 @@ from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
     _apply_model_analysis, _evidence_data_gate, _prepare_selection_data,
-    _preflight_selection_models, create_selection_run, execute_failed_selection_reanalysis,
+    _preflight_selection_models, _selection_result_counts, create_selection_run, execute_failed_selection_reanalysis,
 )
 
 
@@ -123,6 +124,64 @@ def test_exactly_three_failed_calls_then_no_old_conclusion(models, expected):
     assert run.analysis_mode == "MODEL_FAILED_FALLBACK_LOCAL"
 
 
+@pytest.mark.parametrize("second_succeeds", [True, False])
+def test_analysis_progress_counts_terminal_failures_without_timed_or_retry_advances(second_succeeds):
+    run = SimpleNamespace(model_instance_code="ZHIPU", data_mode="REAL", error_message=None,
+                          criteria_json={"analysis_contract": "MULTI_SOURCE_V2"})
+    items = [{"symbol": symbol, "market": "CN_A", "evidence_json": evidence(), "analysis_json": {}}
+             for symbol in ("688627", "300474")]
+    progress = []
+    call_progress = []
+
+    def record(_db, _run, stage, percent, message, **extra):
+        progress.append({"stage": stage, "percent": percent, "message": message, **extra})
+
+    def chat(**kwargs):
+        call_progress.append(deepcopy(progress[-1]))
+        symbol = kwargs["metadata_json"]["candidate_symbols"][0]
+        success = second_succeeds and symbol == "300474"
+        result = {**output(), "symbol": symbol}
+        return SimpleNamespace(id=len(call_progress), instance_code="ZHIPU",
+            status="SUCCESS" if success else "FAILED", error_message=None if success else "模型超时",
+            response_text=json.dumps({"candidates": [result]}, ensure_ascii=False) if success else "")
+
+    with patch("app.services.selection._progress", side_effect=record), \
+            patch("app.services.model_hub.ModelHubService.chat", side_effect=chat), \
+            patch("app.services.selection.clock.sleep"):
+        _apply_model_analysis(None, run, [(item, 1.0) for item in items], max_batch_candidates=1)
+
+    # Calls hold the same checkpoint until a stock succeeds or exhausts all
+    # three attempts. Starting the next stock or retry cannot move it back.
+    expected = [45, 45, 65, 65] if second_succeeds else [45, 45, 45, 45, 65, 65]
+    assert [row["percent"] for row in call_progress] == expected
+    assert [row["percent"] for row in progress] == sorted(row["percent"] for row in progress)
+    finished = [row for row in progress if row["stage"] == "RESULT_VALIDATION"]
+    assert finished[-1]["completed_stock_count"] == 2
+    assert finished[-1]["verified_stock_count"] == int(second_succeeds)
+    assert finished[-1]["failed_stock_count"] == (1 if second_succeeds else 2)
+    assert finished[-1]["percent"] == 85
+    assert len(items[0]["analysis_json"]["model_attempts"]) == 3
+    assert items[0]["analysis_json"]["model_output_status"] == "FAILED"
+
+
+def test_result_counts_are_exclusive_and_do_not_rewrite_empty_historical_successes():
+    rows = [SimpleNamespace(evidence_json=payload, analysis_json=analysis) for payload, analysis in [
+        ({}, {"model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL"}),
+        ({}, {"model_output_status": "FAILED", "analysis_validation_status": "PARTIAL"}),
+        (evidence(), {"model_output_status": "FAILED", "analysis_validation_status": "PARTIAL"}),
+        (evidence(), {"model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL"}),
+        (evidence(), {"model_output_status": "SUCCESS", "analysis_validation_status": "PASSED",
+                      "model": {"reasoning": "根据原始证据研判", "confidence": .7}, "scoring": valid_scorecard(),
+                      "llm_evaluation": {"status": "FAILED"}}),
+    ]]
+    before = deepcopy([row.analysis_json for row in rows])
+    counts = _selection_result_counts(rows)
+    assert counts == {"passed_count": 1, "citation_partial_count": 0, "failed_count": 2,
+                      "data_blocked_count": 2, "evaluation_failed_count": 1}
+    assert sum(counts[key] for key in ("passed_count", "citation_partial_count", "failed_count", "data_blocked_count")) == len(rows)
+    assert [row.analysis_json for row in rows] == before
+
+
 def test_financial_event_type_is_repaired_instead_of_reported_as_provider_failure():
     malformed = output()
     malformed["events"] = [{"source_type": "FINANCIAL"}]
@@ -153,7 +212,7 @@ def test_three_contract_failures_cannot_be_promoted_to_partial_success():
     assert all("horizon_sessions" in call["messages"][1]["content"] for call in calls)
 
 
-def test_invalid_dimension_citations_are_retried_before_partial_is_accepted():
+def test_invalid_dimension_citations_fail_after_three_unsuccessful_repairs():
     partial = output()
     partial["dimensions"][1].update(status="SUPPORTED", direction="POSITIVE", evidence_document_ids=[123])
     _run, analysis, calls = analyze([partial, output()])
@@ -162,9 +221,9 @@ def test_invalid_dimension_citations_are_retried_before_partial_is_accepted():
     assert "公告披露" in analysis["model_attempts"][0]["reason"]
     _run, analysis, calls = analyze([partial])
     assert len(calls) == 3
-    assert analysis["analysis_validation_status"] == "PARTIAL"
-    assert analysis["confidence"] is None and analysis["target_price"] is None
-    assert analysis["model"]["dimensions"][1]["status"] == "INSUFFICIENT"
+    assert analysis["model_output_status"] == "FAILED"
+    assert not analysis.get("model") and not analysis.get("scoring")
+    assert analysis["conclusion_available"] is False
 
 
 @pytest.mark.parametrize("dimension, fact_type", [
@@ -270,7 +329,8 @@ def test_initial_run_executes_sync_preflight_analysis_in_order(isolated):
 
 
 @pytest.mark.parametrize("has_evidence", [True, False])
-def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence):
+@pytest.mark.parametrize("has_untouched_empty_success", [True, False])
+def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence, has_untouched_empty_success):
     db = isolated
     run = SelectionRun(market="CN_A", data_mode="REAL", status="PARTIAL", model_instance_code="ZHIPU",
                        as_of=datetime.now(timezone.utc), criteria_json={"analysis_contract": "MULTI_SOURCE_V2"})
@@ -280,6 +340,11 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence)
         decision="PENDING", evidence_json=evidence(),
         analysis_json={"model_output_status": "FAILED", "model": {"headline": "旧结论"}})
     db.add(candidate)
+    untouched = None
+    if has_untouched_empty_success:
+        untouched = SelectionCandidate(run_id=run.id, market="CN_A", symbol="300474", evidence_json={},
+            analysis_json={"model_output_status": "SUCCESS", "analysis_validation_status": "PARTIAL"})
+        db.add(untouched)
     db.commit()
     stages = []
 
@@ -307,10 +372,17 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence)
     db.expire_all()
     actual = db.get(SelectionCandidate, candidate.id)
     actual_run = db.get(SelectionRun, run.id)
+    assert actual_run.criteria_json["analysis_contract"] == "MULTI_SOURCE_VALUE_CHAIN_V5"
     assert stages == (["DATA", "MODEL_PREFLIGHT", "ANALYSIS"] if has_evidence else ["DATA"])
     assert actual.analysis_json["model_output_status"] == ("FAILED" if has_evidence else "NOT_RUN")
     assert not actual.analysis_json.get("model")
-    assert result["data_blocked_count"] == (0 if has_evidence else 1)
+    assert result["data_blocked_count"] == (0 if has_evidence else 1) + int(has_untouched_empty_success)
+    assert result["citation_partial_count"] == 0 and result["completed_count"] == 0
+    from app.api.selection import _run_read
+    displayed = _run_read(db, actual_run)
+    assert displayed.criteria_json["result_counts"] == actual_run.criteria_json["result_counts"]
+    if untouched is not None:
+        assert db.get(SelectionCandidate, untouched.id).analysis_json["model_output_status"] == "SUCCESS"
     assert all(phase["status"] != "RUNNING" for phase in actual_run.criteria_json["progress"]["phases"].values())
 
 
@@ -413,7 +485,7 @@ def test_terminal_summary_agrees_with_data_gate_without_rewriting_history(isolat
     result = _run_read(db, run)
     assert result.criteria_json["result_counts"] == {
         "passed_count": 0, "citation_partial_count": 0, "failed_count": 1, "data_blocked_count": 1, "evaluation_failed_count": 0}
-    assert "模型失败 1 只、数据不足 1 只" in result.error_message
+    assert "模型/结论/评分失败 1 只、数据不足 1 只" in result.error_message
     assert result.criteria_json["retry_progress"]["message"] == result.error_message
     assert result.criteria_json["progress"]["message"] == result.error_message
     empty = next(row for row in result.candidates if row.symbol == "300474")

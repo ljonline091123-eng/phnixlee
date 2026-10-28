@@ -24,6 +24,9 @@ class SelectionRunCreate(BaseModel):
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
     use_model: bool = True
     data_mode: Literal["REAL", "MOCK"] = "REAL"
+    # UPDATE preserves the normal data-first workflow. CONTINUE_PARTIAL is an
+    # explicit user decision to analyse the current local snapshot as-is.
+    preflight_data_action: Literal["UPDATE", "CONTINUE_PARTIAL"] = "UPDATE"
 
     @model_validator(mode="after")
     def explicit_symbols_fit_candidate_limit(self) -> "SelectionRunCreate":
@@ -70,6 +73,15 @@ class SelectionPreflightRequest(SelectionScopePreview):
         return self
 
 
+class SelectionEvidenceAssessment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reference_type: Literal["DOCUMENT", "FACT", "RELATION"]
+    reference_id: str
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    score: float | None = Field(default=None, ge=-100, le=100)
+    rationale: str = Field(min_length=1, max_length=160)
+
+
 class SelectionDimension(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dimension: Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
@@ -82,6 +94,7 @@ class SelectionDimension(BaseModel):
     evidence_document_ids: list[int] = Field(default_factory=list, max_length=100)
     evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
     evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+    evidence_assessments: list[SelectionEvidenceAssessment] = Field(default_factory=list, max_length=124)
 
 
 class SelectionEvent(BaseModel):
@@ -149,6 +162,84 @@ class SelectionConfidenceBreakdown(BaseModel):
     final_confidence: float = Field(ge=0, le=1)
 
 
+class SelectionBusinessSegment(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    name: str = Field(min_length=1, max_length=160)
+    report_date: str | None = Field(default=None, max_length=32)
+    revenue: float | None = None
+    revenue_ratio: float | None = Field(default=None, ge=0, le=1)
+    profit: float | None = None
+    profit_ratio: float | None = Field(default=None, ge=-1, le=1)
+    gross_margin: float | None = Field(default=None, ge=-1, le=1)
+    evidence_fact_id: str = Field(min_length=1, max_length=128)
+
+
+class SelectionMarketShareEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    verification_status: Literal["SOURCE_VERIFIED", "UNVERIFIED", "MISSING"]
+    value: float | None = Field(default=None, ge=0)
+    unit: str | None = Field(default=None, max_length=32)
+    scope: str | None = Field(default=None, max_length=240)
+    as_of: str | None = Field(default=None, max_length=32)
+    source: str | None = Field(default=None, max_length=240)
+    explanation: str = Field(min_length=1, max_length=600)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+
+
+class SelectionBusinessQualityAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    status: Literal["SUPPORTED", "INSUFFICIENT"]
+    main_business_summary: str = Field(min_length=1, max_length=800)
+    products_services: list[str] = Field(default_factory=list, max_length=10)
+    revenue_mix: list[SelectionBusinessSegment] = Field(default_factory=list, max_length=12)
+    technology_level: Literal["UNKNOWN", "LOW", "MEDIUM", "HIGH", "LEADING"] = "UNKNOWN"
+    technology_assessment: str = Field(min_length=1, max_length=800)
+    competitive_moat: str = Field(min_length=1, max_length=800)
+    commercialization: str = Field(min_length=1, max_length=800)
+    market_position: str = Field(min_length=1, max_length=800)
+    market_share: SelectionMarketShareEvidence
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    impact_score: float | None = Field(default=None, ge=-100, le=100)
+    confidence: float = Field(ge=0, le=1)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=24)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=24)
+    risks: list[str] = Field(default_factory=list, max_length=6)
+    watch_conditions: list[str] = Field(default_factory=list, max_length=6)
+
+
+class SelectionValueChainImpact(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    related_company: str = Field(min_length=1, max_length=240)
+    related_market: str | None = Field(default=None, max_length=16)
+    related_symbol: str | None = Field(default=None, max_length=32)
+    relationship_type: Literal[
+        "SUPPLIER", "CUSTOMER", "PARTNER", "COMPETITOR", "EQUITY_CONTROL",
+        "TECHNOLOGY_SUBSTITUTION", "SAME_INDUSTRY", "SAME_THEME", "OTHER",
+    ]
+    relation_status: Literal["VERIFIED", "CANDIDATE", "UNVERIFIED"]
+    relation_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    current_security_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    related_security_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    event_summary: str = Field(min_length=1, max_length=600)
+    transmission_mechanism: str = Field(min_length=1, max_length=800)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    impact_score: float | None = Field(default=None, ge=-100, le=100)
+    horizon: Literal["SHORT", "MEDIUM", "LONG", "MULTI_PERIOD", "UNKNOWN"]
+    confidence: float = Field(ge=0, le=1)
+    assumptions: list[str] = Field(default_factory=list, max_length=6)
+    invalidation_conditions: list[str] = Field(default_factory=list, max_length=6)
+
+
+class SelectionValueChainAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    status: Literal["SUPPORTED", "INSUFFICIENT"]
+    summary: str = Field(min_length=1, max_length=1000)
+    impacts: list[SelectionValueChainImpact] = Field(default_factory=list, max_length=8)
+    risks: list[str] = Field(default_factory=list, max_length=6)
+    watch_conditions: list[str] = Field(default_factory=list, max_length=6)
+
+
 class SelectionModelRecommendation(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     symbol: str
@@ -175,6 +266,8 @@ class SelectionModelRecommendation(BaseModel):
     validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=4)
     analyzed_document_ids: list[int] = Field(default_factory=list, max_length=100)
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
+    business_quality: SelectionBusinessQualityAnalysis | None = None
+    value_chain_analysis: SelectionValueChainAnalysis | None = None
     positives: list[str] = Field(default_factory=list, max_length=4)
     risks: list[str] = Field(default_factory=list, max_length=4)
     watch_conditions: list[str] = Field(default_factory=list, max_length=4)

@@ -1,6 +1,6 @@
 # GEMINI QUANT 系统总体设计（核心模型、Skill 与复盘链路）
 
-> 更新日期：2026-10-26。本文描述当前生产架构；选股评价实施细节见 [selection-scoring-implementation.md](selection-scoring-implementation.md)。
+> 更新日期：2026-10-28。本文描述当前生产架构；选股评价实施细节见 [selection-scoring-implementation.md](selection-scoring-implementation.md)。
 
 ## 四层应用架构
 
@@ -43,14 +43,14 @@ Python/SQL 对全市场量价、财务和数据质量做批量计算。`filter-w
 
 | 维度 | 短周期权重 | 核心证据与边界 |
 | --- | ---: | --- |
-| 基本面与盈利质量 | 12% | 已治理财务指标及报告期；缺失指标不补零。 |
+| 基本面与盈利质量 | 12% | 已治理财务指标、主营概况与最新主营构成；结合收入结构、毛利率和商业化持续性，缺失指标不补零。 |
 | 估值与盈利预期 | 6% | 明确口径的 PE、PB、股息与预测；当前不直接跨行业比较绝对估值。 |
 | 行业与板块景气 | 14% | 标准行业、同行中位收益与上涨广度；概念标签不替代行业。 |
 | 价格趋势与风险收益 | 20% | 同证券、同周期日线的收益、波动与回撤。 |
 | 资金与交易行为 | 17% | 白名单资金字段和同源量价；放量不等于确认主力或游资。 |
 | 事件催化与信披可信度 | 17% | 通过文档 ID、原文引句和时间线校验的新闻公告语义结果。 |
 | 治理与股东稳定性 | 6% | 控制权、增减持、回购、解禁、质押和高管变化。 |
-| 产业链与外部韧性 | 8% | 仅已核验业务关系；归属边和候选关系不参与评分。 |
+| 产业链与外部韧性 | 8% | 仅沿已审核业务关系联动关联公司重大事件；归属边、同题材和候选关系不参与评分。 |
 
 每个维度输出 `SUPPORTED` 或 `INSUFFICIENT`、原始分、覆盖率、证据置信度、证据 ID 和警告。雷达图展示原始分；缺失轴留空。只有达到方案门槛的维度参与基础分，可信综合分按证据强度向中性值收缩：
 
@@ -60,6 +60,13 @@ trusted_score = 50 + (base_score - 50) × evidence_confidence
 ```
 
 评价方案使用 `DRAFT -> ENABLED -> RETIRED` 生命周期。新任务冻结方案、权重及 Skill 版本快照；历史候选不会因新权重静默变化，只能显式补算。LLM 可以提出优化建议，但不能发布权重。人工确认候选后，系统按真实后续交易日生成 T+3/T+5/T+7 收益、回撤和方向命中；行情未到时保持 `PENDING_DATA`。
+
+新分析使用 `MULTI_SOURCE_VALUE_CHAIN_V5` / `GRAPH_RAG_CONTEXT_V5`。八维评分和历史权重保持兼容，但页面单列两个可审计的语义模块：
+
+- `business_quality`：主营业务、产品/服务、最新收入构成、技术含量、竞争壁垒、商业化、市场地位和中长线影响。市场占有率必须同时具备数值、单位、统计范围、日期、来源和证据 ID；否则保持 `MISSING/UNVERIFIED`。
+- `value_chain_analysis`：关联对象、关系类型、审核状态、重大事件、传导机制、方向、-100 至 100 影响分、周期、置信度、假设和失效条件。`VERIFIED` 必须引用 `ACCEPTED FoundationFact` 和对应关联证券原文；候选关系方向为 `UNKNOWN`、不计分。
+
+这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
 
 对应数据表为 `selection_dimension_definition`、`selection_strategy_profile`、`selection_strategy_profile_item`、`selection_dimension_result` 和 `selection_evaluation_metric`。管理入口为 `AI能力中心 -> 评价体系`，候选雷达图和证据下钻位于 `投研工作台 -> 选股与复选`。
 

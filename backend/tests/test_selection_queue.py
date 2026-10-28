@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import time
 from types import SimpleNamespace
 from unittest.mock import patch
+from tests.selection_samples import valid_scorecard
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,6 +55,30 @@ def isolated():
 
 def request():
     return SelectionRunCreate(symbols=["DEMO001"], use_model=False, data_mode="MOCK")
+
+
+def test_selection_request_defaults_to_updating_data_before_analysis():
+    assert request().preflight_data_action == "UPDATE"
+    assert SelectionRunCreate(
+        symbols=["DEMO001"], use_model=False, data_mode="MOCK",
+        preflight_data_action="CONTINUE_PARTIAL",
+    ).preflight_data_action == "CONTINUE_PARTIAL"
+
+
+def test_continue_partial_records_decision_and_skips_remote_update(isolated):
+    with isolated() as db:
+        payload = request().model_copy(update={"preflight_data_action": "CONTINUE_PARTIAL"})
+        run = queue_selection_run(db, payload)
+        with patch("app.services.selection._prepare_selection_data") as prepare:
+            result = execute_selection_job({"selection_run_id": run.id})
+        assert result["candidate_count"] == 1
+        prepare.assert_not_called()
+        db.expire_all()
+        saved = db.get(SelectionRun, run.id)
+        assert saved.criteria_json["request"]["preflight_data_action"] == "CONTINUE_PARTIAL"
+        steps = saved.criteria_json["progress"]["process_steps"]
+        partial_step = next(item for item in steps if item["stage"] == "DATA_PARTIAL_CONFIRMED")
+        assert "部分数据" in partial_step["message"]
 
 
 def test_graph_dimension_without_loaded_relation_is_downgraded_not_stock_failure():
@@ -276,6 +301,7 @@ def test_valid_candidate_llm_evaluation_is_generated_and_persisted(isolated):
             analysis_json={
                 "model_output_status": "SUCCESS", "analysis_validation_status": "PASSED",
                 "actual_instance_code": "TEST_MODEL",
+                "scoring": valid_scorecard(),
                 "model": {"decision": "WATCH", "confidence": .72, "headline": "证据已核验",
                           "target_price": 12, "reasoning": "基于已引用事实"},
             },
@@ -346,9 +372,12 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
         failed = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO001",
             analysis_json={"model_output_status": "FAILED", "model_attempts": [{"status": "FAILED"}]},
             evidence_json={"documents": [{"id": 123, "content": "原始证据"}]})
+        good_evidence = {"documents": [{"id": 456, "source_table": "stock_news",
+            "content": "公司已披露项目进展及交付计划，相关订单收入仍需依据实际履约进度确认。"}]}
         good = SelectionCandidate(run_id=run.id, market="CN_A", symbol="DEMO002",
-            analysis_json={"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"},
-            evidence_json={"documents": [{"id": 456}]})
+            analysis_json={"model_output_status": "SUCCESS", "reasoning": "保留已成功结果",
+                "model": {"reasoning": "保留已成功结果", "confidence": .7}, "scoring": valid_scorecard()},
+            evidence_json=good_evidence)
         db.add_all([failed, good])
         db.commit()
         app.dependency_overrides[get_db] = lambda: db
@@ -389,11 +418,12 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
                     patch("app.services.selection._evidence", return_value=refreshed_evidence), \
                     patch("app.services.selection._load_disclosure_bodies"):
                 result = execute_failed_selection_reanalysis(job.payload_json)
-            assert calls == ["DEMO001"] and result["failed_count"] == 0
+            assert calls == ["DEMO001"] and result["failed_count"] == 1
             assert stages == ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"]
             db.expire_all()
-            assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果"}
-            assert good.evidence_json == {"documents": [{"id": 456}]}
+            assert good.analysis_json == {"model_output_status": "SUCCESS", "reasoning": "保留已成功结果",
+                "model": {"reasoning": "保留已成功结果", "confidence": .7}, "scoring": valid_scorecard()}
+            assert good.evidence_json == good_evidence
             assert failed.evidence_json["documents"] == refreshed_evidence["documents"]
             prior = db.scalar(select(SelectionDecisionSnapshot).where(
                 SelectionDecisionSnapshot.candidate_id == failed.id,
@@ -403,9 +433,9 @@ def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicat
             assert "scoring" not in failed.analysis_json
             assert failed.analysis_json["scoring_available"] is False
             assert run.status == "PARTIAL" and run.analysis_mode == "MODEL_PARTIAL"
-            assert result["passed_count"] == 1 and result["citation_partial_count"] == 1
+            assert result["passed_count"] == 1 and result["citation_partial_count"] == 0
             assert run.criteria_json["retry_progress"]["passed_count"] == 1
-            assert "引用校验通过 1 只、待核对 1 只、执行失败 0 只" in run.criteria_json["progress"]["message"]
+            assert "有效结论 1 只、模型/结论/评分失败 1 只" in run.criteria_json["progress"]["message"]
             # The worker normally marks the completed job successful. Simulate
             # that lifecycle before retrying the remaining unverified result.
             job.status = "SUCCESS"

@@ -158,11 +158,15 @@ def test_selection_preflight_is_read_only_and_reports_data_gate():
             assert result["data_ready"] is False
             assert result["data"]["missing_symbols"] == ["PREF001"]
             assert db.query(SelectionCandidate).count() == 0
-            unavailable = client.post("/api/v1/selection/preflight", json={
-                "market": "CN_A", "symbols": ["PREF001"],
-                "knowledge_base_ids": [base.id], "graph_ids": [graph.id],
-                "model_instance_code": "DOES_NOT_EXIST", "use_model": True, "data_mode": "REAL",
-            })
+            # Submission preflight must remain local and bounded. The worker
+            # performs the real provider call in its MODEL_PREFLIGHT phase.
+            with patch("app.services.selection.probe_selection_model") as live_probe:
+                unavailable = client.post("/api/v1/selection/preflight", json={
+                    "market": "CN_A", "symbols": ["PREF001"],
+                    "knowledge_base_ids": [base.id], "graph_ids": [graph.id],
+                    "model_instance_code": "DOES_NOT_EXIST", "use_model": True, "data_mode": "REAL",
+                })
+                live_probe.assert_not_called()
             assert unavailable.status_code == 200, unavailable.text
             failed_model = unavailable.json()
             assert failed_model["model_ready"] is False

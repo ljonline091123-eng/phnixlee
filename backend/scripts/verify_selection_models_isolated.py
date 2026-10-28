@@ -25,6 +25,8 @@ from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelS
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.services.model_errors import classify_model_error
 from app.services.selection import _apply_model_analysis, _evidence_data_gate, probe_selection_model
+from app.services.selection_evidence import build_evidence_sections, conclusion_publication
+from app.services.selection_scoring import score_candidate, seed_selection_scoring
 
 
 def clone(row):
@@ -38,6 +40,7 @@ def main() -> None:
     parser.add_argument("--run-id", type=int, default=38)
     parser.add_argument("--symbol", default="688627")
     parser.add_argument("--analyze", action="store_true")
+    parser.add_argument("--contract", help="Use a newer output contract without modifying the historical run")
     parser.add_argument("--report", type=Path, default=Path("validation/selection-reliability-20261027/live-model-report.json"))
     args = parser.parse_args()
     report = {"production_database_mode": "READ_ONLY", "transport": "REAL_HTTP",
@@ -49,7 +52,10 @@ def main() -> None:
             ModelProvider.id.in_({model.provider_id for model in models}))) ]
         models = [clone(row) for row in models]
         skills = [clone(row) for row in source.scalars(select(ModelSkill).where(
-            ModelSkill.skill_code.in_(["STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST"]))) ]
+            ModelSkill.skill_code.in_([
+                "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
+                "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
+            ]))) ]
         old_run = source.get(SelectionRun, args.run_id)
         candidate = source.scalar(select(SelectionCandidate).where(
             SelectionCandidate.run_id == args.run_id, SelectionCandidate.symbol == args.symbol))
@@ -58,7 +64,7 @@ def main() -> None:
         item = {key: deepcopy(getattr(candidate, key)) for key in (
             "market", "symbol", "name", "entry_price", "entry_date", "hard_score", "hard_rules_json", "evidence_json")}
         item["analysis_json"] = {}
-        contract = (old_run.criteria_json or {}).get("analysis_contract", "MULTI_SOURCE_V2")
+        contract = args.contract or (old_run.criteria_json or {}).get("analysis_contract", "MULTI_SOURCE_V2")
         assert not source.dirty and not source.new and not source.deleted
     readonly_engine.dispose()
     with tempfile.TemporaryDirectory(prefix="selection-model-validation-") as directory:
@@ -98,13 +104,26 @@ def main() -> None:
                     start = time.monotonic()
                     _apply_model_analysis(db, run, [(item, item["hard_score"])])
                     analysis = item["analysis_json"]
+                    # Exercise the real score/publication path, using the default
+                    # published profile in this temporary database only.
+                    seed_selection_scoring(db)
+                    result_candidate = SelectionCandidate(run_id=run.id, **item)
+                    db.add(result_candidate)
+                    db.flush()
+                    score_candidate(db, result_candidate)
+                    analysis = result_candidate.analysis_json
+                    db.commit()
                     report["analysis"] = {"symbol": args.symbol, "data_gate_status": gate["status"],
                         "status": analysis.get("model_output_status"), "validation_status": analysis.get("analysis_validation_status"),
                         "actual_instance_code": analysis.get("actual_instance_code"), "attempts": analysis.get("model_attempts"),
                         "dimensions": [{key: value for key, value in dimension.items()
-                                        if key in {"dimension", "status", "evidence_document_ids", "evidence_fact_ids"}}
+                                        if key in {"dimension", "status", "evidence_document_ids", "evidence_fact_ids", "evidence_assessments"}}
                                        for dimension in (analysis.get("model") or {}).get("dimensions", [])],
                         "validation_warnings": analysis.get("evidence_validation_warnings"),
+                        "publication": conclusion_publication(analysis),
+                        "scoring": {key: value for key, value in (analysis.get("scoring") or {}).items()
+                                    if key in {"status", "profile", "trusted_score", "coverage", "dimensions"}},
+                        "sections": build_evidence_sections(analysis, item["evidence_json"]),
                         "failure_detail": {key: value for key, value in (analysis.get("model_failure_detail") or {}).items() if key != "raw_error"},
                         "elapsed_seconds": round(time.monotonic() - start, 2)}
                     print(json.dumps(report["analysis"], ensure_ascii=True), flush=True)
@@ -112,6 +131,12 @@ def main() -> None:
                     "status": log.status, "latency_ms": log.latency_ms,
                     "transport_attempts": len((log.request_json or {}).get("attempted_models") or [])}
                     for log in db.scalars(select(ModelCallLog).order_by(ModelCallLog.id))]
+                # Public-stock output only; never retain request headers,
+                # provider configuration or credentials in this report.
+                report["analysis_responses"] = [{"call_log_id": log.id, "instance_code": log.instance_code,
+                    "response_text": log.response_text}
+                    for log in db.scalars(select(ModelCallLog).where(ModelCallLog.task_type == "stock_screening")
+                                          .order_by(ModelCallLog.id))]
         finally:
             session_module.SessionLocal = original_factory
             engine.dispose()

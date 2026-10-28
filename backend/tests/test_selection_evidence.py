@@ -382,7 +382,8 @@ def test_twenty_stock_batch_isolates_citations_and_withdraws_unverifiable_conclu
 
 def test_valid_chunk_document_reference_is_not_lost_when_stored_as_string():
     from app.services.selection import _sanitize_model_evidence_references, _validate_multi_source_output
-    item = {"evidence_json": {"documents": [], "chunks": [{"id": "chunk-1", "document_id": "48", "text": "经营资料"}],
+    item = {"evidence_json": {"documents": [{"id": 48, "source_table": "stock_symbol", "excerpt": "经营资料"}],
+                              "chunks": [{"id": "chunk-1", "document_id": "48", "text": "经营资料"}],
                               "facts": [], "evidence_fact_ids": [], "graph_paths": []}}
     output = {"dimensions": [{"dimension": "COMPANY", "status": "SUPPORTED", "direction": "NEUTRAL",
                               "summary": "仅有切片线索", "evidence_document_ids": [48]}],
@@ -391,3 +392,17 @@ def test_valid_chunk_document_reference_is_not_lost_when_stored_as_string():
     _validate_multi_source_output(output, item, required=False)
     assert output["validation_status"] == "PASSED"
     assert output["evidence_document_ids"] == [48]
+
+
+def test_untyped_chunk_cannot_be_promoted_to_company_evidence():
+    from app.services.selection import _sanitize_model_evidence_references, _validate_multi_source_output
+    item = {"evidence_json": {"documents": [], "chunks": [{"id": "chunk-1", "document_id": "48", "text": "经营资料"}],
+                              "facts": [], "evidence_fact_ids": [], "graph_paths": []}}
+    output = {"dimensions": [{"dimension": "COMPANY", "status": "SUPPORTED", "direction": "NEUTRAL",
+                              "summary": "仅有无来源分类切片", "evidence_document_ids": [48]}],
+              "events": [], "evidence_document_ids": [48]}
+    _sanitize_model_evidence_references(output, item)
+    _validate_multi_source_output(output, item, required=False)
+    assert output["validation_status"] == "PARTIAL"
+    assert output["dimensions"][0]["status"] == "INSUFFICIENT"
+    assert output["dimensions"][0]["evidence_document_ids"] == []

@@ -654,6 +654,39 @@ DEFAULT_MODEL_SKILLS_V2 = (
                         "managed_contract_version": "EVENT_LINKAGE_V1"},
     },
     {
+        "skill_code": "BUSINESS_MOAT_VALUE_ANALYST",
+        "skill_name": "主营业务、技术壁垒与中长线价值分析",
+        "description": "基于主营构成和原文证据分析产品服务、技术含量、商业化、市场地位与竞争壁垒。",
+        "instructions": (
+            "你是公司业务与竞争壁垒研究智能体。先读取BUSINESS_PROFILE和最新BUSINESS_COMPOSITION，"
+            "区分公司历史主营描述与当前收入结构，列出主要产品/服务、收入占比、毛利率和报告期。"
+            "再从公告、年报、招股书或可靠新闻原文评价技术含量、核心壁垒、客户验证、商业化持续性和市场地位。"
+            "不得根据产品名称推断技术领先、填补国内空白、国产替代或进入某客户供应链。"
+            "市场占有率只有在证据同时给出数值、单位、统计范围、日期和来源时才可标为SOURCE_VERIFIED；"
+            "否则返回MISSING或UNVERIFIED，不得用模型常识补值。输出要区分事实、推断、风险和观察条件，"
+            "并给出-100至100的中长线影响分；影响分不是目标涨跌幅。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
+                        "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "BUSINESS_MOAT_V1"},
+    },
+    {
+        "skill_code": "VALUE_CHAIN_TRANSMISSION_ANALYST",
+        "skill_name": "产业链关联事件传导分析",
+        "description": "沿已审核公司关系联动关联证券重大事件，评估传导方向、强度、周期和失效条件。",
+        "instructions": (
+            "你是产业链事件传导研究智能体。只沿本次上下文已载入的FoundationFact和关联证券文档分析。"
+            "每条传导必须说明关联对象、关系类型、关系审核状态、关联对象重大事件、传导机制、影响方向、"
+            "影响分、短中长期、置信度、关键假设和失效条件。VERIFIED关系必须引用状态为ACCEPTED的关系事实，"
+            "并引用该关系对应关联证券在分析周期内的新闻或公告；行业相同、题材相似或关键词提及不得冒充供应商/客户。"
+            "候选或未验证关系只能作为待核线索，方向为UNKNOWN、影响分为null，不参与综合评分。"
+            "影响分范围-100至100，只表示研究影响强弱，不是股价涨跌幅预测。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
+                        "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "VALUE_CHAIN_TRANSMISSION_V1"},
+    },
+    {
         "skill_code": "FINANCIAL_QUALITY_SCORER",
         "skill_name": "基本面与盈利质量评分",
         "description": "按结构化财务事实计算盈利质量，并保留字段口径、期次和缺失状态。",
