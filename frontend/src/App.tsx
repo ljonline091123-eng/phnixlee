@@ -656,7 +656,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
               className={inputClass}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="按代码或名称模糊搜索"
+              placeholder="代码、中文名称、拼音或首字母模糊搜索"
             />
             <button type="submit">查询</button>
           </form>

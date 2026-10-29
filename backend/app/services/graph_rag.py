@@ -37,6 +37,12 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.models.research_data import (
+    StockBrokerResearchReport,
+    StockEarningsConsensus,
+    StockInstitutionForecast,
+    StockInvestorQA,
+)
 from app.services.graph_identity import canonical_company_id, canonical_security_id, resolve_many
 from app.services.foundation import facts_query
 from app.services.lakehouse import current_knowledge_document_chunks, knowledge_document_source_hash
@@ -504,6 +510,8 @@ def _structured_observations(
     facts: list[dict[str, Any]] = []
     by_category: dict[str, list[dict[str, Any]]] = {
         "business": [], "financial": [], "market": [], "realtime": [], "shareholder": [], "fund_flow": [],
+        # Normalized research rows are source facts, not LLM conclusions.
+        "research": [],
     }
     source_record_refs: list[str] = []
     source_tables: set[str] = set()
@@ -557,6 +565,112 @@ def _structured_observations(
             "url": row.url,
             "fact_only": True,
         }, row.fetched_at)
+
+    # The F10 UI reads normalized research tables, but the original context
+    # builder only projected market/F10 rows.  Add the same source records to
+    # the auditable fact contract so scoring and model citations can see them.
+    def research_rows(model: Any, *where: Any, order: tuple[Any, ...], row_limit: int) -> list[Any]:
+        query = select(model).where(*where)
+        if cutoff is not None:
+            query = query.where(model.fetched_at <= cutoff)
+        return list(db.scalars(query.order_by(*order).limit(row_limit)).all())
+
+    for row in research_rows(
+        StockEarningsConsensus,
+        StockEarningsConsensus.market == market,
+        StockEarningsConsensus.symbol == symbol,
+        order=(StockEarningsConsensus.forecast_year.desc(), StockEarningsConsensus.metric_code.asc()),
+        row_limit=max(limit * 4, 24),
+    ):
+        add("research", row, "EARNINGS_FORECAST", f"{symbol} earnings forecast {row.forecast_year} {row.metric_name}", {
+            "forecast_year": row.forecast_year, "metric_code": row.metric_code,
+            "metric_name": row.metric_name, "unit": row.unit,
+            "prediction_count": row.prediction_count,
+            "minimum_value": row.minimum_value, "mean_value": row.mean_value,
+            "maximum_value": row.maximum_value, "industry_average": row.industry_average,
+            "source_code": row.source_code, "source_url": row.source_url,
+            "source_updated_at": row.source_updated_at, "raw_payload": row.raw_payload or {},
+            "is_forecast": True, "fact_only": True,
+        }, row.fetched_at)
+
+    for row in research_rows(
+        StockInstitutionForecast,
+        StockInstitutionForecast.market == market,
+        StockInstitutionForecast.symbol == symbol,
+        order=(StockInstitutionForecast.report_date.desc(), StockInstitutionForecast.id.desc()),
+        row_limit=max(limit * 3, 18),
+    ):
+        add("research", row, "INSTITUTION_FORECAST", f"{symbol} institution forecast {row.institution} {row.report_date}", {
+            "institution": row.institution, "report_date": row.report_date,
+            "rating": row.rating, "analysts": row.analysts_json or [],
+            "forecast": row.forecast_json or {}, "report_external_id": row.report_external_id,
+            "source_code": row.source_code, "source_url": row.source_url,
+            "detail_url": row.detail_url, "source_updated_at": row.source_updated_at,
+            "raw_payload": row.raw_payload or {}, "is_forecast": True, "fact_only": True,
+        }, row.fetched_at)
+
+    for row in research_rows(
+        StockInvestorQA,
+        StockInvestorQA.market == market,
+        StockInvestorQA.symbol == symbol,
+        order=(StockInvestorQA.updated_time.desc(), StockInvestorQA.id.desc()),
+        row_limit=max(limit * 2, 12),
+    ):
+        add("research", row, "INVESTOR_QA", f"{symbol} investor Q&A {row.asked_time or row.updated_time}", {
+            "question": row.question, "answer": row.answer,
+            "questioner": row.questioner, "answerer": row.answerer,
+            "asked_at": row.asked_time, "answered_at": row.answered_time,
+            "updated_at": row.updated_time, "source_code": row.source_code,
+            "source_url": row.source_url, "source_updated_at": row.source_updated_at,
+            "qa_status": "ANSWERED" if row.answer else "PENDING_REPLY",
+            "raw_payload": row.raw_payload or {}, "fact_only": True,
+        }, row.fetched_at)
+
+    for row in research_rows(
+        StockBrokerResearchReport,
+        StockBrokerResearchReport.market == market,
+        StockBrokerResearchReport.symbol == symbol,
+        order=(StockBrokerResearchReport.report_date.desc(), StockBrokerResearchReport.id.desc()),
+        row_limit=max(limit * 2, 12),
+    ):
+        add("research", row, "RESEARCH_REPORT", f"{symbol} research report {row.title}", {
+            "title": row.title, "report_date": row.report_date,
+            "institution": row.institution, "rating": row.rating,
+            "summary": row.summary, "content_status": row.content_status,
+            "source_code": row.source_code, "source_url": row.source_url,
+            "detail_url": row.detail_url, "pdf_url": row.pdf_url,
+            "source_updated_at": row.source_updated_at, "raw_payload": row.raw_payload or {},
+            "fact_only": True,
+        }, row.fetched_at)
+
+    # Classification labels are evidence for industry/theme context only.  Do
+    # not infer a supplier/customer relation from shared membership.
+    master = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
+    if master is not None:
+        try:
+            from app.services.stock_classification import build_classification_groups
+            latest_profile = db.scalar(select(StockF10Cache).where(
+                StockF10Cache.market == market, StockF10Cache.symbol == symbol,
+                StockF10Cache.section == "profile",
+            ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()))
+            fields = (latest_profile.payload_json or {}).get("fields") if latest_profile else {}
+            groups = build_classification_groups(db, master, fields if isinstance(fields, dict) else {})
+            rows = [{"group": group.get("key"), "title": group.get("title"), "items": [
+                {key: item.get(key) for key in (
+                    "name", "label", "code", "dimension", "classification_dimension", "definition",
+                    "definition_version", "source_name", "source_url", "level",
+                ) if item.get(key) not in (None, "")}
+                for item in group.get("items") or []
+            ]} for group in groups if group.get("items")]
+            if rows:
+                add("research", master, "CLASSIFICATION_OBSERVATION", f"{symbol} industry and theme classification", {
+                    "groups": rows, "source": "security master classification evidence",
+                    "fact_only": True,
+                    "inference_boundary": "Classification does not prove a supplier, customer, or causal relation.",
+                }, latest_profile.fetched_at if latest_profile else master.updated_at)
+        except Exception:
+            # Optional enrichment must not block the core evidence package.
+            pass
 
     # Company profile and main-business composition are long-horizon issuer
     # facts.  They are selected as the latest source record known at cutoff,
@@ -1343,6 +1457,7 @@ def build_selection_context(
         "realtime": "实时行情观测",
         "shareholder": "股东/F10观测",
         "fund_flow": "资金流观测",
+        "research": "research forecasts, institutions, Q&A and classifications",
     }
     for category, label in category_labels.items():
         if not structured["by_category"].get(category):

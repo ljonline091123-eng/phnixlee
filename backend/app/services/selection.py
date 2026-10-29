@@ -2731,7 +2731,7 @@ def _dimension_fact_allowlists(evidence: dict[str, Any]) -> dict[str, set[str]]:
     """
     allowed = {"FINANCIAL": set(), "PRICE_VOLUME": set(), "FUND_FLOW": set()}
     kinds = {
-        "FINANCIAL": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC"},
+        "FINANCIAL": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC", "EARNINGS_FORECAST", "INSTITUTION_FORECAST"},
         "PRICE_VOLUME": {"MARKET_OBSERVATION", "REALTIME_QUOTE", "MARKET_EVENT", "MARKET_ANOMALY"},
         "FUND_FLOW": {"FUND_FLOW_OBSERVATION"},
     }

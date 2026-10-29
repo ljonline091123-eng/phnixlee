@@ -8,6 +8,7 @@ snapshot in ``analysis_json`` while normalized rows support evaluation queries.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from math import sqrt
 from statistics import median
@@ -17,8 +18,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.company_graph import SecurityClassification
-from app.models.foundation import FoundationListing
-from app.models.market_data import StockKline, StockSymbol
+from app.models.foundation import FoundationEvidence, FoundationListing
+from app.models.market_data import StockF10Cache, StockKline, StockSymbol
 from app.models.selection import (
     SelectionCandidate,
     SelectionDimensionDefinition,
@@ -334,6 +335,26 @@ def _numbers(value: Any, keys: Iterable[str]) -> list[float]:
     return result
 
 
+def _numeric_scalar(value: Any) -> float | None:
+    """Parse a source numeric scalar without treating missing text as zero."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    if value in (None, ""):
+        return None
+    text = str(value).strip().replace(",", "")
+    multiplier = 1.0
+    if text.endswith("亿"):
+        text, multiplier = text[:-1], 1e8
+    elif text.endswith("万"):
+        text, multiplier = text[:-1], 1e4
+    if text.endswith("%"):
+        text = text[:-1]
+    try:
+        return float(text) * multiplier
+    except (TypeError, ValueError):
+        return None
+
+
 def _legacy_dimensions(analysis: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if analysis.get("model_output_status") == "FAILED":
         return {}
@@ -402,14 +423,45 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
             SecurityClassification.dimension == "INDUSTRY",
             SecurityClassification.status.in_(("ACCEPTED", "VERIFIED", "SOURCE")),
         ).order_by(SecurityClassification.updated_at.desc()))
+    provider_industry_code: str | None = None
+    provider_industry_label: str | None = None
+    if classification is None:
+        try:
+            from app.services.stock_classification import build_classification_groups
+            profile_cache = db.scalar(select(StockF10Cache).where(
+                StockF10Cache.market == market, StockF10Cache.symbol == symbol,
+                StockF10Cache.section == "profile",
+            ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()))
+            profile_fields = (profile_cache.payload_json or {}).get("fields") if profile_cache else {}
+            groups = build_classification_groups(db, stock, profile_fields if isinstance(profile_fields, dict) else {})
+            industry_items = next((group.get("items") or [] for group in groups if group.get("key") == "industry"), [])
+            if industry_items:
+                selected = industry_items[-1]
+                provider_industry_label = str(selected.get("label") or selected.get("name") or "").strip() or None
+                provider_industry_code = str(selected.get("code") or "").strip() or None
+        except Exception:
+            pass
     def source_industry(row: StockSymbol) -> str | None:
+        payloads: list[dict[str, Any]] = []
         for payload in (row.ext_json or {}, row.raw_payload or {}):
+            if not isinstance(payload, dict):
+                continue
+            payloads.append(payload)
+            nested = payload.get("f10_profile_fields") or payload.get("profile_fields")
+            if isinstance(nested, dict):
+                payloads.append(nested)
+        for payload in payloads:
             for key in ("industry", "industry_name", "industryName", "所属行业", "行业"):
                 value = payload.get(key)
                 if value not in (None, ""):
                     return str(value).strip()
+        for payload in payloads:
+            for key in ("\u6240\u5c5e\u884c\u4e1a", "\u884c\u4e1a", "CSRC_INDUSTRY_NAME"):
+                value = payload.get(key)
+                if value not in (None, ""):
+                    return str(value).strip()
         return None
-    industry = classification.label if classification else source_industry(stock)
+    industry = classification.label if classification else (provider_industry_label or source_industry(stock))
     if not industry:
         return {"status": "INSUFFICIENT", "warning": "缺少标准行业归属"}
     peers: list[tuple[str, str]] = []
@@ -426,8 +478,25 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
     if not peers:
         market_stocks = list(db.scalars(select(StockSymbol).where(StockSymbol.market == market).limit(2000)).all())
         peers = [(row.market, row.symbol) for row in market_stocks if source_industry(row) == industry][:40]
+    if not peers and provider_industry_code:
+        # Foundation listing evidence contains the provider's complete
+        # industry hierarchy even when a classification review row has not
+        # yet been accepted.  Matching the exact BK code supplies a peer set
+        # without inventing a business relationship or calling the network.
+        rows = db.execute(select(FoundationListing, FoundationEvidence).join(
+            FoundationEvidence, FoundationEvidence.id == FoundationListing.evidence_id,
+        ).where(FoundationListing.market == market).limit(20000)).all()
+        for peer_listing, evidence in rows:
+            try:
+                payload = json.loads(evidence.content or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            codes = {str(payload.get(f"BOARD_CODE_BK_{level}LEVEL") or "").strip() for level in (1, 2, 3)}
+            if provider_industry_code in codes:
+                peers.append((peer_listing.market, peer_listing.symbol))
+        peers = list(dict.fromkeys(peers))[:40]
     if (market, symbol) not in peers:
-        peers.append((market, symbol))
+        peers = [*peers[:39], (market, symbol)]
     peer_symbols = [peer_symbol for peer_market, peer_symbol in peers[:40] if peer_market == market]
     period_start = (as_of.date() - timedelta(days=75)).isoformat()
     market_rows = list(db.scalars(select(StockKline).where(
@@ -466,6 +535,8 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     observations = evidence.get("structured_observations") or {}
     business_observations = _records(observations.get("business"))
     financial = _records(observations.get("financial"))
+    research = _records(observations.get("research"))
+    forecast_rows = [row for row in research if str(row.get("fact_type") or "").upper() in {"EARNINGS_FORECAST", "INSTITUTION_FORECAST"}]
     shareholder = _records(observations.get("shareholder"))
     fund_flow = _records(observations.get("fund_flow"))
     bars = _bars(evidence)
@@ -478,9 +549,29 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     result: dict[str, dict[str, Any]] = {}
 
     financial_payload = [row.get("properties") or {} for row in financial]
+    research_payload = [row.get("properties") or {} for row in forecast_rows]
+
+    def forecast_values(*codes: str) -> list[float]:
+        wanted = {code.upper() for code in codes}
+        values: list[float] = []
+        for row in forecast_rows:
+            props = row.get("properties") or {}
+            metric = str(props.get("metric_code") or "").upper()
+            if metric not in wanted:
+                continue
+            for key in ("mean_value", "value", "forecast_mean", "mean"):
+                parsed = _numeric_scalar(props.get(key))
+                if parsed is not None:
+                    values.append(parsed)
+                    break
+        return values
     revenue_growth = (_numbers(financial_payload, ("TOTALOPERATEREVETZ", "revenue_growth", "营业收入同比")) or [None])[0]
     profit_growth = (_numbers(financial_payload, ("PARENTNETPROFITTZ", "net_profit_growth", "归母净利润同比")) or [None])[0]
     roe = (_numbers(financial_payload, ("ROEJQ", "roe", "净资产收益率")) or [None])[0]
+    if revenue_growth is None:
+        revenue_growth = (forecast_values("REVENUE_YOY", "TOTAL_REVENUE_YOY") or [None])[0]
+    if profit_growth is None:
+        profit_growth = (forecast_values("NET_PROFIT_YOY") or [None])[0]
     financial_adjustments = []
     if revenue_growth is not None: financial_adjustments.append(max(-18, min(18, revenue_growth * 0.35)))
     if profit_growth is not None: financial_adjustments.append(max(-22, min(22, profit_growth * 0.4)))
@@ -500,6 +591,7 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     fundamental_coverage = min(1.0,
         0.25 * len(financial) + 0.15 * len(financial_adjustments)
         + min(0.4, 0.2 * len(business_observations))
+        + min(0.25, 0.05 * len(forecast_rows))
         + (0.2 if business_score is not None else 0)
     )
     business_confidence = float(business_quality.get("confidence") or 0) if business_score is not None else 0
@@ -518,10 +610,10 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
             str(business_quality.get("main_business_summary") or ""),
         ]))[:800],
         "metrics": {"revenue_growth": revenue_growth, "profit_growth": profit_growth, "roe": roe,
-                    "financial_records": len(financial), "business_records": len(business_observations),
+                    "financial_records": len(financial), "forecast_records": len(forecast_rows), "business_records": len(business_observations),
                     "business_impact_score": business_impact, "business_score": business_score},
         "evidence": {"fact_ids": list(dict.fromkeys([
-            *[row.get("id") for row in financial], *[row.get("id") for row in business_observations],
+            *[row.get("id") for row in financial], *[row.get("id") for row in forecast_rows], *[row.get("id") for row in business_observations],
             *[str(value) for value in business_quality.get("evidence_fact_ids") or []],
         ]))},
         "warnings": ([] if business_score is not None else ["主营结构已读取，但技术壁垒或中长线影响尚未通过专项证据校验"]),
@@ -530,7 +622,22 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     pe = (_numbers(financial_payload, ("PE", "PETTM", "pe_ratio", "市盈率")) or [None])[0]
     pb = (_numbers(financial_payload, ("PB", "pb_ratio", "市净率")) or [None])[0]
     dividend = (_numbers(financial_payload, ("DIVIDEND_YIELD", "dividend_yield", "股息率")) or [None])[0]
-    valuation_parts = []
+    if pe is None:
+        pe = (forecast_values("FORWARD_PE") or [None])[0]
+    if pb is None:
+        pb = (forecast_values("PB", "FORWARD_PB") or [None])[0]
+    if dividend is None:
+        dividend = (forecast_values("DIVIDEND_YIELD") or [None])[0]
+    forecast_growth = forecast_values("NET_PROFIT_YOY", "REVENUE_YOY", "TOTAL_REVENUE_YOY")
+    if forecast_growth:
+        # A forecast is an expectation, not an actual result.  It contributes
+        # a bounded expectation component so the dimension is supported when
+        # the issuer has forecast coverage even if no provider PE/PB is quoted.
+        valuation_parts = [_clamp(50 + sum(forecast_growth) / len(forecast_growth) * 0.25)]
+    elif forecast_rows:
+        valuation_parts = [50.0]
+    else:
+        valuation_parts = []
     if pe is not None:
         valuation_parts.append(25 if pe <= 0 else 68 if pe <= 15 else 58 if pe <= 30 else 42 if pe <= 50 else 30)
     if pb is not None:
@@ -546,6 +653,10 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
         "evidence": {"fact_ids": [row.get("id") for row in financial]}, "warnings": ([] if valuation_parts else ["盈利预测和估值指标覆盖不足"]),
     }
 
+    result["VALUATION_EXPECTATION"]["evidence"]["fact_ids"] = list(dict.fromkeys(
+        [*result["VALUATION_EXPECTATION"]["evidence"].get("fact_ids", []),
+         *[row.get("id") for row in forecast_rows]]
+    ))
     run = db.get(SelectionRun, candidate.run_id)
     scoring_as_of = run.as_of if run is not None else candidate.created_at or _now()
     industry = _industry_context(db, candidate.market, candidate.symbol, scoring_as_of)
@@ -561,6 +672,9 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
         "warnings": [industry["warning"]] if industry.get("warning") else [],
     }
 
+    classification_fact_ids = [row.get("id") for row in research
+                               if str(row.get("fact_type") or "").upper() == "CLASSIFICATION_OBSERVATION"]
+    result["INDUSTRY_MOMENTUM"]["evidence"]["fact_ids"] = classification_fact_ids
     price_score = None
     if bar_metrics.get("return_20d") is not None:
         price_score = 50 + float(bar_metrics["return_20d"]) * 0.8 + float(bar_metrics.get("return_5d") or 0) * 0.5

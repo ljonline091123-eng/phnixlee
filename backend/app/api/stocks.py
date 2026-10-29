@@ -1694,14 +1694,30 @@ def list_stock_symbols(
             raise HTTPException(status_code=422, detail="未知证券类型")
     if status:
         filters.append(StockSymbol.status == status)
-    if keyword:
-        pattern = f"%{keyword.strip()}%"
+    query = str(keyword or "").strip()
+    # SQL LIKE cannot search pinyin/initials because the security master keeps
+    # the canonical Chinese name.  For alphabetic queries use the same local,
+    # cached transliteration/alias matcher as ``/stocks/search`` and paginate
+    # the ranked result.  The master is bounded to one row per listed security
+    # so this remains a predictable read operation and does not alter source
+    # data.
+    transliterated_query = bool(query and any(character.isalpha() and ord(character) < 128 for character in query))
+    if query and not transliterated_query:
+        pattern = f"%{query}%"
         filters.append(or_(StockSymbol.symbol.ilike(pattern), StockSymbol.name.ilike(pattern)))
 
-    statement = select(StockSymbol).where(*filters).order_by(StockSymbol.market, StockSymbol.symbol)
-    count_statement = select(func.count()).select_from(StockSymbol).where(*filters)
-    total = db.scalar(count_statement) or 0
-    items = db.scalars(statement.offset((page - 1) * page_size).limit(page_size)).all()
+    base_statement = select(StockSymbol).where(*filters)
+    if transliterated_query:
+        candidates = list(db.scalars(base_statement).all())
+        candidates = [item for item in candidates if _matches_stock_text(item, query)]
+        candidates.sort(key=lambda item: _rank_stock_candidate(item, query, item.market))
+        total = len(candidates)
+        items = candidates[(page - 1) * page_size: page * page_size]
+    else:
+        statement = base_statement.order_by(StockSymbol.market, StockSymbol.symbol)
+        count_statement = select(func.count()).select_from(StockSymbol).where(*filters)
+        total = db.scalar(count_statement) or 0
+        items = db.scalars(statement.offset((page - 1) * page_size).limit(page_size)).all()
     latest_quotes = _latest_quotes_for_stocks(db, list(items))
     pipeline_statuses = _stock_pipeline_statuses(db, list(items))
     return StockSymbolPage(
