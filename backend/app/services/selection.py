@@ -2662,6 +2662,94 @@ def _validate_signed_impact(direction: str, score: Any, label: str) -> None:
         raise ValueError(f"{label}影响方向与影响分不一致：利好为正、利空为负、中性/交织为0、未知为null")
 
 
+def _normalize_business_composition_output(output: dict[str, Any], item: dict[str, Any]) -> None:
+    """Restore source precision when an LLM only rounded a cited business fact.
+
+    The model is allowed to explain source facts, but it is not the authority
+    for their numeric values.  A small display-rounding difference is replaced
+    by the exact cited value.  Larger differences remain untouched so the
+    strict validator below rejects them instead of silently accepting a
+    fabricated or incorrectly copied number.
+    """
+    business = output.get("business_quality")
+    if not isinstance(business, dict):
+        return
+
+    evidence = item.get("evidence_json") or {}
+    composition_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for fact in evidence.get("facts") or []:
+        if not isinstance(fact, dict) or str(fact.get("fact_type") or "").upper() != "BUSINESS_COMPOSITION":
+            continue
+        fact_id = str(fact.get("id") or "")
+        if not fact_id:
+            continue
+        properties = fact.get("properties") or {}
+        for section in properties.get("segments") or []:
+            for source_segment in section.get("items") or []:
+                if isinstance(source_segment, dict) and source_segment.get("name"):
+                    composition_rows[(fact_id, str(source_segment["name"]).strip())] = {
+                        **source_segment,
+                        "report_date": properties.get("report_date"),
+                    }
+
+    field_labels = {
+        "revenue": "收入",
+        "revenue_ratio": "收入占比",
+        "profit": "利润",
+        "profit_ratio": "利润占比",
+        "gross_margin": "毛利率",
+    }
+    amount_fields = {"revenue", "profit"}
+    notes = list(output.get("evidence_normalization_notes") or [])
+    normalizations = list(output.get("evidence_normalizations") or [])
+    for segment in business.get("revenue_mix") or []:
+        if not isinstance(segment, dict):
+            continue
+        fact_id = str(segment.get("evidence_fact_id") or "")
+        name = str(segment.get("name") or "").strip()
+        source = composition_rows.get((fact_id, name))
+        if source is None:
+            continue
+        # A date mismatch is not a presentation rounding issue.  Leave it for
+        # the strict validator rather than attaching a value to the wrong period.
+        if segment.get("report_date") and str(segment["report_date"]) != str(source.get("report_date")):
+            continue
+        for key, label in field_labels.items():
+            model_value = _as_float(segment.get(key))
+            source_value = _as_float(source.get(key))
+            if model_value is None or source_value is None:
+                continue
+            exact_tolerance = max(1e-8, abs(source_value) * 1e-8)
+            difference = abs(model_value - source_value)
+            if difference <= exact_tolerance:
+                segment[key] = source_value
+                continue
+            rounding_tolerance = (
+                max(0.01, abs(source_value) * 0.001)
+                if key in amount_fields else 0.001
+            )
+            if difference > rounding_tolerance:
+                continue
+            segment[key] = source_value
+            warning = f"主营构成“{name}”的{label}已按来源事实 {fact_id} 恢复为精确值"
+            notes.append(warning)
+            normalizations.append({
+                "field": f"business_quality.revenue_mix.{key}",
+                "name": name,
+                "evidence_fact_id": fact_id,
+                "model_value": model_value,
+                "source_value": source_value,
+                "reason": "DISPLAY_ROUNDING",
+            })
+
+    if normalizations:
+        output["evidence_normalizations"] = normalizations
+        # These are successful source restorations, not evidence-validation
+        # failures.  Keep them separate so the UI does not withdraw a valid
+        # conclusion merely because the model rounded a displayed value.
+        output["evidence_normalization_notes"] = list(dict.fromkeys(notes))
+
+
 def _validate_business_value_chain_output(output: dict[str, Any], item: dict[str, Any], *, required: bool) -> None:
     """Fail closed on unsupported moat, market-share and transmission claims."""
     evidence = item.get("evidence_json") or {}
@@ -3628,6 +3716,10 @@ def _apply_model_analysis(
                 output, item, required=required,
                 enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
             )
+        # Numeric fields in BUSINESS_COMPOSITION are source facts.  Models
+        # sometimes return a display-rounded amount or percentage; restore the
+        # cited precision before applying the fail-closed validator.
+        _normalize_business_composition_output(output, item)
         _validate_business_value_chain_output(
             output, item, required=contract == "MULTI_SOURCE_VALUE_CHAIN_V5",
         )
@@ -3769,7 +3861,9 @@ def _apply_model_analysis(
                 "BUSINESS_COMPOSITION识别真实主营、产品服务、收入占比和毛利率，再评价技术含量、竞争壁垒、商业化能力、"
                 "市场地位及中长线价值；主营描述与最新收入构成冲突时明确指出。技术领先、填补空白、国产替代、客户验证和"
                 "市场占有率不得凭常识补写，必须引用business_fact_ids或可阅读全文；市场份额没有数值、统计范围、日期、来源时"
-                "返回MISSING且value为null。value_chain_analysis只能沿已载入关系分析关联公司重大事件的传导；VERIFIED必须引用"
+                "返回MISSING且value为null。主营构成的收入、利润、占比及毛利率必须逐位复制BUSINESS_COMPOSITION来源值，"
+                "不得换算、估算或四舍五入；无法准确读取时填null，但仍须保留正确的事实ID、名称和报告期。"
+                "value_chain_analysis只能沿已载入关系分析关联公司重大事件的传导；VERIFIED必须引用"
                 "verified_relation_fact_ids和related_security_document_ids，写明关系、事件、传导机制、短中长期、置信度、假设和"
                 "失效条件。候选/未验证关系只能展示线索，direction=UNKNOWN且impact_score=null。所有impact_score范围-100到100，"
                 "它表示研究影响强弱，不是目标涨跌幅。"
@@ -4128,6 +4222,8 @@ def _apply_model_analysis(
                 "recommendation": output["decision"], "actual_instance_code": instance_code,
                 "analysis_validation_status": output.get("validation_status", "PASSED"),
                 "evidence_validation_warnings": output.get("evidence_validation_warnings", []),
+                "evidence_normalizations": output.get("evidence_normalizations", []),
+                "evidence_normalization_notes": output.get("evidence_normalization_notes", []),
                 "model_failure_reason": None, "model_attempts": history})
             visible = next(row["evidence_json"] for row in selected if row["symbol"] == symbol)
             item["analysis_json"]["analysis_contract"] = (
@@ -4155,7 +4251,8 @@ def _apply_model_analysis(
             last_attempt = attempts_by_symbol.get(symbol, [])[-1] if attempts_by_symbol.get(symbol) else {}
             detail = classify_model_error(reason)
             for key in ("model", "scoring", "summary", "thesis", "target_price", "stop_price", "confidence", "recommendation", "llm_evaluation",
-                        "analysis_validation_status", "evidence_validation_warnings"):
+                        "analysis_validation_status", "evidence_validation_warnings",
+                        "evidence_normalizations", "evidence_normalization_notes"):
                 item["analysis_json"].pop(key, None)
             item["analysis_json"].update({"model_output_status": "FAILED", "model_failure_reason": detail["summary"],
                 "conclusion_available": False, "scoring_available": False,

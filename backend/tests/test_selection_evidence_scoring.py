@@ -16,6 +16,7 @@ from app.models.pipeline import ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionBackfillRequest, SelectionReviewRequest
 from app.services.selection import (
+    _normalize_business_composition_output,
     _validate_business_value_chain_output,
     execute_selection_data_backfill,
     queue_selection_data_backfill,
@@ -126,6 +127,53 @@ def test_v5_business_values_are_tied_to_business_composition_fact():
     changed = v5_output()
     changed["business_quality"]["revenue_mix"][0]["revenue_ratio"] = 0.9
     with pytest.raises(ValueError, match="与来源事实不一致"):
+        _validate_business_value_chain_output(changed, v5_item(), required=True)
+
+
+def test_v5_business_display_rounding_restores_exact_source_values():
+    item = v5_item()
+    source = item["evidence_json"]["facts"][1]["properties"]["segments"][0]["items"][0]
+    source.update(revenue=624516904.27, revenue_ratio=0.55362, gross_margin=0.282552)
+    changed = v5_output()
+    segment = changed["business_quality"]["revenue_mix"][0]
+    segment.update(revenue=625000000.0, revenue_ratio=0.5536, gross_margin=0.2826)
+
+    _normalize_business_composition_output(changed, item)
+    _validate_business_value_chain_output(changed, item, required=True)
+
+    assert segment["revenue"] == 624516904.27
+    assert segment["revenue_ratio"] == 0.55362
+    assert segment["gross_margin"] == 0.282552
+    assert {row["field"] for row in changed["evidence_normalizations"]} == {
+        "business_quality.revenue_mix.revenue",
+        "business_quality.revenue_mix.revenue_ratio",
+        "business_quality.revenue_mix.gross_margin",
+    }
+    assert all(row["reason"] == "DISPLAY_ROUNDING" for row in changed["evidence_normalizations"])
+    assert len(changed["evidence_normalization_notes"]) == 3
+    assert "evidence_validation_warnings" not in changed
+
+
+def test_v5_business_large_numeric_error_is_not_normalized_or_accepted():
+    changed = v5_output()
+    changed["business_quality"]["revenue_mix"][0]["revenue_ratio"] = 0.9
+
+    _normalize_business_composition_output(changed, v5_item())
+
+    assert changed["business_quality"]["revenue_mix"][0]["revenue_ratio"] == 0.9
+    assert "evidence_normalizations" not in changed
+    with pytest.raises(ValueError, match="与来源事实不一致"):
+        _validate_business_value_chain_output(changed, v5_item(), required=True)
+
+
+def test_v5_business_unknown_source_is_not_normalized_or_accepted():
+    changed = v5_output()
+    changed["business_quality"]["revenue_mix"][0]["evidence_fact_id"] = "missing-fact"
+
+    _normalize_business_composition_output(changed, v5_item())
+
+    assert "evidence_normalizations" not in changed
+    with pytest.raises(ValueError, match="未在引用的BUSINESS_COMPOSITION事实中找到"):
         _validate_business_value_chain_output(changed, v5_item(), required=True)
 
 
