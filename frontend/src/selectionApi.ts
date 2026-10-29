@@ -130,7 +130,7 @@ export type SelectionRunCreate = {
   period_months: number;
   strategy_profile_id?: number | null;
   model_instance_code: string | null; model_instance_codes?: string[]; knowledge_base_ids: number[]; graph_ids: number[]; use_model: boolean; data_mode: "REAL";
-  preflight_data_action?: "UPDATE" | "CONTINUE_PARTIAL";
+  preflight_data_action?: "UPDATE" | "CONTINUE_PARTIAL" | "REUSE_EXISTING";
 };
 export type SelectionScoringDimension = {
   id: number; dimension_code: string; dimension_name: string; description: string;

@@ -291,7 +291,7 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             if counts["evaluation_failed_count"]:
                 summary += f"另有 {counts['evaluation_failed_count']} 只股票的 LLM 评价生成失败。"
             if counts["failed_count"] or counts["data_blocked_count"] or counts["citation_partial_count"] or counts["evaluation_failed_count"]:
-                summary += "请查看逐股原因；重试将重新检查同步数据、测试所选模型，再进行分析。"
+                summary += "请查看逐股原因；重试会复用证据齐全项，仅对真实缺口增量同步，然后测试所选模型并重新分析。"
                 payload["error_message"] = summary
             else:
                 payload["error_message"] = None
@@ -488,7 +488,9 @@ def retry_run(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     if not isinstance(request_data, dict):
         raise HTTPException(status_code=409, detail="原任务没有可复用的请求快照，无法安全重试")
     try:
-        payload = SelectionRunCreate.model_validate(request_data)
+        payload = SelectionRunCreate.model_validate(request_data).model_copy(
+            update={"preflight_data_action": "REUSE_EXISTING"},
+        )
         return _run_read(db, queue_selection_run(db, payload, retry_of_run_id=original.id))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

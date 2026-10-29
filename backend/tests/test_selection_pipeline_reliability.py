@@ -12,12 +12,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ModelCallLog
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ModelCallLog, ModelSkill
 from app.models.market_data import DataSource, StockNews, StockSymbol
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
-    _apply_model_analysis, _evidence_data_gate, _prepare_selection_data,
+    _apply_model_analysis, _candidate_needs_data_refresh, _evidence_data_gate,
+    _model_candidate_context, _prepare_selection_data, _split_model_candidate_context,
     _preflight_selection_models, _selection_result_counts, create_selection_run, execute_failed_selection_reanalysis,
 )
 
@@ -66,6 +67,50 @@ def test_real_business_evidence_is_usable_without_semantic_vectors(payload):
     assert _evidence_data_gate(payload)["status"] == "READY"
 
 
+def test_failed_model_retry_refreshes_only_when_evidence_is_missing():
+    ready = SelectionCandidate(evidence_json=evidence(), analysis_json={"model_output_status": "FAILED"})
+    missing = SelectionCandidate(evidence_json={}, analysis_json={"model_output_status": "FAILED"})
+    context_failure = SelectionCandidate(
+        evidence_json=evidence(),
+        analysis_json={"model_output_status": "FAILED", "model_failure_reason": "上下文超过安全上限"},
+    )
+    assert _candidate_needs_data_refresh(ready) is False
+    assert _candidate_needs_data_refresh(context_failure) is False
+    assert _candidate_needs_data_refresh(missing) is True
+
+
+def test_oversized_candidate_context_splits_on_evidence_record_boundaries():
+    item = {
+        "market": "CN_A", "symbol": "688627", "name": "精智达",
+        "evidence_json": {
+            **evidence(),
+            "documents": [
+                {"id": index, "title": f"新闻 {index}", "source_table": "stock_news",
+                 "published_at": "2026-10-01", "content_state": "TEXT_AVAILABLE", "content": BODY * 20}
+                for index in range(1, 81)
+            ],
+            "document_ids": list(range(1, 81)),
+            "facts": [
+                {"id": f"fact:{index}", "fact_type": "FINANCIAL_OBSERVATION",
+                 "properties": {"value": index, "detail": BODY * 20}}
+                for index in range(12)
+            ],
+        },
+        "analysis_json": {},
+    }
+    compact = _model_candidate_context(item)
+    assert len(json.dumps(compact, ensure_ascii=False, separators=(",", ":"))) > 14_000
+    segments = _split_model_candidate_context(compact, max_chars=14_000)
+    assert len(segments) > 1
+    assert all(len(json.dumps(segment, ensure_ascii=False, separators=(",", ":"))) <= 14_000 for segment in segments)
+    document_ids = [row["id"] for segment in segments for row in segment["evidence_json"]["documents"]]
+    fact_ids = [row["id"] for segment in segments for row in segment["evidence_json"]["facts"]]
+    assert document_ids == list(range(1, 81))
+    # The candidate context balances fact types before segmentation; every
+    # retained fact must survive exactly once across the resulting segments.
+    assert fact_ids == compact["evidence_json"]["evidence_fact_ids"]
+
+
 def output(*, empty=False):
     return {"symbol": "688627", "decision": "WATCH", "confidence": .7, "reasoning": "基于项目进展证据观察履约情况",
             "target_price": None, "stop_price": None, "horizon_sessions": 10,
@@ -101,6 +146,74 @@ def analyze(responses, models=None):
     with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat), patch("app.services.selection.clock.sleep"):
         _apply_model_analysis(None, run, [(item, 1.0)])
     return run, item["analysis_json"], calls
+
+
+def test_oversized_analysis_maps_evidence_segments_before_final_reduce(isolated):
+    db = isolated
+    skill_codes = [
+        "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
+        "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
+    ]
+    db.add_all([
+        ModelSkill(skill_code=code, skill_name=code, instructions="治理约束。" * 800,
+                   enabled=True, skill_type="PROMPT_SOP")
+        for code in skill_codes
+    ])
+    db.commit()
+    item = {
+        "market": "CN_A", "symbol": "688627", "name": "精智达",
+        "evidence_json": {
+            **evidence(),
+            "documents": [
+                {"id": index, "title": f"新闻 {index}", "source_table": "stock_news",
+                 "published_at": "2026-10-01", "content_state": "TEXT_AVAILABLE", "content": BODY * 20}
+                for index in range(1, 81)
+            ],
+            "document_ids": list(range(1, 81)),
+            "facts": [
+                {"id": f"fact:{index}", "fact_type": f"CUSTOM_{index}",
+                 "properties": {"value": index, "detail": BODY * 60}}
+                for index in range(16)
+            ],
+        },
+        "analysis_json": {},
+    }
+    run = SimpleNamespace(model_instance_code="TEST_MODEL", data_mode="REAL", error_message=None,
+                          analysis_mode="MODEL_REQUESTED", criteria_json={
+                              "analysis_contract": "LEGACY",
+                              "request": {"model_instance_codes": ["TEST_MODEL"]},
+                          })
+    calls = []
+
+    def chat(**kwargs):
+        calls.append(kwargs)
+        purpose = kwargs["metadata_json"]["purpose"]
+        if purpose == "STOCK_SELECTION_EVIDENCE_SEGMENT":
+            segment = json.loads(kwargs["messages"][-1]["content"].split("证据分段：", 1)[1])
+            document_ids = segment["evidence_json"]["citation_allowlist"]["document_ids"]
+            response = {"analyzed_document_ids": document_ids, "findings": [],
+                        "conflicts": [], "limitations": []}
+        elif purpose == "STOCK_SELECTION_ANALYSIS":
+            # Force one contract failure. The bounded retry must reuse the
+            # segment digests instead of rebuilding the original 60k+ prompt.
+            response = {"unexpected": []}
+        else:
+            response = {"candidates": [output()]}
+            response["candidates"][0]["evidence_document_ids"] = [1]
+            news = next(row for row in response["candidates"][0]["dimensions"] if row["dimension"] == "NEWS")
+            news["evidence_document_ids"] = [1]
+        return SimpleNamespace(id=len(calls), instance_code="TEST_MODEL", status="SUCCESS",
+                               error_message=None, response_text=json.dumps(response, ensure_ascii=False))
+
+    with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat):
+        _apply_model_analysis(db, run, [(item, 1.0)])
+    purposes = [call["metadata_json"]["purpose"] for call in calls]
+    assert purposes.count("STOCK_SELECTION_EVIDENCE_SEGMENT") > 1
+    analysis_call = next(call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_ANALYSIS")
+    assert analysis_call["metadata_json"]["context_strategy"] == "EVIDENCE_RECORD_MAP_REDUCE"
+    assert purposes[-1] == "STOCK_SELECTION_PER_STOCK_RETRY"
+    assert "evidence_segment_digests" in calls[-1]["messages"][-1]["content"]
+    assert item["analysis_json"]["model_output_status"] == "SUCCESS", item["analysis_json"]
 
 
 def test_timeout_switches_only_to_selected_model_then_succeeds():
@@ -348,8 +461,11 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence,
     db.commit()
     stages = []
 
+    sync_calls = []
+
     def sync(*args, **kwargs):
         stages.append("DATA")
+        sync_calls.append(kwargs)
 
     def preflight(*args, **kwargs):
         stages.append("MODEL_PREFLIGHT")
@@ -374,6 +490,10 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence,
     actual_run = db.get(SelectionRun, run.id)
     assert actual_run.criteria_json["analysis_contract"] == "MULTI_SOURCE_VALUE_CHAIN_V5"
     assert stages == (["DATA", "MODEL_PREFLIGHT", "ANALYSIS"] if has_evidence else ["DATA"])
+    # The retry decision uses the candidate's persisted evidence before the
+    # new local read. Both parameterizations start with usable evidence, so a
+    # model retry must not collect it again.
+    assert sync_calls[0]["force_refresh"] is False
     assert actual.analysis_json["model_output_status"] == ("FAILED" if has_evidence else "NOT_RUN")
     assert not actual.analysis_json.get("model")
     assert result["data_blocked_count"] == (0 if has_evidence else 1) + int(has_untouched_empty_success)

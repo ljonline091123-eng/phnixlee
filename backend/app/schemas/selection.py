@@ -26,7 +26,9 @@ class SelectionRunCreate(BaseModel):
     data_mode: Literal["REAL", "MOCK"] = "REAL"
     # UPDATE preserves the normal data-first workflow. CONTINUE_PARTIAL is an
     # explicit user decision to analyse the current local snapshot as-is.
-    preflight_data_action: Literal["UPDATE", "CONTINUE_PARTIAL"] = "UPDATE"
+    # REUSE_EXISTING is reserved for auditable retries: evidence-ready stocks
+    # reuse local data while only genuine evidence gaps are refreshed.
+    preflight_data_action: Literal["UPDATE", "CONTINUE_PARTIAL", "REUSE_EXISTING"] = "UPDATE"
 
     @model_validator(mode="after")
     def explicit_symbols_fit_candidate_limit(self) -> "SelectionRunCreate":

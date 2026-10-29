@@ -63,6 +63,10 @@ def test_selection_request_defaults_to_updating_data_before_analysis():
         symbols=["DEMO001"], use_model=False, data_mode="MOCK",
         preflight_data_action="CONTINUE_PARTIAL",
     ).preflight_data_action == "CONTINUE_PARTIAL"
+    assert SelectionRunCreate(
+        symbols=["DEMO001"], use_model=False, data_mode="MOCK",
+        preflight_data_action="REUSE_EXISTING",
+    ).preflight_data_action == "REUSE_EXISTING"
 
 
 def test_continue_partial_records_decision_and_skips_remote_update(isolated):
@@ -357,8 +361,40 @@ def test_whole_run_retry_preserves_failed_attempt_and_queues_new_run(isolated):
             retried = response.json()
             assert retried["id"] != original.id and retried["status"] == "QUEUED"
             assert retried["criteria_json"]["retry_of_run_id"] == original.id
+            assert retried["criteria_json"]["request"]["preflight_data_action"] == "REUSE_EXISTING"
             assert original.status == "FAILED" and original.error_message == "原始失败原因"
             assert client.post(f"/api/v1/selection/runs/{retried['id']}/retry").status_code == 409
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+
+
+def test_whole_run_retry_reuses_ready_candidate_data_without_remote_collection(isolated):
+    with isolated() as db:
+        original = queue_selection_run(db, request())
+        original.status = "FAILED"
+        original.error_message = "模型上下文超限"
+        db.add(SelectionCandidate(
+            run_id=original.id, market="CN_A", symbol="DEMO001",
+            analysis_json={"model_output_status": "FAILED"},
+            evidence_json={"documents": [{
+                "id": 123, "title": "项目进展",
+                "content": "公司披露项目已进入交付阶段，收入确认仍以实际验收和履约进度为准。",
+                "content_state": "TEXT_AVAILABLE",
+            }]},
+        ))
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            response = client.post(f"/api/v1/selection/runs/{original.id}/retry")
+            assert response.status_code == 202, response.text
+            retry_id = response.json()["id"]
+            with patch("app.services.selection._prepare_selection_data") as prepare:
+                execute_selection_job({"selection_run_id": retry_id})
+            assert prepare.call_args.kwargs == {
+                "symbols": ["DEMO001"], "force_refresh": False,
+            }
         finally:
             client.close()
             app.dependency_overrides.pop(get_db, None)
