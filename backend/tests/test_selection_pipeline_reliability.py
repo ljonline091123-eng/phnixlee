@@ -17,8 +17,8 @@ from app.models.market_data import DataSource, StockNews, StockSymbol
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
-    _apply_model_analysis, _candidate_needs_data_refresh, _evidence_data_gate,
-    _model_candidate_context, _prepare_selection_data, _split_model_candidate_context,
+    _apply_model_analysis, _candidate_needs_data_refresh, _compact_reduce_batch_context,
+    _evidence_data_gate, _model_candidate_context, _prepare_selection_data, _split_model_candidate_context,
     _preflight_selection_models, _selection_result_counts, create_selection_run, execute_failed_selection_reanalysis,
 )
 
@@ -109,6 +109,36 @@ def test_oversized_candidate_context_splits_on_evidence_record_boundaries():
     # The candidate context balances fact types before segmentation; every
     # retained fact must survive exactly once across the resulting segments.
     assert fact_ids == compact["evidence_json"]["evidence_fact_ids"]
+
+
+def test_reduce_context_compaction_keeps_segment_coverage_and_fits_budget():
+    item = {
+        "symbol": "688627", "name": "精智达", "hard_rules_json": {"large": BODY * 100},
+        "evidence_json": {
+            "identity": {"large": BODY * 100},
+            "documents": [
+                {"id": index, "source_table": "stock_news", "published_at": "2026-10-01", "title": BODY * 20}
+                for index in range(1, 30)
+            ],
+            "citation_allowlist": {"document_ids": list(range(1, 30)), "fact_ids": [f"fact:{i}" for i in range(30)]},
+            "evidence_segment_digests": [{
+                "segment": {"index": index, "total": 10},
+                "analyzed_document_ids": [index],
+                "findings": [{
+                    "dimension": "NEWS", "direction": "POSITIVE", "summary": BODY * 20,
+                    "evidence_document_ids": [index], "evidence_fact_ids": [f"fact:{index}"],
+                    "evidence_relation_ids": [],
+                } for _ in range(12)],
+                "conflicts": [BODY * 20], "limitations": [BODY * 20],
+            } for index in range(1, 11)],
+        },
+    }
+    compacted = _compact_reduce_batch_context([item], 6_000)
+    rendered = json.dumps(compacted, ensure_ascii=False, separators=(",", ":"))
+    assert len(rendered) <= 6_000
+    digests = compacted[0]["evidence_json"]["evidence_segment_digests"]
+    assert [row["segment"]["index"] for row in digests] == list(range(1, 11))
+    assert compacted[0]["evidence_json"]["citation_allowlist"]["document_ids"] == list(range(1, 30))
 
 
 def output(*, empty=False):
@@ -208,7 +238,10 @@ def test_oversized_analysis_maps_evidence_segments_before_final_reduce(isolated)
     with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat):
         _apply_model_analysis(db, run, [(item, 1.0)])
     purposes = [call["metadata_json"]["purpose"] for call in calls]
-    assert purposes.count("STOCK_SELECTION_EVIDENCE_SEGMENT") > 1
+    segment_calls = [call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_EVIDENCE_SEGMENT"]
+    assert len(segment_calls) > 1
+    assert all(call["metadata_json"]["skill_codes"] == [] for call in segment_calls)
+    assert max(sum(len(message.get("content", "")) for message in call["messages"]) for call in calls) < 56_000
     analysis_call = next(call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_ANALYSIS")
     assert analysis_call["metadata_json"]["context_strategy"] == "EVIDENCE_RECORD_MAP_REDUCE"
     assert purposes[-1] == "STOCK_SELECTION_PER_STOCK_RETRY"

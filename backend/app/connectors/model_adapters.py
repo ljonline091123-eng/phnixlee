@@ -106,7 +106,8 @@ class OpenAICompatAdapter(ModelAdapter):
                 "NEWS_NOTICE_EVENT_EXTRACTION", "NEWS_NOTICE_SEMANTIC_ANALYSIS",
                 "DOCUMENT_GOVERNANCE_PLANNING", "DOCUMENT_SPECIALIST_DRAFT",
                 "DOCUMENT_FAILURE_DIAGNOSIS", "DOCUMENT_SPECIALIST_EVALUATION",
-                "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_ANALYSIS",
+                "DOCUMENT_SPECIALIST_REVISION", "STOCK_SELECTION_EVIDENCE_SEGMENT",
+                "STOCK_SELECTION_ANALYSIS",
                 "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                 "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
                 "STOCK_SELECTION_PER_STOCK_RETRY",
@@ -250,6 +251,7 @@ class GeminiRestAdapter(ModelAdapter):
         output_schema = metadata.get("json_schema_output")
         controlled_json = (
             metadata.get("purpose") in {
+                "STOCK_SELECTION_EVIDENCE_SEGMENT",
                 "STOCK_SELECTION_ANALYSIS",
                 "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                 "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",

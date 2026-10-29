@@ -2595,6 +2595,123 @@ def _digest_model_candidate_context(item: dict[str, Any], digests: list[dict[str
             "evidence_json": compact_evidence}
 
 
+def _compact_reduce_batch_context(items: list[dict[str, Any]], max_chars: int) -> list[dict[str, Any]]:
+    """Fit reduce-stage summaries into a hard character budget.
+
+    The original evidence is retained in ``SelectionCandidate.evidence_json``;
+    this function only compacts the derived map summaries sent to the final
+    model. Citation IDs and the segment coverage list are retained while prose
+    and duplicate metadata are progressively shortened.
+    """
+    import json
+
+    result = deepcopy(items)
+
+    def size() -> int:
+        return len(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+
+    if size() <= max_chars:
+        return result
+
+    for item in result:
+        evidence = item.get("evidence_json") or {}
+        evidence.pop("identity", None)
+        evidence.pop("counts", None)
+        evidence.pop("missing_data", None)
+        prompt_compaction = evidence.get("prompt_compaction")
+        if isinstance(prompt_compaction, dict):
+            evidence["prompt_compaction"] = {
+                key: prompt_compaction[key]
+                for key in ("strategy", "segment_count", "all_segment_digests_included")
+                if key in prompt_compaction
+            }
+        evidence["documents"] = [
+            {key: row.get(key) for key in ("id", "source_table", "published_at") if row.get(key) is not None}
+            for row in evidence.get("documents") or [] if isinstance(row, dict)
+        ]
+        compact_digests = []
+        for digest in evidence.get("evidence_segment_digests") or []:
+            if not isinstance(digest, dict):
+                continue
+            compact_digests.append({
+                "segment": digest.get("segment") or {},
+                "analyzed_document_ids": list(digest.get("analyzed_document_ids") or []),
+                "findings": [
+                    {
+                        "dimension": str(row.get("dimension") or "OTHER")[:24],
+                        "direction": str(row.get("direction") or "UNKNOWN")[:12],
+                        "summary": str(row.get("summary") or "")[:150],
+                        "evidence_document_ids": list(row.get("evidence_document_ids") or [])[:30],
+                        "evidence_fact_ids": list(row.get("evidence_fact_ids") or [])[:30],
+                        "evidence_relation_ids": list(row.get("evidence_relation_ids") or [])[:30],
+                    }
+                    for row in (digest.get("findings") or [])[:6] if isinstance(row, dict)
+                ],
+                "conflicts": [str(value)[:120] for value in (digest.get("conflicts") or [])[:3]],
+                "limitations": [str(value)[:120] for value in (digest.get("limitations") or [])[:3]],
+            })
+        evidence["evidence_segment_digests"] = compact_digests
+        item.pop("hard_rules_json", None)
+        item.pop("input_usage", None)
+
+    if size() <= max_chars:
+        return result
+
+    for item in result:
+        evidence = item.get("evidence_json") or {}
+        for digest in evidence.get("evidence_segment_digests") or []:
+            digest["findings"] = (digest.get("findings") or [])[:3]
+            digest["conflicts"] = (digest.get("conflicts") or [])[:1]
+            digest["limitations"] = (digest.get("limitations") or [])[:1]
+            for finding in digest.get("findings") or []:
+                finding["summary"] = str(finding.get("summary") or "")[:90]
+
+    if size() <= max_chars:
+        return result
+
+    for item in result:
+        evidence = item.get("evidence_json") or {}
+        for digest in evidence.get("evidence_segment_digests") or []:
+            digest["findings"] = [
+                {
+                    "dimension": finding.get("dimension"),
+                    "direction": finding.get("direction"),
+                    "summary": finding.get("summary"),
+                    "evidence_document_ids": finding.get("evidence_document_ids") or [],
+                    "evidence_fact_ids": finding.get("evidence_fact_ids") or [],
+                    "evidence_relation_ids": finding.get("evidence_relation_ids") or [],
+                }
+                for finding in (digest.get("findings") or [])[:2]
+            ]
+            digest.pop("conflicts", None)
+            digest.pop("limitations", None)
+
+    if size() <= max_chars:
+        return result
+
+    for item in result:
+        evidence = item.get("evidence_json") or {}
+        evidence["documents"] = []
+        evidence["evidence_segment_digests"] = [
+            {
+                "segment": digest.get("segment") or {},
+                "analyzed_document_ids": digest.get("analyzed_document_ids") or [],
+                "findings": [
+                    {
+                        "dimension": finding.get("dimension"),
+                        "direction": finding.get("direction"),
+                        "evidence_document_ids": finding.get("evidence_document_ids") or [],
+                        "evidence_fact_ids": finding.get("evidence_fact_ids") or [],
+                        "evidence_relation_ids": finding.get("evidence_relation_ids") or [],
+                    }
+                    for finding in (digest.get("findings") or [])[:1]
+                ],
+            }
+            for digest in evidence.get("evidence_segment_digests") or []
+        ]
+    return result
+
+
 def _normalize_document_reference(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
@@ -3902,7 +4019,7 @@ def _apply_model_analysis(
             exact_chars = len(system_prompt) + len(contract_prompt) + len(user_prompt) + analysis_skill_prompt_chars
             context_strategy = "BOUNDED_DIRECT"
             evidence_segment_count = 0
-            if exact_chars > 58_000:
+            if exact_chars > 52_000:
                 context_strategy = "EVIDENCE_RECORD_MAP_REDUCE"
                 reduced_batch: list[dict[str, Any]] = []
                 digest_schema = {
@@ -3938,8 +4055,13 @@ def _apply_model_analysis(
                             metadata_json={
                                 "candidate_count": 1,
                                 "batch_index": batch_index,
-                                "skill_codes": analysis_skill_codes,
-                                "require_skills": True,
+                                # Map-stage calls are bounded evidence
+                                # extraction, not the final investment
+                                # judgement. Do not inject the full analysis
+                                # Skill chain into every segment.
+                                "skill_codes": [],
+                                "require_skills": False,
+                                "skill_stage": "EVIDENCE_MAP_REDUCE",
                                 "purpose": "STOCK_SELECTION_EVIDENCE_SEGMENT",
                                 "strict_instance": bool(run.model_instance_code),
                                 "json_schema_output": digest_schema,
@@ -3965,6 +4087,9 @@ def _apply_model_analysis(
                     reduced_item = _digest_model_candidate_context(item, digests)
                     reduced_batch.append(reduced_item)
                     model_context_by_symbol[str(item["symbol"])] = reduced_item
+                fixed_chars = len(system_prompt) + len(contract_prompt) + len(user_prefix) + analysis_skill_prompt_chars
+                reduce_budget = max(8_000, 56_000 - fixed_chars)
+                reduced_batch = _compact_reduce_batch_context(reduced_batch, reduce_budget)
                 context = json.dumps(reduced_batch, ensure_ascii=False, separators=(",", ":"))
                 user_prompt = (
                     user_prefix
@@ -3973,18 +4098,10 @@ def _apply_model_analysis(
                     + context
                 )
                 exact_chars = len(system_prompt) + len(contract_prompt) + len(user_prompt) + analysis_skill_prompt_chars
-                if exact_chars > 58_000:
-                    for reduced in reduced_batch:
-                        for document in (reduced.get("evidence_json") or {}).get("documents") or []:
-                            document.pop("title", None)
-                        (reduced.get("evidence_json") or {}).pop("identity", None)
-                    context = json.dumps(reduced_batch, ensure_ascii=False, separators=(",", ":"))
-                    user_prompt = user_prefix + "证据已按记录分段读取，以下为全部分段摘要和原始引用 ID：" + context
-                    exact_chars = len(system_prompt) + len(contract_prompt) + len(user_prompt) + analysis_skill_prompt_chars
-                if exact_chars > 60_000:
+                if exact_chars > 56_000:
                     raise ValueError(
-                        f"分段分析后的汇总上下文仍为 {exact_chars} 字符，超过 60000 字符安全上限；"
-                        "请缩短分析周期或减少本轮证据范围"
+                        f"分段分析后的汇总上下文仍为 {exact_chars} 字符，超过安全预算；"
+                        "系统已保留原始证据并完成摘要压缩，请缩短分析周期或减少本轮证据范围"
                     )
             log = call_model(
                 messages=[{"role": "system", "content": system_prompt},
