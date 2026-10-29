@@ -787,6 +787,7 @@ function ResearchQaPanel({ section, onOpen, onSync }: { section: JsonRecord; onO
   const [syncError, setSyncError] = useState("");
   const title = String(section.title || "问董秘");
   const sync = asRecord(section.sync);
+  const coverage = asRecord(section.coverage);
   const visibleRows = expanded ? rows : rows.slice(0, 4);
   return <section className="research-source-section research-qa-section">
     <ResearchSectionHeading title={title} note={rows.length > 4 ? <button type="button" className="research-heading-action" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起" : "更多"}<span aria-hidden="true"> ›</span></button> : rows.length ? `${rows.length} 条问答` : undefined} />
@@ -797,6 +798,14 @@ function ResearchQaPanel({ section, onOpen, onSync }: { section: JsonRecord; onO
     }}>{syncing ? "正在提交…" : "更新问答"}</button> : null}
     {["PENDING", "RUNNING", "PARTIAL", "RETRY"].includes(String(sync.status || "")) ? <p className="research-table-note" role="status">{sync.status === "RETRY" ? "采集遇到网络或来源问题，后台将自动重试" : "后台正在采集并保存问答"} · 已保存 {String(sync.stored_count || 0)} 条</p> : null}
     {sync.status === "DISABLED" ? <p className="research-table-note" role="status">问答数据源或接口已停用，已保存的问答仍可查看。</p> : null}
+    {Object.keys(coverage).length ? <div className="research-qa-coverage" role="status">
+      <span>来源：{String(coverage.source || section.source || "未标注")}</span>
+      <span>已保存 {String(coverage.stored_count ?? rows.length)} 条</span>
+      <span>已回复 {String(coverage.answered_count ?? rows.filter((row) => Boolean(pickValue(row, ["answer", "回复", "回答", "回复内容"]))).length)} 条</span>
+      <span>待回复 {String(coverage.pending_count ?? 0)} 条</span>
+      <span className={`coverage-state ${String(coverage.pagination_status || "").toLowerCase()}`}>{String(coverage.pagination_label || "覆盖状态未标注")}</span>
+    </div> : null}
+    {coverage.scope ? <p className="research-table-note">采集范围：{String(coverage.scope)}</p> : null}
     {syncError ? <p className="research-true-empty" role="alert">{syncError}</p> : null}
     {visibleRows.length ? <div className="research-qa-list">{visibleRows.map((row, index) => {
       const question = String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露");
@@ -808,7 +817,7 @@ function ResearchQaPanel({ section, onOpen, onSync }: { section: JsonRecord; onO
         <small><CalendarDays size={12} aria-hidden="true" /> {row.date_status === "UNDISCLOSED" ? "发布日期未披露" : formatDate(researchDateText(row))}<em className={answered ? "answered" : "pending"}>{String(row.qa_kind_name || (answered ? "已回复" : "待回复"))}</em>{row.language === "en" ? " · 英文原文" : ""}</small>
       </button>;
     })}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回该公司的互动问答")}</p>}
-    {rows.length > 0 && section.message ? <p className="research-true-empty" role="status">{String(section.message)}</p> : null}
+    {(coverage.message || section.message) ? <p className="research-table-note" role="status">{String(coverage.message || section.message)}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -2688,10 +2697,15 @@ function F10ConceptDetail({ section, market, symbol, onOpenStock }: { section: J
     const importance = pickValue(concept, ["relevance_label", "相关度标签"]);
     const dimension = String(pickValue(concept, ["dimension", "classification_dimension"]) || "").toUpperCase();
     const code = String(pickValue(concept, ["code", "分类编码"]) || "").toUpperCase();
+    const sourceName = String(pickValue(concept, ["source_name", "definition_source", "来源"]) || section.source || "未标注");
+    const observedAt = String(pickValue(concept, ["classification_as_of", "as_of", "采集时间"]) || "");
+    const relationCaveat = String(pickValue(concept, ["relation_caveat", "关系边界"]) || "分类标签仅表示来源板块或行业归属，不等同于供应商、客户或合同关系。");
     const memberKey = `${String(concept.group_key || "")}/${String(concept.code || "")}`;
     const relatedStocks = resolvedMembers[memberKey] || asArray(concept.related_stocks);
     const trend = toNumber(concept.trend_pct);
     const memberCount = toNumber(concept.member_count);
+    const providerMemberCount = toNumber(concept.provider_member_count);
+    const providerMissingCount = toNumber(concept.provider_missing_count);
     const dimensionLabel = dimension === "INDUSTRY"
       ? "行业"
       : dimension === "BOARD" && code.startsWith("BK")
@@ -2702,6 +2716,9 @@ function F10ConceptDetail({ section, market, symbol, onOpenStock }: { section: J
     return <article className="f10-concept-detail-item" key={`${name}-${index}`}>
       <header><div><h4>{name}</h4><small>{dimensionLabel}{memberCount !== null ? ` · ${memberCount} 只相关证券` : ""}</small></div><span>{String(importance || "最相关")}</span></header>
       <p>{valueText(definition || `${name}是来源主数据登记的${dimensionLabel}标签，成员和口径以来源及采集日期为准。`)}</p>
+      <p className="research-table-note">来源：{sourceName}{observedAt ? ` · 分类截至 ${formatDate(observedAt)}` : ""}</p>
+      {providerMemberCount !== null ? <p className="research-table-note">来源名单 {formatNumber(providerMemberCount, 0)} 只 · 已载入 {formatNumber(memberCount ?? 0, 0)} 只{providerMissingCount ? ` · 当前证券主数据未覆盖 ${formatNumber(providerMissingCount, 0)} 只` : " · 已覆盖"}</p> : null}
+      <p className="research-classification-boundary">关系边界：{relationCaveat}</p>
       <div className="f10-concept-related-head"><strong>相关股票</strong>{trend !== null ? <em className={trend >= 0 ? "positive" : "negative"}>整体 {trend >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(trend))}</em> : <small>暂无统一行情</small>}</div>
       {relatedStocks.length ? <div className="f10-concept-related-list">{relatedStocks.map((stock, stockIndex) => {
         const market = String(stock.market || "CN_A");

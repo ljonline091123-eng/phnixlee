@@ -105,6 +105,75 @@ def _active_job(db: Session, market: str, symbol: str) -> ScheduledJob | None:
     ).order_by(ScheduledJob.id.desc()))
 
 
+def _qa_source_details(market: str, symbol: str, state: dict[str, Any]) -> tuple[str, str, str]:
+    """Return a stable source label, code and public scope for the UI.
+
+    The number of public questions is not a completeness claim about every
+    investor-relations channel.  Keeping the scope explicit prevents an empty
+    official feed from being presented as a failed synchronisation.
+    """
+    if market == "HK":
+        return (
+            str(state.get("source_name") or HK_QA_NAME),
+            str(state.get("source_code") or HK_QA_SOURCE),
+            "港股公司公开投资者问答接口",
+        )
+    if uses_p5w(market, symbol):
+        return (
+            str(state.get("source_name") or "全景网公开投资者关系披露"),
+            str(state.get("source_code") or P5W_SOURCE),
+            "新三板及特定证券的公开投资者关系披露",
+        )
+    code, name = qa_source(symbol)
+    return (
+        str(state.get("source_name") or name),
+        str(state.get("source_code") or code),
+        "上交所 e 互动公开问答流" if code == "SSE_EINTERACTION" else "巨潮资讯互动易公开问答流",
+    )
+
+
+def _qa_coverage(
+    *, market: str, symbol: str, state: dict[str, Any], stored_count: int,
+    answered_count: int,
+) -> dict[str, Any]:
+    source_name, source_code, scope = _qa_source_details(market, symbol, state)
+    status = str(state.get("status") or "MISSING")
+    if status in {"COMPLETE", "EMPTY"}:
+        pagination_status = "COMPLETE"
+        pagination_label = "分页采集已完成"
+    elif status in {"PENDING", "RUNNING", "PARTIAL", "RETRY"}:
+        pagination_status = "IN_PROGRESS" if status != "RETRY" else "RETRYING"
+        pagination_label = "正在分页采集" if status != "RETRY" else "等待重试并从断点继续"
+    elif status == "DISABLED":
+        pagination_status = "DISABLED"
+        pagination_label = "来源或接口已停用"
+    else:
+        pagination_status = "NOT_AVAILABLE"
+        pagination_label = "未配置可用公开接口"
+    message = str(state.get("message") or "").strip()
+    if status == "EMPTY":
+        message = message or "当前公开接口未返回记录；不代表全网没有问答，已保留本地历史数据。"
+    elif status == "COMPLETE" and stored_count:
+        message = message or "已完成当前公开接口的可用分页；未披露的其他渠道不在本次采集范围。"
+    elif status == "PARTIAL":
+        message = message or "已保存部分公开问答，后台将继续采集后续分页。"
+    return {
+        "source": source_name,
+        "source_code": source_code,
+        "scope": scope,
+        "stored_count": int(stored_count),
+        "answered_count": int(answered_count),
+        "pending_count": max(int(stored_count) - int(answered_count), 0),
+        "pages_saved": int(state.get("pages_saved") or 0),
+        "records_seen": int(state.get("records_seen") or 0),
+        "pagination_status": pagination_status,
+        "pagination_label": pagination_label,
+        "message": message,
+        "as_of": state.get("updated_at") or state.get("completed_at"),
+        "source_urls": list(state.get("source_urls") or []),
+    }
+
+
 def qa_sync_status(db: Session, market: str, symbol: str) -> dict[str, Any]:
     state = _state(db, market, symbol)
     info = hk_qa_coverage(symbol) if market == "HK" else {}
@@ -125,12 +194,25 @@ def qa_sync_status(db: Session, market: str, symbol: str) -> dict[str, Any]:
     count = db.scalar(select(func.count()).select_from(StockInvestorQA).where(
         StockInvestorQA.market == market, StockInvestorQA.symbol == symbol,
     )) or 0
+    answered_count = db.scalar(select(func.count()).select_from(StockInvestorQA).where(
+        StockInvestorQA.market == market,
+        StockInvestorQA.symbol == symbol,
+        StockInvestorQA.answer.is_not(None),
+        func.length(func.trim(StockInvestorQA.answer)) > 0,
+    )) or 0
     completed_at = datetime.fromisoformat(state["completed_at"]) if state.get("completed_at") else None
     refresh_needed = bool(info.get("supported") and qa_enabled and not job and (
         not completed_at or completed_at < datetime.now(timezone.utc) - timedelta(hours=6)
     ))
+    coverage = _qa_coverage(
+        market=market, symbol=symbol, state=state,
+        stored_count=int(count), answered_count=int(answered_count),
+    )
     return {
         "status": "MISSING", **info, **state, "market": market, "symbol": symbol, "stored_count": count,
+        "answered_count": int(answered_count),
+        "pending_count": max(int(count) - int(answered_count), 0),
+        "coverage": coverage,
         "refresh_needed": refresh_needed,
         "job_id": job.id if job else None, "job_status": job.status if job else None,
         "attempts": job.attempts if job else None,
@@ -162,7 +244,10 @@ def read_qa_section(db: Session, market: str, symbol: str) -> dict[str, Any]:
         "source": sync.get("source_name") or (HK_QA_NAME if market == "HK" else qa_source(symbol)[1]),
         "as_of": sync.get("updated_at"), "message": sync.get("message") or "",
         "source_urls": sync.get("source_urls") or [],
-        "coverage": hk_qa_coverage(symbol) if market == "HK" else None,
+        "coverage": sync.get("coverage") or _qa_coverage(
+            market=market, symbol=symbol, state=sync,
+            stored_count=len(rows), answered_count=sum(1 for row in rows if row.get("answer")),
+        ),
         "status": "AVAILABLE" if rows and sync["status"] == "COMPLETE" else "PARTIAL" if rows else "DISABLED" if sync["status"] == "DISABLED" else ("MISSING" if market == "HK" else "UNAVAILABLE") if sync["status"] in {"EMPTY", "MISSING"} else "PENDING",
     }
 
@@ -370,6 +455,15 @@ def sync_qa_pages(db: Session, payload: dict[str, Any], *, page_budget: int = 5)
                     "last_response_hash": page.response_hash, "error": None,
                     "message": "已保存部分来源问答，正在继续采集历史分页",
                 })
+                page_urls = [
+                    str(row.get("source_url") or "").strip()
+                    for row in page.rows
+                    if str(row.get("source_url") or "").strip()
+                ]
+                if page_urls:
+                    state["source_urls"] = list(dict.fromkeys([
+                        *list(state.get("source_urls") or []), *page_urls,
+                    ]))[:20]
                 if page.rows:
                     state["page_signatures"] = [*state.get("page_signatures", []), signature]
                 if page.complete:

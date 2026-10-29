@@ -221,6 +221,11 @@ def test_durable_retry_resumes_committed_page_without_losing_rows(sessions):
         section = read_qa_section(db, "CN_A", "688256")
         assert section["status"] == "AVAILABLE" and len(section["rows"]) == 2
         assert {row["answer"] for row in section["rows"]} == {"官方回复"}
+        assert section["coverage"]["source_code"] == "SSE_EINTERACTION"
+        assert section["coverage"]["stored_count"] == 2
+        assert section["coverage"]["answered_count"] == 2
+        assert section["coverage"]["pending_count"] == 0
+        assert section["coverage"]["pagination_status"] == "COMPLETE"
 
 
 def test_batch_f10_reports_partial_until_qa_sync_finishes(sessions):

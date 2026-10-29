@@ -1272,6 +1272,8 @@ def _candidate_missing_dimensions(candidate: SelectionCandidate) -> set[str]:
         dimensions.add("FUND_FLOW")
     if not observations.get("business"):
         dimensions.add("COMPANY")
+    if not observations.get("research"):
+        dimensions.add("RESEARCH")
     if not evidence.get("graph_paths"):
         dimensions.add("GRAPH")
     return dimensions
@@ -1295,7 +1297,7 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
     fact_rows = [row for row in evidence.get("facts") or [] if isinstance(row, dict)]
     facts = len(fact_rows)
     structured = evidence.get("structured_observations") or {}
-    structured_rows = [row for key in ("business", "financial", "market", "shareholder", "fund_flow")
+    structured_rows = [row for key in ("business", "financial", "market", "shareholder", "fund_flow", "research")
                        for row in structured.get(key) or [] if isinstance(row, dict)]
     structured_rows += [row for row in fact_rows if row.get("fact_type") in {
         "FINANCIAL_OBSERVATION", "MARKET_OBSERVATION", "SHAREHOLDER_OBSERVATION", "FUND_FLOW_OBSERVATION"}]
@@ -1322,7 +1324,7 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
     if documents <= 0 and structured_count <= 0:
         return {
             "status": "MISSING_DATA",
-            "reason": "当前周期没有可供模型研判的新闻、公告或结构化业务证据；仅有行情快照/身份事实。",
+            "reason": "当前周期没有可供模型研判的新闻、公告、研究数据或结构化业务证据；仅有行情快照/身份事实。",
             "documents": documents, "facts": facts, "structured_count": structured_count,
         }
     return {"status": "READY", "documents": documents, "facts": facts, "structured_count": structured_count}

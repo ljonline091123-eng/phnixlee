@@ -67,6 +67,19 @@ def test_real_business_evidence_is_usable_without_semantic_vectors(payload):
     assert _evidence_data_gate(payload)["status"] == "READY"
 
 
+def test_research_forecast_evidence_is_usable_for_model_gate():
+    payload = {
+        "structured_observations": {
+            "research": [{
+                "id": "stock_earnings_consensus:1",
+                "fact_type": "EARNINGS_FORECAST",
+                "properties": {"metric_code": "NET_PROFIT", "mean_value": "12.5"},
+            }],
+        },
+    }
+    assert _evidence_data_gate(payload)["status"] == "READY"
+
+
 def test_failed_model_retry_refreshes_only_when_evidence_is_missing():
     ready = SelectionCandidate(evidence_json=evidence(), analysis_json={"model_output_status": "FAILED"})
     missing = SelectionCandidate(evidence_json={}, analysis_json={"model_output_status": "FAILED"})

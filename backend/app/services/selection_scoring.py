@@ -518,6 +518,13 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
     peer_median = median(peer_values) if peer_values else None
     breadth = sum(value > 0 for value in peer_values) / len(peer_values) if peer_values else None
     excess = own - peer_median if own is not None and peer_median is not None else None
+    warning = None
+    if own is None:
+        warning = f"行业标签已确认（{industry}），但该股近20个交易日行情不足，无法计算行业相对强弱。"
+    elif not peer_values:
+        warning = f"行业标签已确认（{industry}），但同行近20个交易日行情覆盖为0，无法计算行业相对强弱。"
+    elif len(peer_values) < 5:
+        warning = f"行业标签已确认（{industry}），当前仅有{len(peer_values)}只同行具备近20个交易日行情，行业动量暂不评分。"
     return {
         "status": "SUPPORTED" if own is not None and peer_values else "INSUFFICIENT",
         "industry": industry, "taxonomy": (classification.properties_json or {}).get("taxonomy") if classification else "STOCK_MASTER",
@@ -525,6 +532,7 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         "stock_return_20d": own, "peer_median_return_20d": peer_median,
         "excess_return_20d": excess, "positive_breadth": breadth,
         "classification_id": classification.id if classification else None,
+        "warning": warning,
     }
 
 

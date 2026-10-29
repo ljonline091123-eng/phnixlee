@@ -272,6 +272,7 @@ def test_stock_classification_uses_label_master_data_without_database() -> None:
     assert "房地产开发经营" in items[("INDUSTRY", "房地产业")]["definition"]
     assert "深圳证券交易所主板" in items[("BOARD", "深交所主板")]["definition"]
     assert "家庭物联网" in items[("THEME", "智能家居")]["definition"]
+    assert items[("THEME", "智能家居")]["relation_caveat"].startswith("分类标签仅表示来源板块")
 
 
 def test_seed_writes_label_definitions_to_taxonomy_table() -> None:

@@ -658,7 +658,7 @@ def _structured_observations(
             rows = [{"group": group.get("key"), "title": group.get("title"), "items": [
                 {key: item.get(key) for key in (
                     "name", "label", "code", "dimension", "classification_dimension", "definition",
-                    "definition_version", "source_name", "source_url", "level",
+                    "definition_version", "source_name", "source_url", "level", "relation_caveat",
                 ) if item.get(key) not in (None, "")}
                 for item in group.get("items") or []
             ]} for group in groups if group.get("items")]
@@ -1457,7 +1457,7 @@ def build_selection_context(
         "realtime": "实时行情观测",
         "shareholder": "股东/F10观测",
         "fund_flow": "资金流观测",
-        "research": "research forecasts, institutions, Q&A and classifications",
+        "research": "研究数据（盈利预测、机构预测、问董秘、研报与行业概念）",
     }
     for category, label in category_labels.items():
         if not structured["by_category"].get(category):

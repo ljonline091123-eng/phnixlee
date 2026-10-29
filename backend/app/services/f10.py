@@ -1290,13 +1290,15 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
                           "master_source_name", "master_source_url", "master_definition_version", "taxonomy"):
                 if item.get(field) in (None, "") and typed.get(field) not in (None, ""):
                     item[field] = typed[field]
+            if item.get("relation_caveat") in (None, "") and typed.get("relation_caveat") not in (None, ""):
+                item["relation_caveat"] = typed["relation_caveat"]
             # Membership is the current read projection, not a stale list
             # embedded in a legacy concept cache. Preserve its lazy-load key.
             for field in ("related_stocks", "members_deferred", "group_key", "member_count",
                           "returned_count", "member_truncated", "quote_observed_count",
                           "quote_unavailable_count", "quote_coverage_ratio", "trend_pct",
                           "classification_as_of", "quote_as_of", "freshness_status",
-                          "quote_freshness_status", "provider_member_count"):
+                          "quote_freshness_status", "provider_member_count", "provider_missing_count"):
                 if field in typed:
                     item[field] = typed[field]
         item.setdefault("name", str(name))

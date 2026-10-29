@@ -1049,6 +1049,15 @@ def _attach_definition(
             if str(definition_version or "").startswith("EASTMONEY_INDUSTRY_LABEL")
             else "MASTER_DATA"
         )
+    normalized_dimension = str(item.get("classification_dimension") or dimension or "").upper()
+    if normalized_dimension in {"INDUSTRY", "THEME", "INDEX", "BOARD"}:
+        # A shared provider label or theme is not a commercial relationship.
+        # Keep this boundary in the read model so downstream scoring and the UI
+        # cannot present a classification as a supplier/customer fact.
+        item["relation_caveat"] = (
+            "分类标签仅表示来源板块或行业归属，不证明供应商、客户、合同、股权或因果关系；"
+            "供应链关系必须有独立合同、公告或已审核 FoundationFact 证据。"
+        )
     return item
 
 
@@ -1146,10 +1155,17 @@ def _foundation_classifications(
             labels = _split(raw.get("BLGAINIAN"))
             codes = _split(raw.get("BLGAINIAN_CODE"))
             for index, label in enumerate(labels):
-                value = _item(label, code=codes[index] if index < len(codes) else None,
-                              source="东方财富主题板块", status="SOURCE")
+                code = codes[index] if index < len(codes) else None
+                is_index = _looks_like_index(label, code)
+                value = _item(
+                    label,
+                    code=code,
+                    source="东方财富主题板块",
+                    status="SOURCE",
+                    classification_dimension="INDEX" if is_index else "THEME",
+                )
                 if value:
-                    (indexes if _looks_like_index(label, value.get("code")) else themes).append(value)
+                    (indexes if is_index else themes).append(value)
         return industries, themes, indexes, boards, type_values
     except (ValueError, TypeError, json.JSONDecodeError):
         return [], [], [], [], []
