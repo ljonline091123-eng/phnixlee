@@ -18,6 +18,13 @@
 .selection-data-gap-dialog header p { margin: 8px 0 0; }
 .selection-data-gap-symbols { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
 .selection-data-gap-symbols span { border: 1px solid #ead8a9; border-radius: 6px; background: #fff8e7; color: #765a19; padding: 4px 8px; font-size: 12px; }
+.selection-data-module-check { margin: 0 0 18px; border: 1px solid #dce7e0; border-radius: 8px; padding: 12px; }
+.selection-data-module-check > summary { cursor: pointer; font-weight: 700; }
+.selection-data-module-check article { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf2ef; }
+.selection-data-module-check article > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.selection-data-module-check article span { border-radius: 4px; padding: 3px 7px; font-size: 12px; }
+.selection-data-module-check article span.ready { background: #e8f4ed; color: #235f43; }
+.selection-data-module-check article span.empty { background: #fff3dc; color: #805c16; }
 .selection-data-gap-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .selection-dialog .selection-data-gap-options button { display: flex; min-height: 104px; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 7px; text-align: left; }
 .selection-data-gap-options button small { color: #65756d; font-size: 12px; font-weight: 400; line-height: 1.55; }
@@ -197,6 +204,8 @@
 .batch-card-title span.batch-badge { display: inline-block; margin: 0; color: #24543e; vertical-align: middle; }
 .batch-card-title select { width: auto; min-width: 170px; }
 .batch-table-wrap { overflow-x: auto; }
+.batch-stock-link { display: inline-flex; flex-direction: column; align-items: flex-start; border: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.batch-stock-link:hover strong, .batch-stock-link:focus-visible strong { color: #176b4d; text-decoration: underline; }
 .batch-workbench table { width: 100%; min-width: 700px; border-collapse: collapse; font-size: 13px; }
 .batch-workbench th, .batch-workbench td { padding: 11px 10px; border-bottom: 1px solid #e7ede8; text-align: left; vertical-align: top; }
 .batch-workbench th { color: #708278; font-size: 12px; font-weight: 500; white-space: nowrap; }

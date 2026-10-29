@@ -378,6 +378,7 @@ class SelectionTrackingRead(BaseModel):
     candidate_id: int
     market: str
     symbol: str
+    name: str | None = None
     entry_price: float
     entry_date: str
     confirmation_date: str
@@ -410,7 +411,7 @@ class SelectionRefreshRequest(BaseModel):
 
 class SelectionBackfillRequest(BaseModel):
     candidate_ids: list[int] = Field(default_factory=list, max_length=500)
-    dimensions: list[Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]] = Field(default_factory=list, max_length=7)
+    dimensions: list[Literal["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "RESEARCH", "GRAPH"]] = Field(default_factory=list, max_length=8)
     period_months: int | None = Field(default=None, ge=1, le=60)
     force_refresh: bool = False
     rerun_analysis: bool = False

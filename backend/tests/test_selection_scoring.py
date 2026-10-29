@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -98,6 +99,55 @@ def test_trusted_score_contracts_toward_neutral(db):
     assert abs(result["trusted_score"] - 50) <= abs(result["base_score"] - 50)
     price = next(row for row in result["dimensions"] if row["dimension_code"] == "PRICE_RISK")
     assert price["status"] == "SUPPORTED" and price["coverage"] == 1
+
+
+def test_research_forecasts_and_normalized_fund_flow_feed_scoring(db):
+    candidate = db.get(SelectionCandidate, db.info["candidate_id"])
+    candidate.evidence_json = {
+        "structured_observations": {
+            "research": [
+                {"id": "forecast-growth", "fact_type": "EARNINGS_FORECAST", "properties": {"metric_code": "NET_PROFIT_YOY", "mean_value": 18}},
+                {"id": "forecast-pe", "fact_type": "EARNINGS_FORECAST", "properties": {"metric_code": "FORWARD_PE", "mean_value": 22}},
+                {"id": "forecast-dividend", "fact_type": "EARNINGS_FORECAST", "properties": {"metric_code": "DIVIDEND_YIELD", "mean_value": 2.5}},
+            ],
+            "fund_flow": [{
+                "id": "fund-flow", "fact_type": "FUND_FLOW_OBSERVATION",
+                "properties": {"payload": {"rows": [
+                    {"日期": "2026-01-02", "主力净流入-净额": 100},
+                    {"日期": "2025-12-31", "主力净流入-净额": -20},
+                    {"日期": "2025-12-30", "主力净流入-净额": 40},
+                ]}},
+            }],
+            "market": [{"id": "market", "properties": {"recent_bars": [
+                {"trade_date": f"2025-12-{day:02d}", "close_price": 10 + day * .1, "volume": 100 + day}
+                for day in range(1, 21)
+            ]}}],
+        },
+    }
+    result = score_candidate(db, candidate, enabled_profile(db))
+    valuation = next(row for row in result["dimensions"] if row["dimension_code"] == "VALUATION_EXPECTATION")
+    capital = next(row for row in result["dimensions"] if row["dimension_code"] == "CAPITAL_BEHAVIOR")
+    assert valuation["status"] == "SUPPORTED"
+    assert valuation["metrics"] == {"pe": 22.0, "pb": None, "dividend_yield": 2.5}
+    assert capital["status"] == "SUPPORTED"
+    assert capital["metrics"]["recognized_flow_values"] == 3
+    assert capital["metrics"]["positive_flow_ratio"] == pytest.approx(2 / 3)
+
+
+def test_primary_theme_trend_can_support_industry_dimension_when_peers_are_sparse(db):
+    candidate = db.get(SelectionCandidate, db.info["candidate_id"])
+    with patch("app.services.selection_scoring._industry_context", return_value={
+        "status": "SUPPORTED", "industry_peer_status": "INSUFFICIENT", "industry": "专用设备",
+        "priced_peer_count": 1, "theme_quote_observed_count": 141, "theme_trend_pct": -5.29,
+        "primary_theme": {"code": "BK1137", "label": "存储芯片", "member_count": 141},
+        "warning": "标准行业覆盖不足，采用来源可追溯的概念板块补充口径。",
+    }):
+        result = score_candidate(db, candidate, enabled_profile(db))
+    industry = next(row for row in result["dimensions"] if row["dimension_code"] == "INDUSTRY_MOMENTUM")
+    assert industry["status"] == "SUPPORTED"
+    assert industry["coverage"] == 1
+    assert industry["observed_score"] == pytest.approx(34.13)
+    assert industry["metrics"]["primary_theme"]["label"] == "存储芯片"
 
 
 @pytest.mark.parametrize("analysis", [

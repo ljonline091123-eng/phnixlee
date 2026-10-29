@@ -700,6 +700,7 @@ def _sync_selection_data(db: Session, run: SelectionRun, *, symbols: list[str] |
     from app.services.stock_on_demand import StockOnDemandService
     service = StockOnDemandService(db)
     failures: list[dict[str, str]] = []
+    section_results: list[dict[str, Any]] = []
     succeeded = 0
     total = len(symbols)
     for index, symbol in enumerate(symbols, start=1):
@@ -722,6 +723,26 @@ def _sync_selection_data(db: Session, run: SelectionRun, *, symbols: list[str] |
                 errors = service.refresh_stock_data(source, run.market, symbol, progress_callback=on_section)
             finally:
                 heartbeat.stop()
+            # The compact stock-detail page has six business areas. Core
+            # refresh covers quote/K-line/financial/news/notices; F10 covers
+            # funds, holders, concepts, forecasts, reports and investor Q&A.
+            from app.services.stock_batch import _run_f10_refresh
+            _progress(db, run, "DATA_SYNC", percent,
+                      f"{symbol} · 正在同步资金、F10与研究数据",
+                      phase="DATA", current_symbol=symbol, source_section="f10_research")
+            try:
+                f10_result = _run_f10_refresh(db, run.market, symbol)
+            except Exception as exc:
+                db.rollback()
+                f10_result = {"status": "FAILED", "sections": [], "error": str(exc)[:500]}
+                errors = [*errors, f"F10/研究：{str(exc)[:300]}"]
+            section_results.append({
+                "symbol": symbol,
+                "core_status": "SUCCESS" if not errors else "PARTIAL",
+                "f10_status": f10_result.get("status"),
+                "f10_sections": f10_result.get("sections") or [],
+                "investor_qa_sync": f10_result.get("investor_qa_sync") or {},
+            })
             if errors:
                 failures.append({"symbol": symbol, "error": "; ".join(errors)[:500]})
             else:
@@ -729,8 +750,11 @@ def _sync_selection_data(db: Session, run: SelectionRun, *, symbols: list[str] |
         except Exception as exc:
             db.rollback()
             failures.append({"symbol": symbol, "error": str(exc)[:500]})
-    return {"status": "SUCCESS" if not failures else "PARTIAL", "attempted": total,
+    pending_sections = [row for row in section_results if row.get("f10_status") != "SUCCESS"]
+    return {"status": "SUCCESS" if not failures and not pending_sections else "PARTIAL", "attempted": total,
             "succeeded": succeeded, "failed": failures, "source_code": source.source_code,
+            "section_results": section_results,
+            "pending_section_count": len(pending_sections),
             "completed_at": _now().isoformat()}
 
 
@@ -1489,7 +1513,8 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             def collect(code: str, operation) -> None:
                 operation_names = {"QUOTE": "实时行情", "KLINE": "历史量价", "NEWS": "新闻",
                                    "NOTICE": "公告", "FINANCIAL": "财务", "F10_FUND_FLOW": "资金流向",
-                                   "F10_BUSINESS": "主营业务与主营构成"}
+                                   "F10_BUSINESS": "主营业务与主营构成",
+                                   "RESEARCH": "研究数据（行业概念、盈利预测、机构预测、研报与问董秘）"}
                 report(f"正在补齐 {candidate.name or candidate.symbol}（{index + 1}/{total_steps}）：{operation_names.get(code, code)}",
                        current_candidate_id=candidate.id, current_operation=code,
                        percent=round(70 * index / total_steps), results=results)
@@ -1513,6 +1538,10 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                         db, market=candidate.market, symbol=candidate.symbol, data_type=data_type,
                         kline_days=days, disclosure_days=days,
                     ))
+            if "RESEARCH" in dimensions:
+                # The stock-detail research panel and the selection evidence
+                # must be refreshed through the same normalized F10 workflow.
+                collect("RESEARCH", lambda: _run_f10_refresh(db, candidate.market, candidate.symbol))
             if "COMPANY" in dimensions:
                 collect("F10_BUSINESS", lambda: _run_f10_refresh(db, candidate.market, candidate.symbol))
                 f10_result = operations["F10_BUSINESS"]
@@ -1566,7 +1595,7 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
         projection_id = None
         projection_error = None
         needs_documents = any(
-            set(dimensions_by_candidate.get(str(row.id)) or []) & {"NEWS", "NOTICE", "COMPANY", "GRAPH"}
+            set(dimensions_by_candidate.get(str(row.id)) or []) & {"NEWS", "NOTICE", "COMPANY", "RESEARCH", "GRAPH"}
             for row in candidates
         )
         if needs_documents and run.graph_ids_json:
@@ -2313,8 +2342,23 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
                          "realtime": "REALTIME_QUOTE", "shareholder": "SHAREHOLDER_OBSERVATION",
                          "fund_flow": "FUND_FLOW_OBSERVATION"}
     for category, observations in (evidence.get("structured_observations") or {}).items():
-        category_limit = 2 if category == "business" else 1
-        for fact in observations[:category_limit] if isinstance(observations, list) else []:
+        selected_observations = observations[:2 if category == "business" else 1] if isinstance(observations, list) else []
+        if category == "research" and isinstance(observations, list):
+            # Research tables are often ordered with dozens of earnings rows
+            # first.  Keep one source-backed representative of every research
+            # type so forecasts cannot crowd out institution views, Q&A,
+            # reports or classification evidence in the bounded LLM context.
+            selected_observations = []
+            selected_types: set[str] = set()
+            for observation in observations:
+                if not isinstance(observation, dict):
+                    continue
+                observation_type = str(observation.get("fact_type") or "RESEARCH_OBSERVATION").upper()
+                if observation_type in selected_types:
+                    continue
+                selected_types.add(observation_type)
+                selected_observations.append(observation)
+        for fact in selected_observations:
             if isinstance(fact, dict) and fact.get("id") not in {row.get("id") for row in fact_rows}:
                 fact_rows.append({**fact, "fact_type": fact.get("fact_type") or observation_kinds.get(category)})
     visible_facts = [{

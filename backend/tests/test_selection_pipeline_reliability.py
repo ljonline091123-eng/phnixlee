@@ -19,7 +19,8 @@ from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
     _apply_model_analysis, _candidate_needs_data_refresh, _compact_reduce_batch_context,
     _evidence_data_gate, _model_candidate_context, _prepare_selection_data, _split_model_candidate_context,
-    _preflight_selection_models, _selection_result_counts, create_selection_run, execute_failed_selection_reanalysis,
+    _preflight_selection_models, _selection_result_counts, _sync_selection_data,
+    create_selection_run, execute_failed_selection_reanalysis,
 )
 
 
@@ -78,6 +79,58 @@ def test_research_forecast_evidence_is_usable_for_model_gate():
         },
     }
     assert _evidence_data_gate(payload)["status"] == "READY"
+
+
+def test_model_context_balances_all_research_fact_types():
+    research = [
+        {"id": f"earnings:{index}", "fact_type": "EARNINGS_FORECAST", "properties": {"mean_value": index}}
+        for index in range(45)
+    ] + [
+        {"id": "institution:1", "fact_type": "INSTITUTION_FORECAST", "properties": {"institution": "机构甲"}},
+        {"id": "qa:1", "fact_type": "INVESTOR_QA", "properties": {"question": "经营进展如何"}},
+        {"id": "report:1", "fact_type": "RESEARCH_REPORT", "properties": {"title": "公司研究"}},
+        {"id": "classification:1", "fact_type": "CLASSIFICATION_OBSERVATION", "properties": {"theme": "存储芯片"}},
+    ]
+    context = _model_candidate_context({
+        "market": "CN_A", "symbol": "688627", "name": "精智达", "analysis_json": {},
+        "evidence_json": {
+            "facts": research[:40],
+            "structured_observations": {"research": research},
+            "documents": [], "chunks": [], "graph_paths": [],
+        },
+    })
+    facts = context["evidence_json"]["facts"]
+    fact_types = {row["fact_type"] for row in facts}
+    assert {
+        "EARNINGS_FORECAST", "INSTITUTION_FORECAST", "INVESTOR_QA",
+        "RESEARCH_REPORT", "CLASSIFICATION_OBSERVATION",
+    }.issubset(fact_types)
+    assert {"earnings:0", "institution:1"}.issubset(
+        set(context["evidence_json"]["citation_allowlist"]["financial_fact_ids"])
+    )
+
+
+def test_data_sync_keeps_pending_f10_and_qa_visible(isolated):
+    db = isolated
+    run = SelectionRun(
+        market="CN_A", status="RUNNING", data_mode="REAL",
+        as_of=datetime.now(timezone.utc), criteria_json={"symbols": ["688627"]},
+    )
+    db.add(run)
+    db.commit()
+    heartbeat = SimpleNamespace(start=lambda: None, stop=lambda: None)
+    with patch("app.services.selection.select_data_source", return_value=SimpleNamespace(source_code="TEST")), \
+            patch("app.services.selection._SelectionProgressHeartbeat", return_value=heartbeat), \
+            patch("app.services.stock_on_demand.StockOnDemandService.refresh_stock_data", return_value=[]), \
+            patch("app.services.stock_batch._run_f10_refresh", return_value={
+                "status": "PARTIAL", "sections": ["profile", "fund_flow", "earnings_forecast"],
+                "investor_qa_sync": {"status": "RUNNING", "stored_count": 2},
+            }):
+        result = _sync_selection_data(db, run)
+    assert result["status"] == "PARTIAL"
+    assert result["succeeded"] == 1 and result["failed"] == []
+    assert result["pending_section_count"] == 1
+    assert result["section_results"][0]["investor_qa_sync"]["status"] == "RUNNING"
 
 
 def test_failed_model_retry_refreshes_only_when_evidence_is_missing():

@@ -67,6 +67,7 @@ def test_http_selection_review_tracking_contract():
                 details = client.get(f"/api/v1/selection/tracking/{tracking_id}").json()
                 assert details["required_sessions"] >= 10 and details["snapshots"] == []
                 assert details["confirmation_date"] == "2025-01-06"
+                assert details["name"] == "Demo"
                 assert client.post("/api/v1/selection/refresh", json={"tracking_ids": [tracking_id]}).status_code == 200
                 assert client.get(f"/api/v1/selection/runs/{run['id']}").json()["status"] == "TRACKING"
         finally:
@@ -157,6 +158,14 @@ def test_selection_preflight_is_read_only_and_reports_data_gate():
             assert result["model"]["status"] == "SKIPPED"
             assert result["data_ready"] is False
             assert result["data"]["missing_symbols"] == ["PREF001"]
+            modules = result["data"]["rows"][0]["detail_modules"]
+            assert [item["key"] for item in modules] == ["selected", "news", "notice", "fund", "f10", "research"]
+            assert modules[0]["status"] == "AVAILABLE"
+            module_status = {item["key"]: item["status"] for item in modules}
+            assert module_status == {
+                "selected": "AVAILABLE", "news": "EMPTY", "notice": "EMPTY",
+                "fund": "EMPTY", "f10": "EMPTY", "research": "AVAILABLE",
+            }
             assert db.query(SelectionCandidate).count() == 0
             # Submission preflight must remain local and bounded. The worker
             # performs the real provider call in its MODEL_PREFLIGHT phase.

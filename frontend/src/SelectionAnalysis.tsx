@@ -7,7 +7,7 @@ const horizonNames: Record<string, string> = {SHORT: "短期", MEDIUM: "中期",
 const technologyNames: Record<string, string> = {UNKNOWN: "证据不足", LOW: "较低", MEDIUM: "中等", HIGH: "较高", LEADING: "领先（有证据）"};
 const array = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
-export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "GRAPH";
+export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH";
 
 function ScoreRadar({ rows }: { rows: SelectionScoreDimensionResult[] }) {
   const size = 280, center = size / 2, radius = 84;

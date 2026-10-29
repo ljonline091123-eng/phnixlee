@@ -116,7 +116,7 @@ export type SelectionRun = {
 };
 export type SelectionSnapshot = { id: number; trade_date: string; close_price: number; return_pct: number; drawdown_pct: number; sequence: number; source: string; data_mode: string };
 export type SelectionTracking = {
-  id: number; candidate_id: number; market: string; symbol: string; entry_price: number; entry_date: string;
+  id: number; candidate_id: number; market: string; symbol: string; name?: string | null; entry_price: number; entry_date: string;
   confirmation_date: string; adjust: string;
   target_price: number | null; stop_price: number | null; target_return_pct: number | null; confidence: number | null;
   required_sessions: number; observed_sessions: number; status: string; latest_date: string | null; latest_price: number | null;
@@ -167,7 +167,7 @@ export type SelectionEvaluationSummary = {
 };
 export type SelectionBackfillRequest = {
   candidate_ids?: number[];
-  dimensions?: Array<"NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "GRAPH">;
+  dimensions?: Array<"NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH">;
   period_months?: number;
   force_refresh?: boolean;
   rerun_analysis?: boolean;

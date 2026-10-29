@@ -313,6 +313,8 @@ def _tracking_read(db: Session, row: SelectionTracking, include_snapshots: bool 
         "latest_price", "cumulative_return_pct", "max_drawdown_pct", "target_hit", "stop_hit", "direction_hit", "data_source", "data_mode",
         "review_json", "started_at", "completed_at",
     )}
+    candidate = db.get(SelectionCandidate, row.candidate_id)
+    payload["name"] = candidate.name if candidate is not None else None
     payload["snapshots"] = []
     if include_snapshots:
         payload["snapshots"] = [SelectionSnapshotRead.model_validate(item) for item in db.scalars(
@@ -744,6 +746,26 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
             )
             counts = context.get("counts") or {}
             missing = list(context.get("missing_data") or [])
+            structured = context.get("structured_observations") or {}
+            source_counts = counts.get("period_source_counts") or {}
+            identity = context.get("identity") or {}
+            module_counts = {
+                "selected": int(bool(identity.get("security"))) + len(structured.get("business") or []) + len(structured.get("market") or []) + len(structured.get("financial") or []),
+                "news": int(source_counts.get("stock_news") or 0),
+                "notice": int(source_counts.get("stock_notice") or 0),
+                "fund": len(structured.get("fund_flow") or []),
+                "f10": len(structured.get("business") or []) + len(structured.get("shareholder") or []) + len(structured.get("financial") or []),
+                "research": len(structured.get("research") or []),
+            }
+            module_labels = {
+                "selected": "精选", "news": "新闻", "notice": "公告",
+                "fund": "资金", "f10": "F10", "research": "研究",
+            }
+            modules = [{
+                "key": key, "label": module_labels[key], "record_count": value,
+                "status": "AVAILABLE" if value > 0 else "EMPTY",
+                "message": (f"本地已有 {value} 条可追溯记录" if value > 0 else "本地当前无记录，开始分析前将调用匹配数据源核查"),
+            } for key, value in module_counts.items()]
             data_rows.append({
                 "symbol": symbol,
                 "document_count": int(counts.get("documents") or 0),
@@ -751,6 +773,7 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
                 "relation_count": int(counts.get("graph_paths") or 0),
                 "chunk_count": int(counts.get("chunks") or 0),
                 "source_counts": counts.get("period_source_counts") or {},
+                "detail_modules": modules,
                 "missing": missing,
                 "status": "READY" if not missing else "PARTIAL",
             })

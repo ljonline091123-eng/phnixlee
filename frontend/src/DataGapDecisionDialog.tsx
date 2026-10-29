@@ -35,6 +35,16 @@ export function DataGapDecisionDialog({
         {missingSymbols.slice(0, 12).map(symbol => <span key={symbol}>{symbol}</span>)}
         {missingSymbols.length > 12 && <span>另有 {missingSymbols.length - 12} 只</span>}
       </div>}
+      {Array.isArray(data.rows) && <details className="selection-data-module-check" open>
+        <summary>逐股查看六个详情板块检查结果</summary>
+        <div>{data.rows.map((row: SelectionRecord) => <article key={String(row.symbol)}>
+          <strong>{String(row.symbol)}</strong>
+          <div>{(Array.isArray(row.detail_modules) ? row.detail_modules : []).map((item: SelectionRecord) => <span key={String(item.key)} className={item.status === "AVAILABLE" ? "ready" : "empty"} title={String(item.message || "")}>
+            {String(item.label)} · {Number(item.record_count || 0)}
+          </span>)}</div>
+        </article>)}</div>
+        <p className="selection-help">第一阶段会同步精选、新闻、公告、资金、F10、研究六个板块；研究包含行业概念、盈利预测、机构预测、研报和问董秘。空记录保留为 EMPTY，不会伪造成已获取。</p>
+      </details>}
       <div className="selection-data-gap-options">
         <button type="button" className="primary-button" onClick={() => onDecision("UPDATE")}>
           <strong>更新数据</strong>

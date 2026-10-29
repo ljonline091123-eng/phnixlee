@@ -318,12 +318,16 @@ def _records(value: Any) -> list[dict[str, Any]]:
 
 
 def _numbers(value: Any, keys: Iterable[str]) -> list[float]:
-    wanted = {str(key).lower().replace("_", "") for key in keys}
+    def normalize_key(key: Any) -> str:
+        return (str(key).lower().replace("_", "").replace("-", "")
+                .replace("－", "").replace(" ", ""))
+
+    wanted = {normalize_key(key) for key in keys}
     result: list[float] = []
     def walk(node: Any) -> None:
         if isinstance(node, dict):
             for key, child in node.items():
-                normalized = str(key).lower().replace("_", "")
+                normalized = normalize_key(key)
                 if normalized in wanted and isinstance(child, (int, float)) and not isinstance(child, bool):
                     result.append(float(child))
                 elif isinstance(child, (dict, list)):
@@ -425,22 +429,41 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         ).order_by(SecurityClassification.updated_at.desc()))
     provider_industry_code: str | None = None
     provider_industry_label: str | None = None
-    if classification is None:
-        try:
-            from app.services.stock_classification import build_classification_groups
-            profile_cache = db.scalar(select(StockF10Cache).where(
-                StockF10Cache.market == market, StockF10Cache.symbol == symbol,
-                StockF10Cache.section == "profile",
-            ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()))
-            profile_fields = (profile_cache.payload_json or {}).get("fields") if profile_cache else {}
-            groups = build_classification_groups(db, stock, profile_fields if isinstance(profile_fields, dict) else {})
-            industry_items = next((group.get("items") or [] for group in groups if group.get("key") == "industry"), [])
-            if industry_items:
-                selected = industry_items[-1]
-                provider_industry_label = str(selected.get("label") or selected.get("name") or "").strip() or None
-                provider_industry_code = str(selected.get("code") or "").strip() or None
-        except Exception:
-            pass
+    theme_contexts: list[dict[str, Any]] = []
+    try:
+        from app.services.stock_classification import (
+            build_classification_groups,
+            enrich_classification_groups_with_members,
+        )
+        profile_cache = db.scalar(select(StockF10Cache).where(
+            StockF10Cache.market == market, StockF10Cache.symbol == symbol,
+            StockF10Cache.section == "profile",
+        ).order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc()))
+        profile_fields = (profile_cache.payload_json or {}).get("fields") if profile_cache else {}
+        groups = build_classification_groups(db, stock, profile_fields if isinstance(profile_fields, dict) else {})
+        industry_items = next((group.get("items") or [] for group in groups if group.get("key") == "industry"), [])
+        if industry_items:
+            selected = industry_items[-1]
+            provider_industry_label = str(selected.get("label") or selected.get("name") or "").strip() or None
+            provider_industry_code = str(selected.get("code") or "").strip() or None
+        theme_items = next((group.get("items") or [] for group in groups if group.get("key") == "theme"), [])
+        if theme_items:
+            enriched = enrich_classification_groups_with_members(
+                db,
+                [{"key": "theme", "title": "概念板块", "items": [dict(theme_items[0])]}],
+                fetch_remote=False,
+                include_members=False,
+            )
+            for item in enriched[0].get("items") or []:
+                theme_contexts.append({key: item.get(key) for key in (
+                    "code", "label", "name", "source_name", "source_url",
+                    "member_count", "provider_member_count", "quote_observed_count",
+                    "quote_coverage_ratio", "trend_pct", "classification_as_of", "quote_as_of",
+                )})
+    except Exception:
+        # Classification evidence is an enrichment.  Keep the standard
+        # industry path usable when a cached theme member snapshot is absent.
+        pass
     def source_industry(row: StockSymbol) -> str | None:
         payloads: list[dict[str, Any]] = []
         for payload in (row.ext_json or {}, row.raw_payload or {}):
@@ -518,6 +541,11 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
     peer_median = median(peer_values) if peer_values else None
     breadth = sum(value > 0 for value in peer_values) / len(peer_values) if peer_values else None
     excess = own - peer_median if own is not None and peer_median is not None else None
+    peer_supported = own is not None and len(peer_values) >= 5
+    usable_themes = [row for row in theme_contexts
+                     if isinstance(row.get("trend_pct"), (int, float))
+                     and int(row.get("quote_observed_count") or 0) >= 5]
+    primary_theme = usable_themes[0] if usable_themes else None
     warning = None
     if own is None:
         warning = f"行业标签已确认（{industry}），但该股近20个交易日行情不足，无法计算行业相对强弱。"
@@ -525,12 +553,23 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         warning = f"行业标签已确认（{industry}），但同行近20个交易日行情覆盖为0，无法计算行业相对强弱。"
     elif len(peer_values) < 5:
         warning = f"行业标签已确认（{industry}），当前仅有{len(peer_values)}只同行具备近20个交易日行情，行业动量暂不评分。"
+    if not peer_supported and primary_theme is not None:
+        warning = (
+            f"标准行业同行行情覆盖不足；改用可追溯概念板块“{primary_theme.get('label') or primary_theme.get('name')}”"
+            "的当日成分股涨跌幅简单平均作为补充口径，不等同于证券公司自建板块指数。"
+        )
     return {
-        "status": "SUPPORTED" if own is not None and peer_values else "INSUFFICIENT",
+        "status": "SUPPORTED" if peer_supported or primary_theme is not None else "INSUFFICIENT",
+        "industry_peer_status": "SUPPORTED" if peer_supported else "INSUFFICIENT",
         "industry": industry, "taxonomy": (classification.properties_json or {}).get("taxonomy") if classification else "STOCK_MASTER",
         "member_count": len(peers), "priced_peer_count": len(peer_values),
         "stock_return_20d": own, "peer_median_return_20d": peer_median,
         "excess_return_20d": excess, "positive_breadth": breadth,
+        "primary_theme": primary_theme,
+        "theme_trend_pct": primary_theme.get("trend_pct") if primary_theme else None,
+        "theme_quote_observed_count": int(primary_theme.get("quote_observed_count") or 0) if primary_theme else 0,
+        "theme_contexts": theme_contexts,
+        "theme_trend_method": "成分股当日涨跌幅简单平均" if primary_theme else None,
         "classification_id": classification.id if classification else None,
         "warning": warning,
     }
@@ -670,10 +709,22 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     industry = _industry_context(db, candidate.market, candidate.symbol, scoring_as_of)
     excess = industry.get("excess_return_20d")
     breadth = industry.get("positive_breadth")
-    industry_score = _clamp(50 + (float(excess) * 1.3 if excess is not None else 0) + ((float(breadth) - 0.5) * 24 if breadth is not None else 0)) if industry.get("status") == "SUPPORTED" else None
+    industry_parts: list[float] = []
+    if industry.get("industry_peer_status") == "SUPPORTED":
+        industry_parts.append(_clamp(50 + (float(excess) * 1.3 if excess is not None else 0)
+                                     + ((float(breadth) - 0.5) * 24 if breadth is not None else 0)))
+    theme_trend = industry.get("theme_trend_pct")
+    if isinstance(theme_trend, (int, float)):
+        industry_parts.append(_clamp(50 + float(theme_trend) * 3))
+    industry_score = round(sum(industry_parts) / len(industry_parts), 2) if industry_parts else None
+    industry_coverage = max(
+        min(1.0, float(industry.get("priced_peer_count") or 0) / 10),
+        min(1.0, float(industry.get("theme_quote_observed_count") or 0) / 20),
+    )
+    industry_confidence = min(0.85, 0.45 + industry_coverage * 0.35) if industry_score is not None else 0
     result["INDUSTRY_MOMENTUM"] = {
-        "score": industry_score, "coverage": min(1.0, float(industry.get("priced_peer_count") or 0) / 10),
-        "confidence": min(0.85, 0.45 + float(industry.get("priced_peer_count") or 0) * 0.025) if industry_score is not None else 0,
+        "score": industry_score, "coverage": industry_coverage,
+        "confidence": industry_confidence,
         "direction": "POSITIVE" if industry_score is not None and industry_score >= 60 else "NEGATIVE" if industry_score is not None and industry_score < 40 else "NEUTRAL" if industry_score is not None else "UNKNOWN",
         "method": "RULE", "summary": f"{industry.get('industry') or '行业未识别'}：比较个股与同行20日表现及上涨广度。",
         "metrics": industry, "evidence": {"classification_id": industry.get("classification_id")},
