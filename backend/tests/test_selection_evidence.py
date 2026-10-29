@@ -406,3 +406,23 @@ def test_untyped_chunk_cannot_be_promoted_to_company_evidence():
     assert output["validation_status"] == "PARTIAL"
     assert output["dimensions"][0]["status"] == "INSUFFICIENT"
     assert output["dimensions"][0]["evidence_document_ids"] == []
+
+
+def test_optional_event_quote_failure_does_not_fail_core_evidence_validation():
+    from app.services.selection import _sanitize_model_evidence_references
+    item = {"evidence_json": {"documents": [{
+        "id": 49, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE",
+        "content": "公司披露新增订单，预计改善收入。",
+    }], "facts": [], "evidence_fact_ids": [], "chunks": [], "graph_paths": []}}
+    output = {
+        "events": [{"document_id": 49, "source_type": "NEWS", "quote": "模型自行改写的句子",
+                     "title": "订单", "direction": "POSITIVE", "mechanism": "收入改善",
+                     "timing": "短期", "confidence": 0.6}],
+        "event_timeline": [], "event_links": [], "validation_findings": [],
+    }
+    _sanitize_model_evidence_references(output, item)
+    assert output["events"] == []
+    assert output["validation_status"] == "PASSED"
+    assert output["semantic_linkage_status"] == "PARTIAL"
+    assert output["semantic_linkage_warnings"]
+    assert not output.get("evidence_validation_warnings")

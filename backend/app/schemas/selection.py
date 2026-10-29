@@ -270,6 +270,10 @@ class SelectionModelRecommendation(BaseModel):
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
     business_quality: SelectionBusinessQualityAnalysis | None = None
     value_chain_analysis: SelectionValueChainAnalysis | None = None
+    # Event linkage is an optional semantic enrichment.  A linkage failure
+    # must not invalidate independently verified dimensions.
+    semantic_linkage_status: Literal["PASSED", "PARTIAL", "UNAVAILABLE"] = "UNAVAILABLE"
+    semantic_linkage_warnings: list[str] = Field(default_factory=list, max_length=8)
     positives: list[str] = Field(default_factory=list, max_length=4)
     risks: list[str] = Field(default_factory=list, max_length=4)
     watch_conditions: list[str] = Field(default_factory=list, max_length=4)

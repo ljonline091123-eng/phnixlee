@@ -3035,6 +3035,7 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         if (reference := _normalize_document_reference(row.get("id"))) is not None
     }
     warnings: list[str] = []
+    semantic_warnings: list[str] = list(output.get("semantic_linkage_warnings") or [])
     dimension_names = {
         "NEWS": "新闻事件", "NOTICE": "公告披露", "FINANCIAL": "财务业绩",
         "PRICE_VOLUME": "量价趋势", "FUND_FLOW": "资金进出", "COMPANY": "经营与股东",
@@ -3088,11 +3089,14 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         if (not document or document.get("source_table") != source_by_type.get(event.get("source_type"))
                 or document.get("content_state") == "METADATA_ONLY"
                 or normalize(event.get("quote")) not in normalize(content)):
-            warnings.append("新闻或公告事件引句未通过原文核验，已从分析结果中移除")
+            semantic_warnings.append("新闻或公告事件引句未通过原文核验，已从事件联动结果中移除")
             continue
         event["document_id"] = document_id
         valid_events.append(event)
     output["events"] = valid_events
+    if semantic_warnings:
+        output["semantic_linkage_status"] = "PARTIAL"
+        output["semantic_linkage_warnings"] = list(dict.fromkeys(semantic_warnings))
 
     raw_top_documents = output.get("evidence_document_ids") or []
     top_documents = {
@@ -3347,8 +3351,16 @@ def _validate_multi_source_output(
         raise ValueError(
             f"周期文档覆盖不完整：漏分析{missing_ids[:20]}，越界引用{unexpected_ids[:20]}"
         )
-    if required and output.get("validation_status") != "PARTIAL" and len(documents) >= 2 and not output.get("event_timeline"):
+    if (required and output.get("validation_status") != "PARTIAL"
+            and output.get("semantic_linkage_status") != "PARTIAL"
+            and len(documents) >= 2 and not output.get("event_timeline")):
         raise ValueError("分析周期内存在多篇新闻公告正文，但模型未返回事件时间线")
+    if output.get("semantic_linkage_status") == "PARTIAL":
+        # The core dimensions have already passed their typed evidence checks;
+        # only the optional timeline/linkage enrichment was withdrawn.
+        output.setdefault("validation_status", "PASSED")
+    elif output.get("event_timeline") or output.get("event_links") or output.get("events"):
+        output["semantic_linkage_status"] = "PASSED"
     _calculate_linkage_confidence(output, documents)
 
 
@@ -3786,6 +3798,14 @@ def _apply_model_analysis(
             raise ValueError(f"模型引用了本股证据白名单之外的切片 ID：{sorted(cited_chunks - allowed_chunks)}")
         if sanitize:
             _sanitize_model_evidence_references(output, item)
+        # Semantic event linkage is an optional enrichment.  Keep its own
+        # status separate from evidence validation so a bad timeline date or
+        # quote cannot turn otherwise valid NEWS/FINANCIAL/PRICE results into
+        # a failed stock analysis.
+        semantic_snapshot = {
+            key: deepcopy(output.get(key) or [])
+            for key in ("events", "event_timeline", "event_links", "validation_findings")
+        }
         from app.services.selection_evidence import validate_assessments
         contract = analysis_contract
         validate_assessments(output, evidence, required=contract in {"MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"})
@@ -3795,44 +3815,21 @@ def _apply_model_analysis(
                 enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
             )
         except ValueError as validation_error:
-            # Event linkage is an optional semantic enrichment.  A model may
-            # cite a document outside this bounded prompt; withdraw only that
-            # linkage and retain dimensions whose factual citations passed.
-            if not any(output.get(key) for key in ("events", "event_timeline", "event_links", "validation_findings")):
-                raise
-            output["events"] = []
-            output["event_timeline"] = []
-            output["event_links"] = []
-            output["validation_findings"] = []
-            evidence_documents = {
-                document_id for row in item["evidence_json"].get("documents", [])
-                if (document_id := _normalize_document_reference(row.get("id"))) is not None
-            }
-            evidence_documents.update(
-                document_id for row in item["evidence_json"].get("chunks", [])
-                if (document_id := _normalize_document_reference(row.get("document_id"))) is not None
-            )
-            evidence_documents.update(
-                document_id for row in item["evidence_json"].get("graph_paths", [])
-                if (document_id := _normalize_document_reference(row.get("evidence_document_id"))) is not None
-            )
-            output["evidence_document_ids"] = [
-                document_id for raw in output.get("evidence_document_ids") or []
-                if (document_id := _normalize_document_reference(raw)) is not None
-                and document_id in evidence_documents
+            # Retry the core evidence validation without optional semantic
+            # linkage payloads.  The typed dimensions remain authoritative.
+            output.update({key: [] for key in semantic_snapshot})
+            output["semantic_linkage_status"] = "PARTIAL"
+            output["semantic_linkage_warnings"] = [
+                f"事件联动未通过本轮证据边界校验，已撤销联动结论：{str(validation_error)[:160]}"
             ]
-            warnings = list(output.get("evidence_validation_warnings") or [])
-            warnings.append(f"事件联动引用未通过本轮证据边界校验，已撤销事件联动结论：{str(validation_error)[:160]}")
-            output["evidence_validation_warnings"] = list(dict.fromkeys(warnings))
-            output["validation_status"] = "PARTIAL"
-            output["decision"] = "WATCH"
-            output["confidence"] = None
-            output["target_price"] = None
-            output["stop_price"] = None
-            _validate_multi_source_output(
-                output, item, required=required,
-                enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
-            )
+            try:
+                _validate_multi_source_output(
+                    output, item, required=required,
+                    enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5"},
+                )
+            except ValueError:
+                output.update(semantic_snapshot)
+                raise
         # Numeric fields in BUSINESS_COMPOSITION are source facts.  Models
         # sometimes return a display-rounded amount or percentage; restore the
         # cited precision before applying the fail-closed validator.
@@ -4339,6 +4336,8 @@ def _apply_model_analysis(
                 "recommendation": output["decision"], "actual_instance_code": instance_code,
                 "analysis_validation_status": output.get("validation_status", "PASSED"),
                 "evidence_validation_warnings": output.get("evidence_validation_warnings", []),
+                "semantic_linkage_status": output.get("semantic_linkage_status", "UNAVAILABLE"),
+                "semantic_linkage_warnings": output.get("semantic_linkage_warnings", []),
                 "evidence_normalizations": output.get("evidence_normalizations", []),
                 "evidence_normalization_notes": output.get("evidence_normalization_notes", []),
                 "model_failure_reason": None, "model_attempts": history})
@@ -4369,6 +4368,7 @@ def _apply_model_analysis(
             detail = classify_model_error(reason)
             for key in ("model", "scoring", "summary", "thesis", "target_price", "stop_price", "confidence", "recommendation", "llm_evaluation",
                         "analysis_validation_status", "evidence_validation_warnings",
+                        "semantic_linkage_status", "semantic_linkage_warnings",
                         "evidence_normalizations", "evidence_normalization_notes"):
                 item["analysis_json"].pop(key, None)
             item["analysis_json"].update({"model_output_status": "FAILED", "model_failure_reason": detail["summary"],
