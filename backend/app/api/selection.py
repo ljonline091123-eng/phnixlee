@@ -44,7 +44,7 @@ from app.schemas.selection import SelectionScopePreview
 from app.services.graph_rag import build_selection_context
 from app.services.model_errors import classify_model_error
 from app.services.selection_audit import retrospective_read, snapshot_read
-from app.services.selection_evidence import build_evidence_sections, conclusion_publication
+from app.services.selection_evidence import build_evidence_sections, conclusion_publication, evidence_coverage_summary
 from app.services.selection_scoring import (
     clone_profile, create_profile, evaluation_summary, list_profiles,
     publish_profile, refresh_candidate_evaluations, resolve_profile,
@@ -129,6 +129,7 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
     analysis_json["conclusion_available"] = publication["conclusion_available"]
     analysis_json["scoring_available"] = publication["scoring_available"]
     analysis_json["evidence_sections"] = build_evidence_sections(analysis_json, evidence_payload)
+    analysis_json["evidence_coverage"] = evidence_coverage_summary(evidence_payload, analysis_json)
     return SelectionCandidateRead(
         **{key: getattr(candidate, key) for key in (
             "id", "run_id", "market", "symbol", "name", "entry_price", "entry_date", "hard_score",
@@ -279,6 +280,25 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             row.hard_score,
         ), reverse=True)
         payload["candidates"] = [_candidate_read(db, item) for item in candidates]
+        coverage_rows = [
+            row.analysis_json.get("evidence_coverage") or {}
+            for row in payload["candidates"]
+        ]
+        backfill_rows = [row for row in coverage_rows if row.get("requires_data_backfill")]
+        phases = (criteria_json.get("progress") or {}).get("phases")
+        if backfill_rows and isinstance(phases, dict) and isinstance(phases.get("DATA"), dict):
+            data_phase = dict(phases["DATA"])
+            data_phase.update({
+                "status": "PARTIAL",
+                "coverage_status": "PARTIAL",
+                "coverage_message": (
+                    f"数据检查和同步流程已结束，但 {len(backfill_rows)} 只股票仍有真实来源缺口或正文补取失败；"
+                    "模型输入预算和可选增强缺口另行展示。"
+                ),
+            })
+            phases["DATA"] = data_phase
+            criteria_json["progress"]["phases"] = phases
+            payload["criteria_json"] = criteria_json
         if (payload["candidates"] and run.status not in {"QUEUED", "RUNNING"} and run.data_mode == "REAL"
                 and (str(run.analysis_mode).startswith("MODEL") or run.analysis_mode == "DATA_INSUFFICIENT")):
             # Old summaries counted empty, invalid conclusions as partial
@@ -303,6 +323,7 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
                     state["historical_message"] = state.get("historical_message") or state.get("message")
                 state.update({"message": summary, **counts})
                 criteria_json[key] = state
+            payload["criteria_json"] = criteria_json
     return SelectionRunRead(**payload)
 
 

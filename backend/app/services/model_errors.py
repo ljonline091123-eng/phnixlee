@@ -84,12 +84,21 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
             "降低单次股票数量或请求长度后重试单股分析。",
             "检查 Token、超时和供应商限流设置。",
         ]
+    elif any(token in lowered for token in ("逐条评分", "每条引用数据评分", "证据类型不匹配", "引用核验未通过")):
+        category, title = "MODEL_EVIDENCE_CONTRACT", "模型证据评分契约未通过"
+        summary = "模型已经读取数据并返回结果，但逐条评分、证据类型归属或引用完整性未通过校验；这不是数据同步失败。"
+        suggestion = "请复用当前证据执行单股定向重试；只有覆盖状态明确标记为需补采时才重新同步数据。"
+        recovery_actions = [
+            "保留当前证据快照，不要因模型评分格式问题重复采集数据。",
+            "按失败详情修正事实类型、逐条评分或缺失引用后，执行单股定向重试。",
+            "校验通过前不发布结论；无法逐字核验的可选事件联动应单独撤销，不影响已通过的核心维度。",
+        ]
     elif any(token in lowered for token in ("证据", "引用", "白名单", "evidence", "citation")):
         category, title = "MODEL_EVIDENCE", "模型引用的证据未通过校验"
         summary = "模型引用了本次分析范围之外的文档、事实或切片。"
         suggestion = "请重新分析或更换模型；系统不会把未核验结论标记为有效。"
         recovery_actions = [
-            "先补齐该股票的新闻、公告正文和知识切片。",
+            "先核对覆盖状态；只有明确标记为需补采时才补新闻、公告正文或知识切片。",
             "重新生成本批次证据包，确保引用 ID 在当前股票白名单内。",
             "再执行单股定向重试；未通过校验的结论不会进入跟踪。",
         ]

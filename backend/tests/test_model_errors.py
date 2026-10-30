@@ -90,6 +90,15 @@ def test_historical_schema_errors_are_not_reported_as_provider_failures(reason):
     assert "契约" in detail["title"]
 
 
+def test_item_score_contract_error_is_not_reported_as_collection_failure():
+    detail = classify_model_error(
+        "FINANCIAL逐条评分存在重复、越界或类型不符的引用：('FACT', 'stock_institution_forecast:16')"
+    )
+    assert detail["category"] == "MODEL_EVIDENCE_CONTRACT"
+    assert "不是数据同步失败" in detail["summary"]
+    assert all("补齐" not in action for action in detail["recovery_actions"])
+
+
 def test_failure_log_keeps_upstream_reason_and_new_default_preserves_custom_model():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)

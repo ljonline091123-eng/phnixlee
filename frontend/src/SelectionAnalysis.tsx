@@ -1,7 +1,7 @@
 import type { SelectionCandidate, SelectionRecord, SelectionScorecard, SelectionScoreDimensionResult } from "./selectionApi";
 import { SelectionEvidenceCards } from "./SelectionEvidenceCards";
 
-const names: Record<string, string> = {NEWS: "新闻事件", NOTICE: "公告披露", FINANCIAL: "财务业绩", PRICE_VOLUME: "量价趋势", FUND_FLOW: "资金进出", COMPANY: "主营经营与股东", GRAPH: "公司关联与图谱", POSITIVE: "偏利好", NEGATIVE: "偏利空", MIXED: "影响交织", NEUTRAL: "中性", UNKNOWN: "待判断", WATCH: "值得关注", PASS: "暂不关注", FOLLOW_UP: "后续进展", VALIDATES: "相互验证", CONTRADICTS: "信息冲突", REALIZES: "已兑现", FAILS_TO_REALIZE: "未兑现", SAME_TOPIC: "同一事项", EXECUTIVE_UNLOCKING_RISK: "高管与解禁线索", SHAREHOLDER_CONFIDENCE_SIGNAL: "股东信心信号", RELATED_SECURITY_IMPACT: "关联证券影响", UNVERIFIED: "待验证", PARTIALLY_REALIZED: "部分兑现", REALIZED: "已兑现", NOT_REALIZED: "未兑现", CONFLICTED: "存在冲突", INSUFFICIENT: "证据不足"};
+const names: Record<string, string> = {NEWS: "新闻事件", NOTICE: "公告披露", FINANCIAL: "财务业绩", PRICE_VOLUME: "量价趋势", FUND_FLOW: "资金进出", COMPANY: "主营经营、行业分类与股东", GRAPH: "公司关联与图谱", POSITIVE: "偏利好", NEGATIVE: "偏利空", MIXED: "影响交织", NEUTRAL: "中性", UNKNOWN: "待判断", WATCH: "值得关注", PASS: "暂不关注", FOLLOW_UP: "后续进展", VALIDATES: "相互验证", CONTRADICTS: "信息冲突", REALIZES: "已兑现", FAILS_TO_REALIZE: "未兑现", SAME_TOPIC: "同一事项", EXECUTIVE_UNLOCKING_RISK: "高管与解禁线索", SHAREHOLDER_CONFIDENCE_SIGNAL: "股东信心信号", RELATED_SECURITY_IMPACT: "关联证券影响", UNVERIFIED: "待验证", PARTIALLY_REALIZED: "部分兑现", REALIZED: "已兑现", NOT_REALIZED: "未兑现", CONFLICTED: "存在冲突", INSUFFICIENT: "证据不足"};
 const relationshipNames: Record<string, string> = {SUPPLIER: "供应商", CUSTOMER: "客户", PARTNER: "合作伙伴", COMPETITOR: "竞争对手", EQUITY_CONTROL: "股权/控制", TECHNOLOGY_SUBSTITUTION: "技术替代", SAME_INDUSTRY: "同行业", SAME_THEME: "同主题", OTHER: "其他关系"};
 const horizonNames: Record<string, string> = {SHORT: "短期", MEDIUM: "中期", LONG: "长期", MULTI_PERIOD: "跨周期", UNKNOWN: "周期待判断"};
 const technologyNames: Record<string, string> = {UNKNOWN: "证据不足", LOW: "较低", MEDIUM: "中等", HIGH: "较高", LEADING: "领先（有证据）"};
@@ -33,6 +33,24 @@ function ScoreRadar({ rows }: { rows: SelectionScoreDimensionResult[] }) {
     </svg>
     <figcaption>原始维度分 · 缺失项留空</figcaption>
   </figure>;
+}
+
+function EvidenceCoverage({ analysis }: { analysis: SelectionRecord }) {
+  const coverage = (analysis.evidence_coverage || {}) as SelectionRecord;
+  const acquisition = strings(coverage.acquisition_gaps), sourceFailures = strings(coverage.source_failures);
+  const enrichment = strings(coverage.optional_enrichment_gaps), contextLimits = strings(coverage.context_limits);
+  const warnings = strings(coverage.quality_warnings);
+  const ready = coverage.minimum_analysis_ready === true;
+  if (!Object.keys(coverage).length) return null;
+  return <section className="analysis-input" aria-label="数据覆盖与分析输入状态">
+    <div className="analysis-card-heading"><div><strong>数据覆盖与分析输入</strong><small>{ready ? "最低分析门槛已通过，不等于所有数据源均完整" : "未达到最低分析门槛"}</small></div><span className={`batch-badge ${ready ? "" : "warning"}`}>{ready ? "可进入分析" : "需要补数"}</span></div>
+    {Number(coverage.period_document_count || 0) > 0 && <p>周期内发现 {Number(coverage.period_document_count)} 篇文档，本轮模型输入 {Number(coverage.included_document_count || 0)} 篇。上下文预算外资料仍保存在数据库，不属于采集失败。</p>}
+    {coverage.model_validation_error ? <p className="batch-alert error"><strong>本轮失败环节：模型输出与证据引用校验</strong><br />{String(coverage.model_validation_error)}</p> : null}
+    {(acquisition.length > 0 || sourceFailures.length > 0) && <details open><summary>需要补采或重试来源（{acquisition.length + sourceFailures.length}）</summary><ul>{[...acquisition, ...sourceFailures].map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+    {contextLimits.length > 0 && <details><summary>模型输入容量限制（{contextLimits.length}）</summary><ul>{contextLimits.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+    {enrichment.length > 0 && <details><summary>可选增强数据尚未覆盖（{enrichment.length}）</summary><ul>{enrichment.map((item, index) => <li key={index}>{item}</li>)}</ul><p>这些项目会影响对应维度覆盖率，但在最低门槛已通过时，不代表数据同步任务失败。</p></details>}
+    {warnings.length > 0 && <details><summary>数据质量提醒（{warnings.length}）</summary><ul>{warnings.map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+  </section>;
 }
 
 export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; backfillDisabled?: boolean; onRescore?: () => void}) {
@@ -70,14 +88,17 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     <p className="batch-alert warning"><strong>{analysis.historical_model_output_status ? "数据不足，历史模型结果无效，未形成可用结论。" : "数据不足，未进入模型分析，未形成分析结论。"}</strong><br />当前证据不足，不能把缺失数据显示为“部分完成”或零值结论；请先补齐数据后重新分析。</p>
     {!!analysis.model_failure_reason && <p className="batch-note">数据原因：{String(analysis.model_failure_reason)}</p>}
     {onBackfillAll && <button type="button" disabled={backfillDisabled} onClick={onBackfillAll}>{backfillDisabled ? "正在补齐数据…" : "补齐该股票数据并重新分析"}</button>}
+    <EvidenceCoverage analysis={analysis} />
     {!!analysis.local_multi_source && <div className="analysis-local-inventory"><h3>已保存的本地数据盘点</h3><p>系统仅保存了可追溯的本地事实，未将实时行情快照当作完整研究依据。请在“数据缺口”中补齐新闻、公告、财务或量价数据。</p></div>}
   </section>;
   if (modelFailed) return <section className="selection-analysis">
     <p className="batch-alert error"><strong>模型分析失败，不能显示模型结论、方向、目标价或评分。</strong><br />请查看失败原因并重试。以下仅为本地证据盘点，不是模型分析结论，也不可用于确认跟踪。</p>
     {!!analysis.model_failure_reason && <p className="batch-note">失败原因：{String(analysis.model_failure_reason)}</p>}
     {!!analysis.local_multi_source && <div className="analysis-local-inventory"><h3>本地证据盘点</h3><p>系统已保存原始证据和结构化数据，可在“数据事实”“原文与引用”页签核对；模型恢复后重新分析。</p></div>}
+    <EvidenceCoverage analysis={analysis} />
   </section>;
   return <section className="selection-analysis">
+    <EvidenceCoverage analysis={analysis} />
     {["CONCLUSION_FAILED", "SCORE_FAILED"].includes(publication.status) && <div className="batch-alert error" role="alert"><strong>{publication.status === "CONCLUSION_FAILED" ? "结论生成失败" : "评分生成失败"}</strong><p>{publication.reason}。以下分项仅供诊断，不是已发布结论。</p>{publication.status === "SCORE_FAILED" && onRescore && <button disabled={backfillDisabled} onClick={onRescore}>重新生成评分</button>}</div>}
     {strings(analysis.evidence_validation_warnings).length > 0 && <div className="batch-alert warning"><strong>结论校验失败 · 引用核验后已撤销部分判断</strong><ul>{strings(analysis.evidence_validation_warnings).map((warning, index) => <li key={index}>{warning}</li>)}</ul><p>以下保留诊断信息，不能确认跟踪；请重新分析并通过引用校验。</p></div>}
     {model.semantic_linkage_status === "PARTIAL" && <div className="batch-alert warning"><strong>事件联动部分完成</strong><ul>{strings(model.semantic_linkage_warnings).map((warning, index) => <li key={index}>{warning}</li>)}</ul><p>新闻、公告及其他已通过证据核验的分项仍然有效；仅事件时间线或前后联动结论需要后续补充原文证据。</p></div>}

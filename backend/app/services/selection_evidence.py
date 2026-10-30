@@ -11,13 +11,13 @@ from typing import Any
 
 
 SECTION_NAMES = {"NEWS": "新闻事件", "NOTICE": "公告披露", "FINANCIAL": "财务业绩",
-                 "PRICE_VOLUME": "量价趋势", "FUND_FLOW": "资金进出", "COMPANY": "主营经营、壁垒与股东",
+                 "PRICE_VOLUME": "量价趋势", "FUND_FLOW": "资金进出", "COMPANY": "主营经营、行业分类与股东",
                  "GRAPH": "公司关联与图谱"}
 DOCUMENT_SOURCES = {"NEWS": {"stock_news"}, "NOTICE": {"stock_notice"},
                     "FINANCIAL": {"stock_financial_report"},
                     "PRICE_VOLUME": {"stock_kline", "stock_realtime_quote"},
                     "FUND_FLOW": set(), "COMPANY": {"stock_symbol", "stock_f10_cache"}, "GRAPH": set()}
-FACT_KINDS = {"FINANCIAL": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC"},
+FACT_KINDS = {"FINANCIAL": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC", "EARNINGS_FORECAST", "INSTITUTION_FORECAST"},
               "VALUATION_EXPECTATION": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC", "EARNINGS_FORECAST", "INSTITUTION_FORECAST"},
               "INDUSTRY_MOMENTUM": {"CLASSIFICATION_OBSERVATION", "INDUSTRY_OBSERVATION"},
               "PRICE_VOLUME": {"MARKET_OBSERVATION", "REALTIME_QUOTE", "MARKET_EVENT", "MARKET_ANOMALY"},
@@ -25,13 +25,69 @@ FACT_KINDS = {"FINANCIAL": {"FINANCIAL_OBSERVATION", "FINANCIAL_METRIC"},
               "COMPANY": {"SHAREHOLDER_OBSERVATION", "SHAREHOLDER_EVENT", "COMPANY_PROFILE",
                           "BUSINESS_PROFILE", "BUSINESS_COMPOSITION", "BUSINESS_POSITION", "TECHNOLOGY_CLAIM",
                           "OWNERSHIP", "CONTROL", "BUSINESS", "SUPPLY_CHAIN", "LEGAL_PARTICIPATION", "INVESTOR_QA",
-                          "RESEARCH_REPORT"}}
+                          "RESEARCH_REPORT", "CLASSIFICATION_OBSERVATION", "INDUSTRY_OBSERVATION"}}
 CATEGORY_KINDS = {"financial": "FINANCIAL_OBSERVATION", "market": "MARKET_OBSERVATION",
                   "realtime": "REALTIME_QUOTE", "fund_flow": "FUND_FLOW_OBSERVATION",
                   "shareholder": "SHAREHOLDER_OBSERVATION", "business": "BUSINESS_PROFILE",
                   "research": "RESEARCH_OBSERVATION"}
 SCORE_DIMENSIONS = {"EVENT_DISCLOSURE", "FUNDAMENTAL_QUALITY", "VALUATION_EXPECTATION", "PRICE_RISK",
                     "CAPITAL_BEHAVIOR", "GOVERNANCE_STABILITY", "SUPPLY_CHAIN_RESILIENCE", "INDUSTRY_MOMENTUM"}
+
+
+def evidence_coverage_summary(evidence: dict, analysis: dict | None = None) -> dict:
+    """Separate acquisition gaps from bounded analysis and optional enrichment.
+
+    ``missing_data`` predates the selection data gate and contains several
+    different concepts.  Keep the historical list intact for auditability, but
+    expose a read-side classification so the UI does not tell users to collect
+    data again when a model contract check or prompt budget was the real issue.
+    """
+    analysis = analysis or {}
+    gate = analysis.get("data_gate") or evidence.get("data_gate") or {}
+    limitations = [str(value) for value in evidence.get("missing_data") or [] if str(value).strip()]
+    context_limits: list[str] = []
+    enrichment_gaps: list[str] = []
+    source_failures: list[str] = []
+    acquisition_gaps: list[str] = []
+    other_warnings: list[str] = []
+
+    for value in limitations:
+        if "上下文预算" in value or "预算未载入" in value:
+            context_limits.append(value)
+        elif any(marker in value for marker in ("正文补取失败", "读取失败", "获取失败", "采集失败")):
+            source_failures.append(value)
+        elif any(marker in value for marker in ("文档切片", "尚未切片", "切片尚未生成向量", "图谱缺少", "图谱关系",
+                                                 "结构化", "观测", "股东/F10", "公司关系事实")):
+            enrichment_gaps.append(value)
+        elif any(marker in value for marker in ("缺少知识库文档", "知识库缺少", "缺少该股票资料")):
+            acquisition_gaps.append(value)
+        else:
+            other_warnings.append(value)
+
+    counts = evidence.get("counts") or {}
+    period_documents = int(counts.get("period_documents") or 0)
+    included_documents = int(counts.get("period_documents_included") or counts.get("documents") or 0)
+    model_status = str(analysis.get("model_output_status") or "")
+    validation_status = str(analysis.get("analysis_validation_status") or "")
+    failure = analysis.get("model_failure_detail") or {}
+    model_validation_error = None
+    if model_status == "FAILED" or validation_status == "PARTIAL":
+        model_validation_error = str(failure.get("summary") or analysis.get("model_failure_reason") or "").strip() or None
+
+    return {
+        "data_gate_status": str(gate.get("status") or "UNKNOWN"),
+        "data_gate_reason": gate.get("reason"),
+        "minimum_analysis_ready": gate.get("status") == "READY",
+        "period_document_count": period_documents,
+        "included_document_count": included_documents,
+        "acquisition_gaps": list(dict.fromkeys(acquisition_gaps)),
+        "source_failures": list(dict.fromkeys(source_failures)),
+        "optional_enrichment_gaps": list(dict.fromkeys(enrichment_gaps)),
+        "context_limits": list(dict.fromkeys(context_limits)),
+        "quality_warnings": list(dict.fromkeys(other_warnings)),
+        "model_validation_error": model_validation_error,
+        "requires_data_backfill": bool(acquisition_gaps or source_failures or gate.get("status") == "MISSING_DATA"),
+    }
 
 
 def _finite_number(value: Any) -> bool:

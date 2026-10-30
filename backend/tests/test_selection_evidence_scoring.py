@@ -23,7 +23,8 @@ from app.services.selection import (
     review_candidate,
 )
 from app.services.selection_evidence import (
-    build_evidence_sections, conclusion_publication, section_weights, typed_references, validate_assessments,
+    build_evidence_sections, conclusion_publication, evidence_coverage_summary, section_weights, typed_references,
+    validate_assessments,
 )
 from tests.selection_samples import valid_scorecard
 
@@ -236,6 +237,59 @@ def test_missing_duplicate_or_foreign_item_score_is_rejected():
             validate_assessments({"dimensions": [dimension(ids=[1], assessments=rows)]}, evidence(), required=True)
 
 
+def test_financial_dimension_accepts_scored_earnings_and_institution_forecasts():
+    payload = {"facts": [
+        {"id": "stock_earnings_forecast:15", "fact_type": "EARNINGS_FORECAST"},
+        {"id": "stock_institution_forecast:16", "fact_type": "INSTITUTION_FORECAST"},
+    ]}
+    row = dimension("FINANCIAL")
+    row.update(
+        evidence_fact_ids=["stock_earnings_forecast:15", "stock_institution_forecast:16"],
+        evidence_assessments=[
+            assessment("stock_earnings_forecast:15", kind="FACT"),
+            assessment("stock_institution_forecast:16", kind="FACT"),
+        ],
+    )
+    assert typed_references(row, payload)["evidence_fact_ids"] == [
+        "stock_earnings_forecast:15", "stock_institution_forecast:16",
+    ]
+    validate_assessments({"dimensions": [row]}, payload, required=True)
+
+
+def test_company_dimension_accepts_company_classification_observation():
+    payload = {"facts": [{
+        "id": "stock_symbol:5092", "fact_type": "CLASSIFICATION_OBSERVATION",
+        "properties": {"industry": "专用设备", "themes": ["存储芯片"]},
+    }]}
+    row = dimension("COMPANY")
+    row.update(
+        evidence_fact_ids=["stock_symbol:5092"],
+        evidence_assessments=[assessment("stock_symbol:5092", kind="FACT")],
+    )
+    assert typed_references(row, payload)["evidence_fact_ids"] == ["stock_symbol:5092"]
+    validate_assessments({"dimensions": [row]}, payload, required=True)
+
+
+def test_coverage_summary_does_not_report_context_budget_as_collection_failure():
+    result = evidence_coverage_summary({
+        "data_gate": {"status": "READY"},
+        "counts": {"period_documents": 155, "period_documents_included": 80},
+        "missing_data": [
+            "分析周期内文档超过上下文预算（已载入 80/155 篇）",
+            "文档切片",
+            "结构化财务观测",
+            "文档#23703正文补取失败：缺少可读取的官方公告 PDF 地址",
+        ],
+    }, {"model_output_status": "FAILED", "model_failure_reason": "模型证据引用校验未通过"})
+    assert result["minimum_analysis_ready"] is True
+    assert result["requires_data_backfill"] is True
+    assert len(result["context_limits"]) == 1
+    assert len(result["optional_enrichment_gaps"]) == 2
+    assert len(result["source_failures"]) == 1
+    assert result["acquisition_gaps"] == []
+    assert result["model_validation_error"] == "模型证据引用校验未通过"
+
+
 def test_scores_use_deduplicated_evidence_and_conserve_weight_budget():
     payload = evidence()
     payload["documents"].append({"id": 4, "source_table": "stock_news", "title": "风险提示"})
@@ -323,6 +377,46 @@ def test_summary_details_and_follow_gate_agree_for_invalid_conclusions(isolated)
                 with pytest.raises(ValueError):
                     review_candidate(db, candidate["id"], SelectionReviewRequest(decision="APPROVED", target_price=15))
         assert not db.dirty
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+def test_run_data_phase_is_partial_for_real_source_failure_not_context_limit(isolated):
+    db = isolated
+    run = SelectionRun(
+        market="CN_A", status="PARTIAL", analysis_mode="MODEL_FAILED_FALLBACK_LOCAL", data_mode="REAL",
+        completed_at=datetime.now(timezone.utc),
+        criteria_json={"progress": {"phases": {
+            "DATA": {"status": "SUCCESS", "percent": 100, "activities": []},
+            "MODEL_PREFLIGHT": {"status": "SUCCESS", "percent": 100, "activities": []},
+            "ANALYSIS": {"status": "FAILED", "percent": 100, "activities": []},
+        }}},
+    )
+    db.add(run)
+    db.flush()
+    db.add(SelectionCandidate(
+        run_id=run.id, market="CN_A", symbol="688627",
+        analysis_json={"model_output_status": "FAILED", "data_gate": {"status": "READY"},
+                       "model_failure_reason": "逐条评分校验未通过"},
+        evidence_json={
+            **evidence(), "data_gate": {"status": "READY"},
+            "missing_data": [
+                "分析周期内文档超过上下文预算（已载入 80/155 篇）",
+                "文档#23703正文补取失败：缺少可读取的官方公告 PDF 地址",
+            ],
+            "counts": {"period_documents": 155, "period_documents_included": 80},
+        },
+    ))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        value = TestClient(app).get(f"/api/v1/selection/runs/{run.id}").json()
+        phase = value["criteria_json"]["progress"]["phases"]["DATA"]
+        assert phase["status"] == "PARTIAL"
+        assert "正文补取失败" in phase["coverage_message"]
+        coverage = value["candidates"][0]["analysis_json"]["evidence_coverage"]
+        assert len(coverage["source_failures"]) == 1
+        assert len(coverage["context_limits"]) == 1
     finally:
         app.dependency_overrides.pop(get_db, None)
 
