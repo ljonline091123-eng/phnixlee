@@ -1,0 +1,262 @@
+diff --git a/backend/app/services/document_event_governance.py b/backend/app/services/document_event_governance.py
+index 87a419a..5ccefc1 100644
+--- a/backend/app/services/document_event_governance.py
++++ b/backend/app/services/document_event_governance.py
+@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
+ from hashlib import sha256
+ import json
+ import re
+-from urllib.parse import urljoin, urlparse
++from urllib.parse import parse_qs, urljoin, urlparse
+ from uuid import NAMESPACE_URL, uuid5
+ from zoneinfo import ZoneInfo
+ 
+@@ -126,6 +126,26 @@ def official_notice_body(row: StockNotice) -> tuple[str, dict]:
+     if not candidate:
+         candidate = str(row.url or "")
+     parsed = urlparse(candidate)
++    # F10/report imports can create a linked notice row whose URL points to
++    # CNINFO's HTML disclosure page while the canonical notice row contains
++    # the actual ``adjunctUrl`` PDF. Reconstruct the stable CNINFO PDF path
++    # from that disclosure URL instead of treating the linked row as a source
++    # failure. The original row and lineage remain unchanged.
++    if not (
++        parsed.scheme == "https"
++        and parsed.hostname in {"static.cninfo.com.cn", "www1.hkexnews.hk"}
++        and parsed.path.lower().endswith(".pdf")
++    ):
++        entry = payload.get("disclosure_entry") or {}
++        detail_url = str(entry.get("url") or row.url or "")
++        query = parse_qs(urlparse(detail_url).query)
++        announcement_id = str((query.get("announcementId") or [""])[0]).strip()
++        notice_date = str((query.get("announcementTime") or [""])[0]).strip()[:10]
++        if announcement_id and not notice_date:
++            notice_date = str(getattr(row, "notice_date", "") or "")[:10]
++        if announcement_id and notice_date:
++            candidate = f"https://static.cninfo.com.cn/finalpage/{notice_date}/{announcement_id}.PDF"
++            parsed = urlparse(candidate)
+     if parsed.scheme != "https" or parsed.hostname not in {"static.cninfo.com.cn", "www1.hkexnews.hk"} or not parsed.path.lower().endswith(".pdf"):
+         raise ValueError("缺少可读取的官方公告 PDF 地址")
+     binary = bytearray()
+diff --git a/backend/app/services/selection.py b/backend/app/services/selection.py
+index b2733fd..19d31f6 100644
+--- a/backend/app/services/selection.py
++++ b/backend/app/services/selection.py
+@@ -2199,8 +2199,12 @@ def _load_disclosure_bodies(db: Session, evidence: dict, market: str, symbol: st
+         if not source or (source.market, source.symbol) != document_pair or not allowed_pair:
+             continue
+         body = document_body(source)
+-        refresh = not body or (isinstance(source, StockNews) and _news_search_record(source)
+-                               and not (source.content_json or {}).get("governance_full_text"))
++        refresh = (
++            not body
++            or (isinstance(source, StockNotice) and len(body.strip()) < 40)
++            or (isinstance(source, StockNews) and _news_search_record(source)
++                and not (source.content_json or {}).get("governance_full_text"))
++        )
+         work.append((doc, source, body, refresh))
+     def read(entry):
+         doc, source, body, refresh = entry
+@@ -3070,6 +3074,16 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str,
+         document_id = _normalize_document_reference(path.get("evidence_document_id"))
+         if document_id is not None:
+             documents.setdefault(document_id, {"id": document_id, "content_state": "GRAPH_REFERENCE_ONLY"})
++    # The persisted snapshot keeps a small display list in ``documents`` and
++    # the complete bounded model allowlist in ``evidence_context.documents``.
++    # Both are valid citation sources; omitting the latter makes legitimate
++    # period documents look like fabricated IDs during result sanitization.
++    for scope in (evidence.get("evidence_context") or {}, evidence):
++        for key in ("documents", "related_security_documents"):
++            for row in scope.get(key) or []:
++                document_id = _normalize_document_reference(row.get("id"))
++                if document_id is not None:
++                    documents.setdefault(document_id, row)
+ 
+     valid_document_ids = set(documents)
+     valid_fact_ids = {str(value) for value in evidence.get("evidence_fact_ids", [])}
+@@ -3080,7 +3094,68 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str,
+         reference for row in evidence.get("graph_paths", [])
+         if (reference := _normalize_document_reference(row.get("id"))) is not None
+     }
++    # Normalize known cross-source citations before the strict validator sees
++    # them. A model may cite a news document while explaining a financial
++    # fact; remove that citation from FINANCIAL while retaining valid facts.
++    # Unknown IDs remain untouched and still fail closed below.
++    from app.services.selection_evidence import typed_references
++    pre_sanitize_warnings: list[str] = []
++    for dimension in output.get("dimensions") or []:
++        raw_documents = dimension.get("evidence_document_ids") or []
++        raw_document_ids = {
++            value for raw in raw_documents
++            if (value := _normalize_document_reference(raw)) is not None
++        }
++        raw_facts = {str(value) for value in dimension.get("evidence_fact_ids") or []}
++        raw_relations = {
++            value for raw in dimension.get("evidence_relation_ids") or []
++            if (value := _normalize_document_reference(raw)) is not None
++        }
++        unresolved = (
++            raw_document_ids - valid_document_ids
++            or raw_facts - valid_fact_ids
++            or raw_relations - valid_relation_ids
++            or any(_normalize_document_reference(raw) is None for raw in raw_documents)
++        )
++        if unresolved:
++            continue
++        try:
++            typed = typed_references(dimension, evidence)
++        except (TypeError, ValueError):
++            continue
++        typed_document_ids = {int(value) for value in typed["evidence_document_ids"]}
++        typed_fact_ids = set(typed["evidence_fact_ids"])
++        typed_relation_ids = {int(value) for value in typed["evidence_relation_ids"]}
++        if (
++            raw_document_ids == typed_document_ids
++            and raw_facts == typed_fact_ids
++            and raw_relations == typed_relation_ids
++        ):
++            continue
++        dimension.update(typed)
++        expected_assessments = (
++            {("DOCUMENT", str(value)) for value in typed_document_ids}
++            | {("FACT", str(value)) for value in typed_fact_ids}
++            | {("RELATION", str(value)) for value in typed_relation_ids}
++        )
++        assessments: list[dict[str, Any]] = []
++        seen_assessments: set[tuple[Any, str]] = set()
++        for assessment in dimension.get("evidence_assessments") or []:
++            identity = (
++                assessment.get("reference_type"),
++                str(assessment.get("reference_id")),
++            )
++            if identity not in expected_assessments or identity in seen_assessments:
++                continue
++            seen_assessments.add(identity)
++            assessments.append(assessment)
++        dimension["evidence_assessments"] = assessments
++        pre_sanitize_warnings.append(
++            f"{dimension.get('dimension', '分析分项')}已移除跨来源或类型不匹配引用，保留可核验证据"
++        )
+     warnings: list[str] = []
++    if pre_sanitize_warnings:
++        output.setdefault("evidence_normalization_notes", []).extend(pre_sanitize_warnings)
+     semantic_warnings: list[str] = list(output.get("semantic_linkage_warnings") or [])
+     dimension_names = {
+         "NEWS": "新闻事件", "NOTICE": "公告披露", "FINANCIAL": "财务业绩",
+@@ -3147,7 +3222,9 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str,
+     raw_top_documents = output.get("evidence_document_ids") or []
+     top_documents = {
+         value for raw in raw_top_documents
+-        if (value := _normalize_document_reference(raw)) is not None and value in valid_document_ids
++        if (value := _normalize_document_reference(raw)) is not None
++        and value in valid_document_ids
++        and documents[value].get("content_state") != "METADATA_ONLY"
+     }
+     top_facts = {str(value) for value in output.get("evidence_fact_ids") or []} & valid_fact_ids
+     top_chunks = {str(value) for value in output.get("evidence_chunk_ids") or []} & valid_chunk_ids
+@@ -3168,6 +3245,23 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str,
+            for value in row.get("supporting_document_ids") or []
+            if _normalize_document_reference(value) in valid_document_ids}
+     )
++    output["evidence_document_ids"] = sorted(
++        value for value in output["evidence_document_ids"]
++        if documents.get(value, {}).get("content_state") != "METADATA_ONLY"
++    )
++    output["analyzed_document_ids"] = sorted(
++        {
++            value for raw in output.get("analyzed_document_ids") or []
++            if (value := _normalize_document_reference(raw)) is not None
++            and value in valid_document_ids
++            and documents[value].get("content_state") != "METADATA_ONLY"
++        }
++        | {
++            value for raw in output.get("analyzed_document_ids") or []
++            if (value := _normalize_document_reference(raw)) is not None
++            and value not in valid_document_ids
++        }
++    )
+     linked_facts = {
+         str(value) for row in output.get("event_links") or []
+         for value in row.get("evidence_fact_ids") or []
+@@ -3240,6 +3334,12 @@ def _validate_multi_source_output(
+         doc_id = _normalize_document_reference(path.get("evidence_document_id"))
+         if doc_id is not None:
+             documents.setdefault(doc_id, {"id": doc_id, "source_table": None, "content_state": "GRAPH_REFERENCE_ONLY"})
++    for scope in (evidence.get("evidence_context") or {}, evidence):
++        for key in ("documents", "related_security_documents"):
++            for row in scope.get(key) or []:
++                doc_id = _normalize_document_reference(row.get("id"))
++                if doc_id is not None:
++                    documents.setdefault(doc_id, row)
+     fact_ids = {str(value) for value in evidence.get("evidence_fact_ids") or []}
+     dimension_fact_ids = _dimension_fact_allowlists(evidence)
+     fact_ids.update(value for values in dimension_fact_ids.values() for value in values)
+@@ -3271,6 +3371,12 @@ def _validate_multi_source_output(
+         document_id for raw in output.get("evidence_document_ids") or []
+         if (document_id := _normalize_document_reference(raw)) is not None
+     } | referenced_docs
++    # Metadata-only rows are inventory records, not readable evidence. Do not
++    # let them enter the analyzed-document coverage contract.
++    all_docs = {
++        value for value in all_docs
++        if documents.get(value, {}).get("content_state") != "METADATA_ONLY"
++    }
+     output["evidence_document_ids"] = sorted(all_docs)
+     if not all_docs.issubset(documents):
+         raise ValueError("模型引用了本次压缩上下文之外的文档")
+diff --git a/backend/tests/test_selection_evidence.py b/backend/tests/test_selection_evidence.py
+index 58ac974..01fddbc 100644
+--- a/backend/tests/test_selection_evidence.py
++++ b/backend/tests/test_selection_evidence.py
+@@ -119,6 +119,51 @@ def test_unmatched_news_is_excluded_from_selection_and_graph_rag_without_deletin
+     engine.dispose()
+ 
+ 
++def test_financial_cross_source_document_is_pruned_with_its_assessment():
++    from app.services.selection import _sanitize_model_evidence_references
++    from app.services.selection_evidence import validate_assessments
++
++    item = {"evidence_json": {
++        "documents": [
++            {"id": 23710, "source_table": "stock_financial_report", "content_state": "TEXT_AVAILABLE"},
++        ],
++        "evidence_context": {"documents": [
++            {"id": 23685, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE"},
++        ]},
++        "facts": [
++            {"id": "stock_institution_forecast:16", "fact_type": "INSTITUTION_FORECAST"},
++        ],
++        "evidence_fact_ids": ["stock_institution_forecast:16"],
++        "chunks": [], "graph_paths": [],
++    }}
++    financial = {
++        "dimension": "FINANCIAL", "status": "SUPPORTED", "direction": "POSITIVE",
++        "summary": "有机构预测事实",
++        "evidence_document_ids": [23685, 23710],
++        "evidence_fact_ids": ["stock_institution_forecast:16"],
++        "evidence_relation_ids": [],
++        "evidence_assessments": [
++            {"reference_type": "DOCUMENT", "reference_id": "23685",
++             "direction": "POSITIVE", "score": 20, "rationale": "新闻"},
++            {"reference_type": "DOCUMENT", "reference_id": "23710",
++             "direction": "POSITIVE", "score": 10, "rationale": "财报"},
++            {"reference_type": "FACT", "reference_id": "stock_institution_forecast:16",
++             "direction": "POSITIVE", "score": 10, "rationale": "预测"},
++        ],
++    }
++    output = {"dimensions": [financial], "events": []}
++
++    _sanitize_model_evidence_references(output, item)
++
++    assert financial["status"] == "SUPPORTED"
++    assert financial["evidence_document_ids"] == [23710]
++    assert financial["evidence_fact_ids"] == ["stock_institution_forecast:16"]
++    assert {(row["reference_type"], row["reference_id"]) for row in financial["evidence_assessments"]} == {
++        ("DOCUMENT", "23710"), ("FACT", "stock_institution_forecast:16"),
++    }
++    validate_assessments(output, item["evidence_json"], required=True)
++
++
+ def test_model_calls_batch_large_evidence_and_use_workflow_schema():
+     run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None)
+     pool = [({"symbol": f"DEMO{index:03}", "analysis_json": {}, "evidence_json": {
