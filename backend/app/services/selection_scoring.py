@@ -899,7 +899,21 @@ def score_candidate(db: Session, candidate: SelectionCandidate, profile: Selecti
         "profile_snapshot": snapshot, "as_of": scoring_as_of.isoformat(),
         "explanation": "可信评分会按覆盖率和证据置信度向中性50分收缩；它不是收益概率。",
     }
-    candidate.analysis_json = {**(candidate.analysis_json or {}), "scoring": result}
+    # Keep the persisted UI flags in sync with the scorecard. A reanalysis may
+    # start with stale ``conclusion_available=false`` from an earlier model
+    # failure; leaving that value untouched makes a successful, validated model
+    # result appear as "待复核" even though the scorecard is complete.
+    persisted_analysis = {**(candidate.analysis_json or {}), "scoring": result,
+                          "scoring_available": bool(result.get("dimensions"))}
+    try:
+        from app.services.selection_evidence import conclusion_publication
+        publication = conclusion_publication(persisted_analysis)
+        persisted_analysis["conclusion_available"] = publication["conclusion_available"]
+    except Exception:
+        # Publication is a derived UI status; never prevent the auditable
+        # scorecard from being saved if a legacy analysis payload is malformed.
+        persisted_analysis["conclusion_available"] = False
+    candidate.analysis_json = persisted_analysis
     db.execute(delete(SelectionDimensionResult).where(
         SelectionDimensionResult.candidate_id == candidate.id,
         SelectionDimensionResult.profile_id == profile.id,

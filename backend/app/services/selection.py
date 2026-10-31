@@ -758,6 +758,54 @@ def _sync_selection_data(db: Session, run: SelectionRun, *, symbols: list[str] |
             "completed_at": _now().isoformat()}
 
 
+def _refresh_selection_snapshot(run: SelectionRun, *, reason: str) -> dict[str, Any]:
+    """Move the analysis cutoff forward without re-collecting local data.
+
+    A retry may deliberately reuse records already collected by a previous
+    run.  The evidence contract is still time-bounded, though, so keeping the
+    old ``as_of`` would hide records fetched after the original queue time.
+    This updates only the retry's reproducibility metadata; historical runs
+    and their immutable snapshots remain unchanged.
+    """
+    from app.services.graph_rag import selection_period_bounds
+
+    previous = run.as_of
+    # SQLite may materialize timezone-aware columns as naive datetimes.  The
+    # selection cutoff is always UTC, so normalize legacy rows before comparing
+    # them with the new aware timestamp.
+    if previous is not None and previous.tzinfo is None:
+        previous = previous.replace(tzinfo=timezone.utc)
+    refreshed = _now()
+    if previous is not None and refreshed <= previous:
+        refreshed = previous + timedelta(microseconds=1)
+    criteria = dict(run.criteria_json or {})
+    months = max(1, min(int(criteria.get("period_months") or 3), 60))
+    period_start, period_end = selection_period_bounds(refreshed, months, run.market)
+    previous_iso = previous.isoformat() if previous is not None else None
+    refreshed_iso = refreshed.isoformat()
+    criteria.setdefault("queued_as_of", previous_iso)
+    criteria.update({
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "snapshot_status": "REFRESHED",
+        "snapshot_previous_as_of": previous_iso,
+        "snapshot_refreshed_at": refreshed_iso,
+        "snapshot_refresh_reason": reason,
+    })
+    run.as_of = refreshed
+    run.criteria_json = criteria
+    return {
+        "snapshot_status": "REFRESHED",
+        "data_sync_mode": "REUSE_EXISTING" if reason == "REUSE_EXISTING_LOCAL_DATA" else "REFRESH",
+        "snapshot_previous_as_of": previous_iso,
+        "snapshot_refreshed_at": refreshed_iso,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "period_months": months,
+        "reason": reason,
+    }
+
+
 def _prepare_selection_data(
     db: Session,
     run: SelectionRun,
@@ -782,13 +830,15 @@ def _prepare_selection_data(
         str(item).strip() for item in ((run.criteria_json or {}).get("symbols") or []) if str(item).strip()
     ]
     if not force_refresh:
+        snapshot = _refresh_selection_snapshot(run, reason="REUSE_EXISTING_LOCAL_DATA")
         result = {
             "status": "SKIPPED",
             "attempted": 0,
             "succeeded": 0,
             "failed": [],
             "reused": len(requested_symbols),
-            "reason": "复用本次候选已采集的数据与证据，未重复连接远程数据源",
+            "reason": "复用本地已采集数据，未重复连接远程数据源；已刷新本次分析证据快照",
+            **snapshot,
             "completed_at": _now().isoformat(),
         }
         run.criteria_json = {**(run.criteria_json or {}), "data_sync": result}
@@ -834,10 +884,8 @@ def _prepare_selection_data(
     # The evidence snapshot must include records fetched by this synchronization,
     # rather than filtering them out with the earlier queue creation timestamp.
     if run.data_mode == "REAL":
-        previous_cutoff = run.as_of
-        run.as_of = _now()
-        run.criteria_json = {**(run.criteria_json or {}), "queued_as_of":
-                            (run.criteria_json or {}).get("queued_as_of") or previous_cutoff.isoformat()}
+        snapshot = _refresh_selection_snapshot(run, reason="SOURCE_REFRESH")
+        result.update(snapshot)
     run.criteria_json = {**(run.criteria_json or {}), "data_sync": result}
     _progress(db, run, "DATA_QUALITY_GATE", 25, "同步已结束，正在核验本地数据及证据覆盖",
               phase="DATA", data_sync_status=result.get("status"),
@@ -1313,10 +1361,17 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
     """
     context = evidence.get("evidence_context") or {}
     doc_rows = [*(evidence.get("documents") or []), *(context.get("documents") or [])]
-    usable_docs = {str(row.get("id")) for row in doc_rows if isinstance(row, dict) and row.get("id") is not None
-                   and row.get("content_state") != "METADATA_ONLY"
-                   and len(str(row.get("content") or row.get("excerpt") or "").strip()) >= 20
-                   and str(row.get("content") or row.get("excerpt") or "").strip() != str(row.get("title") or "").strip()}
+    documents_by_id = {
+        str(row.get("id")): row for row in doc_rows
+        if isinstance(row, dict) and row.get("id") is not None
+    }
+    usable_docs = {
+        key for key, row in documents_by_id.items()
+        if row.get("content_state") != "METADATA_ONLY"
+        and len(str(row.get("content") or row.get("excerpt") or "").strip()) >= 20
+        and str(row.get("content") or row.get("excerpt") or "").strip()
+        != str(row.get("title") or "").strip()
+    }
     documents = len(usable_docs)
     fact_rows = [row for row in evidence.get("facts") or [] if isinstance(row, dict)]
     facts = len(fact_rows)
@@ -1340,8 +1395,47 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, list):
             return any(has_value(child) for child in value)
         return False
+    def substantive(properties: Any) -> bool:
+        if not isinstance(properties, dict):
+            return has_value(properties)
+        if has_value(properties):
+            return True
+        ignored = {"id", "symbol", "code", "source_id", "source_record_id", "window_size",
+                   "report_period", "report_year", "year", "date", "trade_date", "ordinal", "index",
+                   "fetched_at", "published_at", "available_at"}
+        return any(value not in (None, "", [], {})
+                   and not (isinstance(value, float) and not isfinite(value))
+                   and str(key).lower() not in ignored
+                   and not str(key).lower().endswith(("_id", "_code", "_count"))
+                   for key, value in properties.items())
+
     structured_count = len({str(row.get("id") or index) for index, row in enumerate(structured_rows)
-                            if has_value(row.get("properties") or {})})
+                            if substantive(row.get("properties") or {})})
+    structured_by_category = evidence.get("structured_observations") or {}
+    category_counts = {
+        "NEWS": sum(1 for row in documents_by_id.values()
+                     if str(row.get("source_table") or "") == "stock_news" and str(row.get("id")) in usable_docs),
+        "NOTICE": sum(1 for row in documents_by_id.values()
+                       if str(row.get("source_table") or "") == "stock_notice" and str(row.get("id")) in usable_docs),
+        "BUSINESS": sum(1 for row in structured_by_category.get("business") or []
+                         if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "FINANCIAL": sum(1 for row in structured_by_category.get("financial") or []
+                          if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "PRICE_VOLUME": sum(1 for row in structured_by_category.get("market") or []
+                             if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "REALTIME": sum(1 for row in structured_by_category.get("realtime") or []
+                         if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "SHAREHOLDER": sum(1 for row in structured_by_category.get("shareholder") or []
+                            if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "FUND_FLOW": sum(1 for row in structured_by_category.get("fund_flow") or []
+                          if isinstance(row, dict) and substantive(row.get("properties") or {})),
+        "RESEARCH": sum(1 for row in structured_by_category.get("research") or []
+                         if isinstance(row, dict) and substantive(row.get("properties") or {})),
+    }
+    required_categories = ("NEWS", "NOTICE", "BUSINESS", "FINANCIAL", "PRICE_VOLUME",
+                           "SHAREHOLDER", "FUND_FLOW", "RESEARCH")
+    missing_categories = [category for category in required_categories if category_counts[category] <= 0]
+    coverage_status = "COMPLETE" if not missing_categories else "PARTIAL"
     # One realtime quote and one identity fact is only a security stub, not a
     # usable analysis context. Documents or a substantive structured set are
     # required before model calls are allowed.
@@ -1350,8 +1444,12 @@ def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
             "status": "MISSING_DATA",
             "reason": "当前周期没有可供模型研判的新闻、公告、研究数据或结构化业务证据；仅有行情快照/身份事实。",
             "documents": documents, "facts": facts, "structured_count": structured_count,
+            "category_counts": category_counts, "coverage_status": coverage_status,
+            "missing_categories": missing_categories,
         }
-    return {"status": "READY", "documents": documents, "facts": facts, "structured_count": structured_count}
+    return {"status": "READY", "documents": documents, "facts": facts,
+            "structured_count": structured_count, "category_counts": category_counts,
+            "coverage_status": coverage_status, "missing_categories": missing_categories}
 
 
 def queue_selection_data_backfill(db: Session, run_id: int, payload: SelectionBackfillRequest) -> SelectionRun:
@@ -2199,8 +2297,12 @@ def _load_disclosure_bodies(db: Session, evidence: dict, market: str, symbol: st
         if not source or (source.market, source.symbol) != document_pair or not allowed_pair:
             continue
         body = document_body(source)
-        refresh = not body or (isinstance(source, StockNews) and _news_search_record(source)
-                               and not (source.content_json or {}).get("governance_full_text"))
+        refresh = (
+            not body
+            or (isinstance(source, StockNotice) and len(body.strip()) < 40)
+            or (isinstance(source, StockNews) and _news_search_record(source)
+                and not (source.content_json or {}).get("governance_full_text"))
+        )
         work.append((doc, source, body, refresh))
     def read(entry):
         doc, source, body, refresh = entry
@@ -2616,11 +2718,26 @@ def _sanitize_evidence_digest(payload: dict[str, Any], segment: dict[str, Any]) 
 def _digest_model_candidate_context(item: dict[str, Any], digests: list[dict[str, Any]]) -> dict[str, Any]:
     """Build the reduce-stage context while retaining the citation contract."""
     evidence = item.get("evidence_json") or {}
-    documents = [
-        {key: (str(row.get(key))[:100] if key == "title" else row.get(key))
-         for key in ("id", "title", "source_table", "published_at", "content_state") if row.get(key) is not None}
-        for row in evidence.get("documents") or [] if isinstance(row, dict)
-    ]
+    documents = []
+    news_with_content = 0
+    for row in evidence.get("documents") or []:
+        if not isinstance(row, dict):
+            continue
+        source = row.get("source_table")
+        # The map stage removes full bodies, but the reduce stage still needs a
+        # short source excerpt to validate event quotes and source type. Keep
+        # all notices and a bounded news sample; complete originals remain in
+        # the persisted candidate evidence.
+        include_news_excerpt = source == "stock_news" and news_with_content < 12
+        excerpt_limit = 320 if source == "stock_notice" else 120 if include_news_excerpt else 0
+        if include_news_excerpt:
+            news_with_content += 1
+        documents.append({
+            key: (str(row.get(key))[:100] if key == "title" else row.get(key))
+            for key in ("id", "title", "source_table", "published_at", "content_state")
+            if row.get(key) is not None
+        } | ({"content": str(row.get("content") or row.get("excerpt") or "")[:excerpt_limit]}
+             if excerpt_limit else {}))
     compact_evidence = {
         key: deepcopy(evidence.get(key))
         for key in ("data_mode", "data_cutoff", "analysis_period", "identity", "missing_data", "counts", "citation_allowlist")
@@ -2672,7 +2789,12 @@ def _compact_reduce_batch_context(items: list[dict[str, Any]], max_chars: int) -
                 if key in prompt_compaction
             }
         evidence["documents"] = [
-            {key: row.get(key) for key in ("id", "source_table", "published_at") if row.get(key) is not None}
+            {
+                **{key: row.get(key) for key in ("id", "source_table", "published_at") if row.get(key) is not None},
+                **({"content": str(row.get("content") or row.get("excerpt") or "")[:320]}
+                   if row.get("source_table") == "stock_notice"
+                   and (row.get("content") or row.get("excerpt")) else {}),
+            }
             for row in evidence.get("documents") or [] if isinstance(row, dict)
         ]
         compact_digests = []
@@ -2755,6 +2877,131 @@ def _compact_reduce_batch_context(items: list[dict[str, Any]], max_chars: int) -
             }
             for digest in evidence.get("evidence_segment_digests") or []
         ]
+    return result
+
+
+def _compact_retry_model_context(item: dict[str, Any], *, max_chars: int = 18_000) -> dict[str, Any]:
+    """Build a smaller, still-citable context for a contract retry.
+
+    The first analysis keeps the full bounded evidence package.  A validation
+    retry previously reused that package and added a second schema plus the
+    validation error, which could exceed the provider's 60k prompt limit even
+    though the original call was accepted.  Retries only need the source
+    records that can repair the failed contract; the unabridged package stays
+    in ``SelectionCandidate.evidence_json``.
+    """
+    import json
+
+    result = deepcopy(item)
+    evidence = result.get("evidence_json") or {}
+
+    def bound(value: Any, limit: int, depth: int = 0) -> Any:
+        if value is None or isinstance(value, (int, float, bool)):
+            return value
+        if isinstance(value, str):
+            return value[:limit]
+        if depth >= 4:
+            return str(value)[:limit]
+        if isinstance(value, list):
+            rows = [bound(row, max(48, limit // max(1, min(len(value), 6))), depth + 1)
+                    for row in value[:6]]
+            return rows
+        if isinstance(value, dict):
+            output: dict[str, Any] = {}
+            used = 2
+            for key, child in value.items():
+                candidate = bound(child, max(64, min(limit // 2, 420)), depth + 1)
+                output[str(key)] = candidate
+                used = len(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
+                if used >= limit:
+                    output.pop(str(key), None)
+                    break
+            return output
+        return str(value)[:limit]
+
+    documents = [row for row in evidence.get("documents") or [] if isinstance(row, dict)]
+    notices = [row for row in documents if row.get("source_table") == "stock_notice"]
+    news = [row for row in documents if row.get("source_table") == "stock_news"]
+    other = [row for row in documents if row.get("source_table") not in {"stock_notice", "stock_news"}]
+    # Keep every notice (the common contract failure is an unscored notice),
+    # the newest representative news, and a small number of other documents.
+    selected_documents = [*notices, *news[:12], *other[:3]]
+    compact_documents = []
+    for row in selected_documents:
+        compact_documents.append({
+            key: (str(row.get(key))[:220] if key in {"content", "excerpt"}
+                  else bound(row.get(key), 260))
+            for key in ("id", "title", "source_table", "published_at", "content_state",
+                        "content", "excerpt", "relation_scope", "related_via_fact_ids")
+            if row.get(key) is not None
+        })
+
+    compact_facts = []
+    for row in (evidence.get("facts") or []):
+        if not isinstance(row, dict):
+            continue
+        compact_facts.append({
+            key: bound(row.get(key), 1_300 if key == "properties" else 260)
+            for key in ("id", "fact_type", "title", "properties", "status", "observed_at", "evidence")
+            if row.get(key) is not None
+        })
+
+    evidence["documents"] = compact_documents
+    evidence["facts"] = compact_facts
+    evidence["chunks"] = []
+    evidence["relations"] = []
+    evidence["graph_paths"] = []
+    for key in ("identity", "selected_scope", "counts", "missing_data", "related_securities"):
+        evidence.pop(key, None)
+
+    document_ids = [row["id"] for row in compact_documents if row.get("id") is not None]
+    fact_ids = [str(row["id"]) for row in compact_facts if row.get("id") is not None]
+    original_allowlist = evidence.get("citation_allowlist") or {}
+    allowed_document_ids = {str(value) for value in document_ids}
+    allowed_fact_ids = set(fact_ids)
+    evidence["model_document_ids"] = document_ids
+    evidence["document_ids"] = document_ids
+    evidence["evidence_fact_ids"] = fact_ids
+    evidence["citation_allowlist"] = {
+        **original_allowlist,
+        "document_ids": document_ids,
+        "news_document_ids": [row["id"] for row in compact_documents
+                               if row.get("source_table") == "stock_news"],
+        "notice_document_ids": [row["id"] for row in compact_documents
+                                 if row.get("source_table") == "stock_notice"],
+        "fact_ids": fact_ids,
+        "financial_fact_ids": [str(value) for value in original_allowlist.get("financial_fact_ids") or []
+                                if str(value) in allowed_fact_ids],
+        "market_fact_ids": [str(value) for value in original_allowlist.get("market_fact_ids") or []
+                             if str(value) in allowed_fact_ids],
+        "fund_flow_fact_ids": [str(value) for value in original_allowlist.get("fund_flow_fact_ids") or []
+                                if str(value) in allowed_fact_ids],
+        "business_fact_ids": [str(value) for value in original_allowlist.get("business_fact_ids") or []
+                               if str(value) in allowed_fact_ids],
+        "verified_relation_fact_ids": [str(value) for value in original_allowlist.get("verified_relation_fact_ids") or []
+                                        if str(value) in allowed_fact_ids],
+        "chunk_ids": [], "relation_ids": [],
+    }
+    evidence["prompt_compaction"] = {
+        "strategy": "CONTRACT_RETRY_SOURCE_COMPACT",
+        "source_document_count": len(documents),
+        "retained_document_count": len(compact_documents),
+        "source_fact_count": len(item.get("evidence_json", {}).get("facts") or []),
+        "retained_fact_count": len(compact_facts),
+        "full_text_preserved_in_evidence": True,
+    }
+    result["evidence_json"] = evidence
+    # Fall back to a progressively smaller representation if a provider has a
+    # stricter account-specific limit than the platform default.
+    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded) > max_chars:
+        for row in evidence["documents"]:
+            for key in ("content", "excerpt", "title"):
+                if key in row:
+                    row[key] = str(row[key])[:96 if key != "title" else 140]
+        for row in evidence["facts"]:
+            if "properties" in row:
+                row["properties"] = bound(row["properties"], 700)
     return result
 
 
@@ -2873,10 +3120,19 @@ def _normalize_business_composition_output(output: dict[str, Any], item: dict[st
         source = composition_rows.get((fact_id, name))
         if source is None:
             continue
-        # A date mismatch is not a presentation rounding issue.  Leave it for
-        # the strict validator rather than attaching a value to the wrong period.
-        if segment.get("report_date") and str(segment["report_date"]) != str(source.get("report_date")):
-            continue
+        # A year-only date is a common display form for a full report date. It
+        # is safe to expand it only when it is an exact prefix of the source
+        # date; a genuinely different period remains invalid.
+        model_report_date = str(segment.get("report_date") or "").strip()
+        source_report_date = str(source.get("report_date") or "").strip()
+        if model_report_date and source_report_date and model_report_date != source_report_date:
+            if len(model_report_date) == 4 and source_report_date.startswith(model_report_date):
+                segment["report_date"] = source_report_date
+                notes.append(
+                    f"主营构成“{name}”的报告期已按来源事实 {fact_id} 恢复为完整日期"
+                )
+            else:
+                continue
         for key, label in field_labels.items():
             model_value = _as_float(segment.get(key))
             source_value = _as_float(source.get(key))
@@ -2891,6 +3147,27 @@ def _normalize_business_composition_output(output: dict[str, Any], item: dict[st
                 max(0.01, abs(source_value) * 0.001)
                 if key in amount_fields else 0.001
             )
+            # Database facts are stored in yuan while the UI and many model
+            # responses use 亿元. Accept only an exact, source-backed unit
+            # conversion and immediately restore the canonical yuan value.
+            if key in amount_fields:
+                for multiplier, unit_label in ((100_000_000.0, "亿元"), (10_000.0, "万元")):
+                    if abs(model_value * multiplier - source_value) <= max(0.01, abs(source_value) * 0.001):
+                        segment[key] = source_value
+                        normalizations.append({
+                            "field": f"business_quality.revenue_mix.{key}",
+                            "name": name,
+                            "evidence_fact_id": fact_id,
+                            "model_value": model_value,
+                            "source_value": source_value,
+                            "reason": f"DISPLAY_UNIT_{unit_label}_TO_YUAN",
+                        })
+                        notes.append(
+                            f"主营构成“{name}”的{label}已按来源事实 {fact_id} 将{unit_label}显示值恢复为元"
+                        )
+                        break
+                if segment.get(key) == source_value:
+                    continue
             if difference > rounding_tolerance:
                 continue
             segment[key] = source_value
@@ -3070,6 +3347,16 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         document_id = _normalize_document_reference(path.get("evidence_document_id"))
         if document_id is not None:
             documents.setdefault(document_id, {"id": document_id, "content_state": "GRAPH_REFERENCE_ONLY"})
+    # The persisted snapshot keeps a small display list in ``documents`` and
+    # the complete bounded model allowlist in ``evidence_context.documents``.
+    # Both are valid citation sources; omitting the latter makes legitimate
+    # period documents look like fabricated IDs during result sanitization.
+    for scope in (evidence.get("evidence_context") or {}, evidence):
+        for key in ("documents", "related_security_documents"):
+            for row in scope.get(key) or []:
+                document_id = _normalize_document_reference(row.get("id"))
+                if document_id is not None:
+                    documents.setdefault(document_id, row)
 
     valid_document_ids = set(documents)
     valid_fact_ids = {str(value) for value in evidence.get("evidence_fact_ids", [])}
@@ -3080,7 +3367,108 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         reference for row in evidence.get("graph_paths", [])
         if (reference := _normalize_document_reference(row.get("id"))) is not None
     }
+    # Normalize known cross-source citations before the strict validator sees
+    # them. A model may cite a news document while explaining a financial
+    # fact; remove that citation from FINANCIAL while retaining valid facts.
+    # Unknown IDs remain untouched and still fail closed below.
+    from app.services.selection_evidence import typed_references
+    pre_sanitize_warnings: list[str] = []
+    for dimension in output.get("dimensions") or []:
+        raw_documents = dimension.get("evidence_document_ids") or []
+        raw_document_ids = {
+            value for raw in raw_documents
+            if (value := _normalize_document_reference(raw)) is not None
+        }
+        raw_facts = {str(value) for value in dimension.get("evidence_fact_ids") or []}
+        raw_relations = {
+            value for raw in dimension.get("evidence_relation_ids") or []
+            if (value := _normalize_document_reference(raw)) is not None
+        }
+        unresolved = (
+            raw_document_ids - valid_document_ids
+            or raw_facts - valid_fact_ids
+            or raw_relations - valid_relation_ids
+            or any(_normalize_document_reference(raw) is None for raw in raw_documents)
+        )
+        if unresolved:
+            continue
+        try:
+            typed = typed_references(dimension, evidence)
+        except (TypeError, ValueError):
+            continue
+        typed_document_ids = {int(value) for value in typed["evidence_document_ids"]}
+        typed_fact_ids = set(typed["evidence_fact_ids"])
+        typed_relation_ids = {int(value) for value in typed["evidence_relation_ids"]}
+        if (
+            raw_document_ids == typed_document_ids
+            and raw_facts == typed_fact_ids
+            and raw_relations == typed_relation_ids
+        ):
+            continue
+        dimension.update(typed)
+        expected_assessments = (
+            {("DOCUMENT", str(value)) for value in typed_document_ids}
+            | {("FACT", str(value)) for value in typed_fact_ids}
+            | {("RELATION", str(value)) for value in typed_relation_ids}
+        )
+        assessments: list[dict[str, Any]] = []
+        seen_assessments: set[tuple[Any, str]] = set()
+        for assessment in dimension.get("evidence_assessments") or []:
+            identity = (
+                assessment.get("reference_type"),
+                str(assessment.get("reference_id")),
+            )
+            if identity not in expected_assessments or identity in seen_assessments:
+                continue
+            seen_assessments.add(identity)
+            assessments.append(assessment)
+        dimension["evidence_assessments"] = assessments
+        pre_sanitize_warnings.append(
+            f"{dimension.get('dimension', '分析分项')}已移除跨来源或类型不匹配引用，保留可核验证据"
+        )
+    # A model can cite a document in the wrong dimension while leaving the
+    # typed reference arrays empty. Remove those orphaned assessments before
+    # the strict scorer runs; they are never valid evidence for that section.
+    for dimension in output.get("dimensions") or []:
+        expected = {
+            ("DOCUMENT", str(value)) for value in dimension.get("evidence_document_ids") or []
+        } | {
+            ("FACT", str(value)) for value in dimension.get("evidence_fact_ids") or []
+        } | {
+            ("RELATION", str(value)) for value in dimension.get("evidence_relation_ids") or []
+        }
+        dimension["evidence_assessments"] = [
+            row for row in (dimension.get("evidence_assessments") or [])
+            if (row.get("reference_type"), str(row.get("reference_id"))) in expected
+        ]
+        # Do not let an omitted score invalidate an otherwise useful model
+        # result. Withdraw the unscored citation itself and retain only the
+        # references the model actually assessed. This is conservative: no
+        # score is invented, and an empty dimension is subsequently marked
+        # INSUFFICIENT by the typed evidence validator.
+        assessed = {
+            (row.get("reference_type"), str(row.get("reference_id")))
+            for row in dimension.get("evidence_assessments") or []
+        }
+        if assessed and assessed != expected:
+            dimension["evidence_document_ids"] = [
+                value for value in dimension.get("evidence_document_ids") or []
+                if ("DOCUMENT", str(value)) in assessed
+            ]
+            dimension["evidence_fact_ids"] = [
+                value for value in dimension.get("evidence_fact_ids") or []
+                if ("FACT", str(value)) in assessed
+            ]
+            dimension["evidence_relation_ids"] = [
+                value for value in dimension.get("evidence_relation_ids") or []
+                if ("RELATION", str(value)) in assessed
+            ]
+            pre_sanitize_warnings.append(
+                f"{dimension.get('dimension', '分析分项')}撤销未逐条评分的引用，保留已评分证据"
+            )
     warnings: list[str] = []
+    if pre_sanitize_warnings:
+        output.setdefault("evidence_normalization_notes", []).extend(pre_sanitize_warnings)
     semantic_warnings: list[str] = list(output.get("semantic_linkage_warnings") or [])
     dimension_names = {
         "NEWS": "新闻事件", "NOTICE": "公告披露", "FINANCIAL": "财务业绩",
@@ -3147,7 +3535,9 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
     raw_top_documents = output.get("evidence_document_ids") or []
     top_documents = {
         value for raw in raw_top_documents
-        if (value := _normalize_document_reference(raw)) is not None and value in valid_document_ids
+        if (value := _normalize_document_reference(raw)) is not None
+        and value in valid_document_ids
+        and documents[value].get("content_state") != "METADATA_ONLY"
     }
     top_facts = {str(value) for value in output.get("evidence_fact_ids") or []} & valid_fact_ids
     top_chunks = {str(value) for value in output.get("evidence_chunk_ids") or []} & valid_chunk_ids
@@ -3167,6 +3557,23 @@ def _sanitize_model_evidence_references(output: dict[str, Any], item: dict[str, 
         | {value for row in output.get("validation_findings") or []
            for value in row.get("supporting_document_ids") or []
            if _normalize_document_reference(value) in valid_document_ids}
+    )
+    output["evidence_document_ids"] = sorted(
+        value for value in output["evidence_document_ids"]
+        if documents.get(value, {}).get("content_state") != "METADATA_ONLY"
+    )
+    output["analyzed_document_ids"] = sorted(
+        {
+            value for raw in output.get("analyzed_document_ids") or []
+            if (value := _normalize_document_reference(raw)) is not None
+            and value in valid_document_ids
+            and documents[value].get("content_state") != "METADATA_ONLY"
+        }
+        | {
+            value for raw in output.get("analyzed_document_ids") or []
+            if (value := _normalize_document_reference(raw)) is not None
+            and value not in valid_document_ids
+        }
     )
     linked_facts = {
         str(value) for row in output.get("event_links") or []
@@ -3240,6 +3647,12 @@ def _validate_multi_source_output(
         doc_id = _normalize_document_reference(path.get("evidence_document_id"))
         if doc_id is not None:
             documents.setdefault(doc_id, {"id": doc_id, "source_table": None, "content_state": "GRAPH_REFERENCE_ONLY"})
+    for scope in (evidence.get("evidence_context") or {}, evidence):
+        for key in ("documents", "related_security_documents"):
+            for row in scope.get(key) or []:
+                doc_id = _normalize_document_reference(row.get("id"))
+                if doc_id is not None:
+                    documents.setdefault(doc_id, row)
     fact_ids = {str(value) for value in evidence.get("evidence_fact_ids") or []}
     dimension_fact_ids = _dimension_fact_allowlists(evidence)
     fact_ids.update(value for values in dimension_fact_ids.values() for value in values)
@@ -3271,6 +3684,12 @@ def _validate_multi_source_output(
         document_id for raw in output.get("evidence_document_ids") or []
         if (document_id := _normalize_document_reference(raw)) is not None
     } | referenced_docs
+    # Metadata-only rows are inventory records, not readable evidence. Do not
+    # let them enter the analyzed-document coverage contract.
+    all_docs = {
+        value for value in all_docs
+        if documents.get(value, {}).get("content_state") != "METADATA_ONLY"
+    }
     output["evidence_document_ids"] = sorted(all_docs)
     if not all_docs.issubset(documents):
         raise ValueError("模型引用了本次压缩上下文之外的文档")
@@ -3735,6 +4154,21 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
             continue
         seen.add(symbol)
         try:
+            # Providers frequently emit numeric evidence IDs although the
+            # schema deliberately uses strings for mixed fact identifiers.
+            # Normalize only identifier fields; all other values remain under
+            # the Pydantic contract and are still rejected when malformed.
+            for dimension in raw.get("dimensions") or []:
+                for key in ("evidence_fact_ids", "evidence_relation_ids", "evidence_document_ids"):
+                    if isinstance(dimension, dict) and isinstance(dimension.get(key), list):
+                        dimension[key] = [str(value) if key == "evidence_fact_ids" else value
+                                          for value in dimension[key]]
+                for assessment in dimension.get("evidence_assessments") or []:
+                    if isinstance(assessment, dict) and assessment.get("reference_id") is not None:
+                        assessment["reference_id"] = str(assessment["reference_id"])
+            for key in ("evidence_fact_ids", "evidence_chunk_ids"):
+                if isinstance(raw.get(key), list):
+                    raw[key] = [str(value) for value in raw[key]]
             recommendation = SelectionModelRecommendation.model_validate(raw)
             parsed[symbol] = recommendation.model_dump()
         except Exception as exc:
@@ -3757,6 +4191,16 @@ def _apply_model_analysis(
 
     selected = [_model_candidate_context(item) for item, _ in candidates[:50]]
     model_context_by_symbol = {str(item.get("symbol")): item for item in selected}
+    # Keep an immutable source context for every repair attempt. Map/Reduce
+    # deliberately replaces the final prompt with digests, but those digests
+    # are not sufficient to repair typed business/financial citations. Retries
+    # must therefore compact the original bounded evidence package instead of
+    # the reduce-stage summary.
+    retry_source_context_by_symbol = deepcopy(model_context_by_symbol)
+
+    def build_retry_context(symbol: str, fallback: dict[str, Any]) -> dict[str, Any]:
+        source = retry_source_context_by_symbol.get(str(symbol)) or fallback
+        return _compact_retry_model_context(source)
     schema = SelectionModelOutput.model_json_schema()
     # Keep headroom for the system schema and the model skill prompt. The full,
     # untruncated evidence remains in SelectionCandidate.evidence_json.
@@ -4180,8 +4624,9 @@ def _apply_model_analysis(
                     record_attempt(symbol, "INVALID", "STOCK_SELECTION_ANALYSIS", detail, log)
                     isolated_log = None
                     try:
+                        retry_item = build_retry_context(symbol, item)
                         single_context = json.dumps(
-                            [model_context_by_symbol.get(symbol, item)],
+                            [retry_item],
                             ensure_ascii=False, separators=(",", ":"),
                         )
                         isolated_log = call_model(
@@ -4208,7 +4653,7 @@ def _apply_model_analysis(
                         isolated_output = isolated_rows.get(symbol)
                         if isolated_output is None:
                             raise ValueError(isolated_errors.get(symbol, "单股恢复未返回有效结果"))
-                        check_prediction(isolated_output, item)
+                        check_prediction(isolated_output, retry_item)
                         predictions[symbol] = (isolated_output, isolated_log.id, isolated_log.instance_code)
                         failures.pop(symbol, None)
                         record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", log=isolated_log)
@@ -4245,16 +4690,17 @@ def _apply_model_analysis(
             symbol = str(item["symbol"])
             retry_log = None
             try:
-                retry_context = json.dumps(
-                    [model_context_by_symbol.get(symbol, item)],
+                retry_item = build_retry_context(symbol, item)
+                retry_context_json = json.dumps(
+                    [retry_item],
                     ensure_ascii=False, separators=(",", ":"),
                 )
                 retry_log = call_model(
                     messages=[{"role": "system", "content": "仅重答一只股票；上次校验失败原因：" + original_reason +
                         "。严格返回契约要求的字段，证据不足填INSUFFICIENT。只允许引用以下白名单 ID：" +
-                        citation_allowlist(item) + "。" + json.dumps(schema, ensure_ascii=False)},
+                         citation_allowlist(retry_item) + "。" + json.dumps(schema, ensure_ascii=False)},
                         {"role": "system", "content": contract_prompt},
-                        {"role": "user", "content": "仅分析并返回该股票，严格遵守正文引句及七维度约束：" + retry_context}],
+                        {"role": "user", "content": "仅分析并返回该股票，严格遵守正文引句及七维度约束：" + retry_context_json}],
                     max_tokens=12288,
                     metadata_json={"candidate_count": 1, "batch_index": batch_index,
                         "skill_codes": analysis_skill_codes,
@@ -4273,8 +4719,8 @@ def _apply_model_analysis(
                 repaired = retry_by_symbol.get(symbol)
                 if repaired is None:
                     raise ValueError(retry_errors.get(symbol, "单股定向重试未返回有效结果"))
-                _sanitize_model_evidence_references(repaired, item)
-                check_prediction(repaired, item, sanitize=False)
+                _sanitize_model_evidence_references(repaired, retry_item)
+                check_prediction(repaired, retry_item, sanitize=False)
                 predictions[symbol] = (repaired, retry_log.id, retry_log.instance_code)
                 failures.pop(symbol, None)
                 record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", log=retry_log)
@@ -4298,8 +4744,9 @@ def _apply_model_analysis(
             continue
         while len(attempts_by_symbol.get(symbol, [])) < 3 and symbol not in predictions:
             attempt_number = len(attempts_by_symbol.get(symbol, [])) + 1
+            retry_item = build_retry_context(symbol, item)
             single_context = json.dumps(
-                [model_context_by_symbol.get(symbol, item)],
+                [retry_item],
                 ensure_ascii=False, separators=(",", ":"),
             )
             retry_system = (
@@ -4309,7 +4756,7 @@ def _apply_model_analysis(
             retry_contract = contract_prompt + (
                 "只分析这一个股票，所有证据引用必须来自该股票白名单；缺失维度返回 INSUFFICIENT，"
                 "事件来源只能是 NEWS 或 NOTICE，不能编造行情或结论。白名单："
-                + citation_allowlist(item)
+                + citation_allowlist(retry_item)
                 + "。上次未通过的具体原因：" + failures.get(symbol, "未返回有效结果")
             )
             retry_user = "请返回该股票的完整七维分析，证据上下文如下：" + single_context
@@ -4344,7 +4791,7 @@ def _apply_model_analysis(
                 output = parsed.get(symbol)
                 if output is None:
                     raise ValueError(row_errors.get(symbol, "模型未返回该股票的有效分析结果"))
-                check_prediction(output, item)
+                check_prediction(output, retry_item)
                 predictions[symbol] = (output, retry_log.id, retry_log.instance_code)
                 failures.pop(symbol, None)
                 record_attempt(symbol, "SUCCESS", "STOCK_SELECTION_PER_STOCK_RETRY", log=retry_log)

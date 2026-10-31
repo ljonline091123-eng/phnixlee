@@ -119,6 +119,51 @@ def test_unmatched_news_is_excluded_from_selection_and_graph_rag_without_deletin
     engine.dispose()
 
 
+def test_financial_cross_source_document_is_pruned_with_its_assessment():
+    from app.services.selection import _sanitize_model_evidence_references
+    from app.services.selection_evidence import validate_assessments
+
+    item = {"evidence_json": {
+        "documents": [
+            {"id": 23710, "source_table": "stock_financial_report", "content_state": "TEXT_AVAILABLE"},
+        ],
+        "evidence_context": {"documents": [
+            {"id": 23685, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE"},
+        ]},
+        "facts": [
+            {"id": "stock_institution_forecast:16", "fact_type": "INSTITUTION_FORECAST"},
+        ],
+        "evidence_fact_ids": ["stock_institution_forecast:16"],
+        "chunks": [], "graph_paths": [],
+    }}
+    financial = {
+        "dimension": "FINANCIAL", "status": "SUPPORTED", "direction": "POSITIVE",
+        "summary": "有机构预测事实",
+        "evidence_document_ids": [23685, 23710],
+        "evidence_fact_ids": ["stock_institution_forecast:16"],
+        "evidence_relation_ids": [],
+        "evidence_assessments": [
+            {"reference_type": "DOCUMENT", "reference_id": "23685",
+             "direction": "POSITIVE", "score": 20, "rationale": "新闻"},
+            {"reference_type": "DOCUMENT", "reference_id": "23710",
+             "direction": "POSITIVE", "score": 10, "rationale": "财报"},
+            {"reference_type": "FACT", "reference_id": "stock_institution_forecast:16",
+             "direction": "POSITIVE", "score": 10, "rationale": "预测"},
+        ],
+    }
+    output = {"dimensions": [financial], "events": []}
+
+    _sanitize_model_evidence_references(output, item)
+
+    assert financial["status"] == "SUPPORTED"
+    assert financial["evidence_document_ids"] == [23710]
+    assert financial["evidence_fact_ids"] == ["stock_institution_forecast:16"]
+    assert {(row["reference_type"], row["reference_id"]) for row in financial["evidence_assessments"]} == {
+        ("DOCUMENT", "23710"), ("FACT", "stock_institution_forecast:16"),
+    }
+    validate_assessments(output, item["evidence_json"], required=True)
+
+
 def test_model_calls_batch_large_evidence_and_use_workflow_schema():
     run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None)
     pool = [({"symbol": f"DEMO{index:03}", "analysis_json": {}, "evidence_json": {

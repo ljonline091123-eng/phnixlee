@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
@@ -126,6 +126,26 @@ def official_notice_body(row: StockNotice) -> tuple[str, dict]:
     if not candidate:
         candidate = str(row.url or "")
     parsed = urlparse(candidate)
+    # F10/report imports can create a linked notice row whose URL points to
+    # CNINFO's HTML disclosure page while the canonical notice row contains
+    # the actual ``adjunctUrl`` PDF. Reconstruct the stable CNINFO PDF path
+    # from that disclosure URL instead of treating the linked row as a source
+    # failure. The original row and lineage remain unchanged.
+    if not (
+        parsed.scheme == "https"
+        and parsed.hostname in {"static.cninfo.com.cn", "www1.hkexnews.hk"}
+        and parsed.path.lower().endswith(".pdf")
+    ):
+        entry = payload.get("disclosure_entry") or {}
+        detail_url = str(entry.get("url") or row.url or "")
+        query = parse_qs(urlparse(detail_url).query)
+        announcement_id = str((query.get("announcementId") or [""])[0]).strip()
+        notice_date = str((query.get("announcementTime") or [""])[0]).strip()[:10]
+        if announcement_id and not notice_date:
+            notice_date = str(getattr(row, "notice_date", "") or "")[:10]
+        if announcement_id and notice_date:
+            candidate = f"https://static.cninfo.com.cn/finalpage/{notice_date}/{announcement_id}.PDF"
+            parsed = urlparse(candidate)
     if parsed.scheme != "https" or parsed.hostname not in {"static.cninfo.com.cn", "www1.hkexnews.hk"} or not parsed.path.lower().endswith(".pdf"):
         raise ValueError("缺少可读取的官方公告 PDF 地址")
     binary = bytearray()

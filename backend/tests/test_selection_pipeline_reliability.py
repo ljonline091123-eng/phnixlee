@@ -18,7 +18,9 @@ from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
     _apply_model_analysis, _candidate_needs_data_refresh, _compact_reduce_batch_context,
-    _evidence_data_gate, _model_candidate_context, _prepare_selection_data, _split_model_candidate_context,
+    _compact_retry_model_context, _evidence_data_gate, _model_candidate_context, _prepare_selection_data,
+    _refresh_selection_snapshot,
+    _split_model_candidate_context,
     _preflight_selection_models, _selection_result_counts, _sync_selection_data,
     create_selection_run, execute_failed_selection_reanalysis,
 )
@@ -79,6 +81,76 @@ def test_research_forecast_evidence_is_usable_for_model_gate():
         },
     }
     assert _evidence_data_gate(payload)["status"] == "READY"
+
+
+def test_reused_local_data_refreshes_cutoff_and_period_metadata():
+    # SQLite returns historical timezone columns as naive datetimes in some
+    # deployments; the refresh path must normalize them before comparison.
+    old = datetime(2026, 10, 30, 0, 30)
+    run = SimpleNamespace(
+        as_of=old,
+        market="CN_A",
+        criteria_json={"period_months": 3, "symbols": ["688627"]},
+    )
+
+    snapshot = _refresh_selection_snapshot(run, reason="REUSE_EXISTING_LOCAL_DATA")
+
+    assert run.as_of > old.replace(tzinfo=timezone.utc)
+    assert snapshot["snapshot_status"] == "REFRESHED"
+    assert snapshot["data_sync_mode"] == "REUSE_EXISTING"
+    assert run.criteria_json["snapshot_previous_as_of"].startswith("2026-10-30T00:30:00")
+    assert run.criteria_json["snapshot_refreshed_at"] == run.as_of.isoformat()
+    assert run.criteria_json["period_start"] < run.criteria_json["period_end"]
+
+
+def test_gate_reports_missing_source_categories_without_blocking_other_evidence():
+    payload = {
+        "documents": [{
+            "id": 1, "source_table": "stock_news", "title": "新闻标题",
+            "content_state": "TEXT_AVAILABLE", "content": "这是一段足够长的新闻正文，用于验证来源覆盖状态。",
+        }],
+        "structured_observations": {
+            "market": [{"id": "stock_kline:1", "properties": {"close_price": 12.3}}],
+        },
+    }
+    gate = _evidence_data_gate(payload)
+    assert gate["status"] == "READY"
+    assert gate["coverage_status"] == "PARTIAL"
+    assert "FINANCIAL" in gate["missing_categories"]
+    assert gate["category_counts"]["NEWS"] == 1
+    assert gate["category_counts"]["PRICE_VOLUME"] == 1
+
+
+def test_contract_retry_context_keeps_business_and_notice_citations_below_budget():
+    item = {
+        "market": "CN_A", "symbol": "688627", "name": "精智达",
+        "evidence_json": {
+            "documents": [
+                {"id": index, "source_table": "stock_notice" if index < 2 else "stock_news",
+                 "title": f"文档{index}", "published_at": "2026-10-30",
+                 "content": "正文" * 2_000}
+                for index in range(82)
+            ],
+            "facts": [
+                {"id": "stock_f10_cache:56", "fact_type": "BUSINESS_COMPOSITION",
+                 "properties": {"segments": [{"name": "测试", "revenue": 123.4}] * 20}},
+                {"id": "stock_f10_cache:51", "fact_type": "BUSINESS_PROFILE",
+                 "properties": {"main_business": "主营业务"}},
+            ],
+            "citation_allowlist": {
+                "document_ids": list(range(82)), "news_document_ids": list(range(2, 82)),
+                "notice_document_ids": [0, 1], "fact_ids": ["stock_f10_cache:56", "stock_f10_cache:51"],
+                "business_fact_ids": ["stock_f10_cache:56", "stock_f10_cache:51"],
+            },
+        },
+    }
+    compact = _compact_retry_model_context(item)
+    encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    evidence = compact["evidence_json"]
+    assert len(encoded) < 18_000
+    assert {row["id"] for row in evidence["documents"] if row["source_table"] == "stock_notice"} == {0, 1}
+    assert set(evidence["citation_allowlist"]["notice_document_ids"]) == {0, 1}
+    assert set(evidence["citation_allowlist"]["business_fact_ids"]) == {"stock_f10_cache:56", "stock_f10_cache:51"}
 
 
 def test_model_context_balances_all_research_fact_types():
@@ -311,7 +383,10 @@ def test_oversized_analysis_maps_evidence_segments_before_final_reduce(isolated)
     analysis_call = next(call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_ANALYSIS")
     assert analysis_call["metadata_json"]["context_strategy"] == "EVIDENCE_RECORD_MAP_REDUCE"
     assert purposes[-1] == "STOCK_SELECTION_PER_STOCK_RETRY"
-    assert "evidence_segment_digests" in calls[-1]["messages"][-1]["content"]
+    # Contract repair must return to the original bounded evidence package so
+    # typed business/financial facts and their allowlists remain available;
+    # reduce-stage digests alone cannot repair those citations.
+    assert "business_fact_ids" in calls[-1]["messages"][-1]["content"]
     assert item["analysis_json"]["model_output_status"] == "SUCCESS", item["analysis_json"]
 
 
