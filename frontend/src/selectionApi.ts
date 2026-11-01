@@ -114,6 +114,23 @@ export type SelectionRun = {
   missing_data_json: string[]; error_message: string | null; as_of: string; completed_at: string | null;
   created_at: string; updated_at: string; candidates: SelectionCandidate[];
 };
+export type SelectionHistoryItem = {
+  market: string; symbol: string; name: string | null; analysis_count: number;
+  latest_candidate_id: number; latest_run_id: number; run_status: string; analysis_status: string;
+  decision: string; recommendation: string | null; headline: string | null;
+  trusted_score: number | null; confidence: number | null; model_instance_code: string | null;
+  analysis_contract: string | null; data_cutoff: string | null; analyzed_at: string;
+};
+export type SelectionHistoryPage = {
+  items: SelectionHistoryItem[]; total: number; page: number; page_size: number;
+};
+export type SelectionHistoryVersion = {
+  candidate_id: number; run_id: number; market: string; symbol: string; name: string | null;
+  run_status: string; analysis_status: string; decision: string; recommendation: string | null;
+  headline: string | null; trusted_score: number | null; confidence: number | null;
+  model_instance_code: string | null; analysis_contract: string | null; data_cutoff: string | null;
+  analyzed_at: string;
+};
 export type SelectionSnapshot = { id: number; trade_date: string; close_price: number; return_pct: number; drawdown_pct: number; sequence: number; source: string; data_mode: string };
 export type SelectionTracking = {
   id: number; candidate_id: number; market: string; symbol: string; name?: string | null; entry_price: number; entry_date: string;
@@ -222,6 +239,18 @@ export const selectionApi = {
   backfillStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/backfill-status`),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
+  history: (params: {query?: string; market?: string; page?: number; page_size?: number} = {}) => {
+    const query = new URLSearchParams();
+    if (params.query?.trim()) query.set("query", params.query.trim());
+    if (params.market?.trim()) query.set("market", params.market.trim());
+    query.set("page", String(params.page || 1));
+    query.set("page_size", String(params.page_size || 20));
+    return request<SelectionHistoryPage>(`/selection/history?${query.toString()}`);
+  },
+  historyVersions: (market: string, symbol: string) => request<SelectionHistoryVersion[]>(
+    `/selection/history/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}`,
+  ),
+  candidate: (id: number) => request<SelectionCandidate>(`/selection/candidates/${id}`),
   document: (graphId: number, documentId: number) => request<SelectionRecord>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
   createRun: (payload: SelectionRunCreate) => request<SelectionRun>("/selection/runs", { method: "POST", body: JSON.stringify(payload) }),
   review: (id: number, payload: SelectionReview) => request<SelectionCandidate>(`/selection/candidates/${id}/review`, { method: "POST", body: JSON.stringify(payload) }),

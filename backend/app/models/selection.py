@@ -45,6 +45,7 @@ class SelectionCandidate(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("run_id", "market", "symbol", name="uq_selection_candidate_run_symbol"),
         Index("ix_selection_candidate_decision", "decision"),
+        Index("ix_selection_candidate_identity_history", "market", "symbol", "id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

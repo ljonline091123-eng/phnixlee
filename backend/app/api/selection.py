@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.db.session import get_db
 from app.models.selection import (
@@ -25,6 +25,9 @@ from app.schemas.selection import (
     SelectionProfileCloneRequest,
     SelectionProfileCreate,
     SelectionProfileUpdate,
+    SelectionHistoryItem,
+    SelectionHistoryPage,
+    SelectionHistoryVersion,
     SelectionRunRead,
     SelectionSnapshotRead,
     SelectionTrackingRead,
@@ -325,6 +328,46 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
                 criteria_json[key] = state
             payload["criteria_json"] = criteria_json
     return SelectionRunRead(**payload)
+
+
+def _history_summary(
+    db: Session,
+    candidate: SelectionCandidate,
+    run: SelectionRun,
+    *,
+    analysis_count: int | None = None,
+) -> dict:
+    # History list/versions must stay lightweight. Full evidence snapshots can
+    # be several megabytes and are loaded only after the user opens one record.
+    analysis = candidate.analysis_json if isinstance(candidate.analysis_json, dict) else {}
+    model = analysis.get("model") if isinstance(analysis.get("model"), dict) else {}
+    publication = conclusion_publication(analysis)
+    scoring = analysis.get("scoring") if isinstance(analysis.get("scoring"), dict) else {}
+    usage = analysis.get("input_usage") if isinstance(analysis.get("input_usage"), dict) else {}
+    period = usage.get("analysis_period") if isinstance(usage.get("analysis_period"), dict) else {}
+    criteria = run.criteria_json if isinstance(run.criteria_json, dict) else {}
+    analyzed_at = run.completed_at or getattr(candidate, "updated_at", None) or candidate.created_at
+    return {
+        "market": candidate.market,
+        "symbol": candidate.symbol,
+        "name": candidate.name,
+        "analysis_count": int(analysis_count or 1),
+        "latest_candidate_id": candidate.id,
+        "latest_run_id": candidate.run_id,
+        "candidate_id": candidate.id,
+        "run_id": candidate.run_id,
+        "run_status": run.status,
+        "analysis_status": str(publication.get("status") or analysis.get("model_output_status") or "NOT_ANALYZED"),
+        "decision": candidate.decision,
+        "recommendation": analysis.get("recommendation") or model.get("decision"),
+        "headline": model.get("headline") or analysis.get("summary"),
+        "trusted_score": scoring.get("trusted_score"),
+        "confidence": analysis.get("confidence") if analysis.get("confidence") is not None else model.get("confidence"),
+        "model_instance_code": analysis.get("actual_instance_code") or run.model_instance_code,
+        "analysis_contract": analysis.get("analysis_contract") or (run.criteria_json or {}).get("analysis_contract"),
+        "data_cutoff": period.get("end") or criteria.get("period_end") or (run.as_of.date().isoformat() if run.as_of else None),
+        "analyzed_at": analyzed_at,
+    }
 
 
 def _tracking_read(db: Session, row: SelectionTracking, include_snapshots: bool = True) -> SelectionTrackingRead:
@@ -859,6 +902,85 @@ def selection_preflight(payload: SelectionPreflightRequest, db: Session = Depend
         "warnings": warnings,
         "scope": scope,
     }
+
+
+@router.get("/history", response_model=SelectionHistoryPage)
+def selection_history(
+    query: str | None = Query(default=None, max_length=128),
+    market: str | None = Query(default=None, max_length=16),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> SelectionHistoryPage:
+    filters = []
+    if market:
+        filters.append(SelectionCandidate.market == market.strip().upper())
+    normalized_query = (query or "").strip()
+    if normalized_query:
+        pattern = f"%{normalized_query}%"
+        filters.append(or_(
+            SelectionCandidate.symbol.ilike(pattern),
+            SelectionCandidate.name.ilike(pattern),
+        ))
+    grouped = select(
+        SelectionCandidate.market.label("market"),
+        SelectionCandidate.symbol.label("symbol"),
+        func.max(SelectionCandidate.id).label("latest_candidate_id"),
+        func.count(SelectionCandidate.id).label("analysis_count"),
+    ).where(*filters).group_by(SelectionCandidate.market, SelectionCandidate.symbol).subquery()
+    total = int(db.scalar(select(func.count()).select_from(grouped)) or 0)
+    rows = db.execute(
+        select(SelectionCandidate, SelectionRun, grouped.c.analysis_count)
+        .options(load_only(
+            SelectionCandidate.id, SelectionCandidate.run_id, SelectionCandidate.market,
+            SelectionCandidate.symbol, SelectionCandidate.name, SelectionCandidate.decision,
+            SelectionCandidate.confidence, SelectionCandidate.analysis_json,
+            SelectionCandidate.created_at, SelectionCandidate.updated_at,
+        ))
+        .join(grouped, grouped.c.latest_candidate_id == SelectionCandidate.id)
+        .join(SelectionRun, SelectionRun.id == SelectionCandidate.run_id)
+        .order_by(SelectionCandidate.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [SelectionHistoryItem(**_history_summary(
+        db, candidate, run, analysis_count=int(analysis_count),
+    )) for candidate, run, analysis_count in rows]
+    return SelectionHistoryPage(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/history/{market}/{symbol}", response_model=list[SelectionHistoryVersion])
+def selection_history_versions(
+    market: str,
+    symbol: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> list[SelectionHistoryVersion]:
+    rows = db.execute(
+        select(SelectionCandidate, SelectionRun)
+        .options(load_only(
+            SelectionCandidate.id, SelectionCandidate.run_id, SelectionCandidate.market,
+            SelectionCandidate.symbol, SelectionCandidate.name, SelectionCandidate.decision,
+            SelectionCandidate.confidence, SelectionCandidate.analysis_json,
+            SelectionCandidate.created_at, SelectionCandidate.updated_at,
+        ))
+        .join(SelectionRun, SelectionRun.id == SelectionCandidate.run_id)
+        .where(
+            SelectionCandidate.market == market.strip().upper(),
+            SelectionCandidate.symbol == symbol.strip(),
+        )
+        .order_by(SelectionCandidate.id.desc())
+        .limit(limit)
+    ).all()
+    return [SelectionHistoryVersion(**_history_summary(db, candidate, run)) for candidate, run in rows]
+
+
+@router.get("/candidates/{candidate_id}", response_model=SelectionCandidateRead)
+def get_candidate(candidate_id: int, db: Session = Depends(get_db)) -> SelectionCandidateRead:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="selection candidate not found")
+    return _candidate_read(db, candidate)
 
 
 @router.get("/runs", response_model=list[SelectionRunRead])

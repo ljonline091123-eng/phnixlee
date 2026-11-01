@@ -61,12 +61,16 @@ trusted_score = 50 + (base_score - 50) × evidence_confidence
 
 评价方案使用 `DRAFT -> ENABLED -> RETIRED` 生命周期。新任务冻结方案、权重及 Skill 版本快照；历史候选不会因新权重静默变化，只能显式补算。LLM 可以提出优化建议，但不能发布权重。人工确认候选后，系统按真实后续交易日生成 T+3/T+5/T+7 收益、回撤和方向命中；行情未到时保持 `PENDING_DATA`。
 
-新分析使用 `MULTI_SOURCE_VALUE_CHAIN_V5` / `GRAPH_RAG_CONTEXT_V5`。八维评分和历史权重保持兼容，但页面单列两个可审计的语义模块：
+新分析使用 `FUNDAMENTAL_THESIS_V6` / `GRAPH_RAG_CONTEXT_V5`。旧版 `MULTI_SOURCE_VALUE_CHAIN_V5` 历史结果保持只读兼容；新任务增加 `investment_thesis`，先形成“主营与收入利润 → 盈利质量 → 核心行业与主题 → 公司行为 → 产业链 → 估值和机构预期 → 量价资金”的整体逻辑，再计算分项评分。页面首屏展示整体逻辑、最多三条投资假设、支持证据、反证和失效条件，复杂维度与证据默认折叠。
+
+生产默认评价方案为 `FUNDAMENTAL_THESIS / 基本面主线综合`：基本面与盈利质量 40%、估值与盈利预期 15%、行业与板块景气 15%、产业链与外部韧性 10%、价格趋势与风险收益 6%、事件催化与信披 5%、治理与股东稳定性 5%、资金与交易行为 4%。该方案以基本面与盈利质量作为发布门禁；价格趋势用于交易状态校验，不再替代主营价值判断。历史候选继续冻结当时权重快照，不静默重算。
+
+V6 保留并复用两个可审计的语义模块：
 
 - `business_quality`：主营业务、产品/服务、最新收入构成、技术含量、竞争壁垒、商业化、市场地位和中长线影响。市场占有率必须同时具备数值、单位、统计范围、日期、来源和证据 ID；否则保持 `MISSING/UNVERIFIED`。
 - `value_chain_analysis`：关联对象、关系类型、审核状态、重大事件、传导机制、方向、-100 至 100 影响分、周期、置信度、假设和失效条件。`VERIFIED` 必须引用 `ACCEPTED FoundationFact` 和对应关联证券原文；候选关系方向为 `UNKNOWN`、不计分。
 
-这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
+这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，`HOLISTIC_INVESTMENT_THESIS_ANALYST` 负责将其与财务、治理、估值、机构预期和交易状态编排成整体投资逻辑，三者均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
 
 对应数据表为 `selection_dimension_definition`、`selection_strategy_profile`、`selection_strategy_profile_item`、`selection_dimension_result` 和 `selection_evaluation_metric`。管理入口为 `AI能力中心 -> 评价体系`，候选雷达图和证据下钻位于 `投研工作台 -> 选股与复选`。
 

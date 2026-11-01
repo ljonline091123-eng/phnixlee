@@ -251,3 +251,8 @@ def ensure_compat_columns(engine: Engine) -> None:
                 connection.execute(text("ALTER TABLE selection_tracking ADD COLUMN target_hit BOOLEAN"))
             if "stop_hit" not in existing:
                 connection.execute(text("ALTER TABLE selection_tracking ADD COLUMN stop_hit BOOLEAN"))
+        if "selection_candidate" in tables:
+            connection.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_selection_candidate_identity_history "
+                "ON selection_candidate (market, symbol, id)"
+            ))

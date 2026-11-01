@@ -132,7 +132,19 @@ def test_auto_route_and_model_prediction_are_recorded(db):
             "direction": "UNKNOWN", "impact_score": None, "confidence": 0,
             "evidence_document_ids": [], "evidence_fact_ids": [], "risks": [], "watch_conditions": []},
         "value_chain_analysis": {"status": "INSUFFICIENT", "summary": "No verified relation",
-                                 "impacts": [], "risks": [], "watch_conditions": []}}]}
+                                 "impacts": [], "risks": [], "watch_conditions": []},
+        "investment_thesis": {
+            "status": "INSUFFICIENT", "primary_business": "No business evidence",
+            "earning_engine_summary": "Revenue and profit drivers are unavailable.",
+            "profit_quality_summary": "Profit quality cannot be verified.",
+            "industry_chain_summary": "Industry and supply-chain evidence is unavailable.",
+            "valuation_summary": "Valuation evidence is unavailable.",
+            "institution_view_summary": "Institution forecasts are unavailable.",
+            "market_timing_summary": "Only the cited price observation is available.",
+            "overall_logic": "The current snapshot is insufficient for a holistic investment thesis.",
+            "classifications": [], "hypotheses": [], "confidence": 0,
+            "evidence_document_ids": [], "evidence_fact_ids": [], "evidence_relation_ids": [],
+        }}]}
     log = SimpleNamespace(id=99, status="SUCCESS", instance_code="DEMO_MODEL", response_text=json.dumps(result))
 
     def respond(**kwargs):

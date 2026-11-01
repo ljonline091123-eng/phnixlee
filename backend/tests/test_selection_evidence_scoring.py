@@ -18,6 +18,7 @@ from app.schemas.selection import SelectionBackfillRequest, SelectionReviewReque
 from app.services.selection import (
     _normalize_business_composition_output,
     _validate_business_value_chain_output,
+    _validate_investment_thesis_output,
     execute_selection_data_backfill,
     queue_selection_data_backfill,
     review_candidate,
@@ -121,6 +122,77 @@ def v5_output():
         "value_chain_analysis": {"status": "INSUFFICIENT", "summary": "暂无可核验传导。",
                                  "impacts": [], "risks": [], "watch_conditions": []},
     }
+
+
+def v6_output():
+    return {
+        "investment_thesis": {
+            "status": "SUPPORTED",
+            "primary_business": "测试设备研发与销售",
+            "earning_engine_summary": "测试设备形成主要收入，利润取决于订单交付和毛利率。",
+            "profit_quality_summary": "已有主营收入构成，现金流持续性仍需跟踪。",
+            "industry_chain_summary": "位于测试设备环节，关联扩产是需求线索而非已确认收入。",
+            "valuation_summary": "缺少同口径估值比较，不据此给出方向。",
+            "institution_view_summary": "机构覆盖不足，仅作为待补充预期。",
+            "market_timing_summary": "交易数据不足，不能替代基本面结论。",
+            "overall_logic": "主营收入已形成，但成长假设仍取决于客户扩产、订单兑现和盈利质量。",
+            "classifications": [{
+                "role": "PRIMARY_INDUSTRY", "name": "专用测试设备", "code": "TEST_EQUIPMENT",
+                "relevance_score": 0.9, "rationale": "与主营产品和收入构成直接一致。",
+                "evidence_document_ids": [], "evidence_fact_ids": ["business-1", "business-2"],
+                "evidence_relation_ids": [],
+            }],
+            "hypotheses": [{
+                "title": "客户扩产带动设备需求", "thesis": "若客户扩产按计划执行，设备订单可能增加。",
+                "status": "SUPPORTED", "direction": "POSITIVE", "horizon": "MEDIUM", "confidence": 0.65,
+                "supporting_document_ids": [2], "supporting_fact_ids": ["relation-1"],
+                "supporting_relation_ids": [], "counter_document_ids": [], "counter_fact_ids": [],
+                "counter_relation_ids": [], "invalidation_conditions": ["客户取消资本开支"],
+                "watch_conditions": ["新增订单及交付进度"],
+            }],
+            "confidence": 0.68, "evidence_document_ids": [1, 2],
+            "evidence_fact_ids": ["business-1", "business-2", "relation-1"], "evidence_relation_ids": [],
+        },
+    }
+
+
+def test_v6_holistic_thesis_accepts_business_grounded_logic():
+    _validate_investment_thesis_output(v6_output(), v5_item(), required=True)
+
+
+def test_v6_requires_holistic_thesis_for_new_analysis_contract():
+    with pytest.raises(ValueError, match="V6分析必须返回"):
+        _validate_investment_thesis_output({}, v5_item(), required=True)
+
+
+def test_v6_core_theme_cannot_use_unrelated_relation_as_business_evidence():
+    changed = v6_output()
+    changed["investment_thesis"]["classifications"][0].update(
+        role="CORE_THEME", evidence_fact_ids=["relation-1"], evidence_document_ids=[],
+    )
+    with pytest.raises(ValueError, match="必须引用主营构成事实"):
+        _validate_investment_thesis_output(changed, v5_item(), required=True)
+
+
+def test_v6_low_relevance_tag_cannot_be_promoted_to_core_theme():
+    changed = v6_output()
+    changed["investment_thesis"]["classifications"][0].update(role="CORE_THEME", relevance_score=0.49)
+    with pytest.raises(ValueError, match="相关度低于50%"):
+        _validate_investment_thesis_output(changed, v5_item(), required=True)
+
+
+def test_v6_supported_hypothesis_requires_invalidation_conditions():
+    changed = v6_output()
+    changed["investment_thesis"]["hypotheses"][0]["invalidation_conditions"] = []
+    with pytest.raises(ValueError, match="必须明确逻辑失效条件"):
+        _validate_investment_thesis_output(changed, v5_item(), required=True)
+
+
+def test_v6_rejects_evidence_outside_current_snapshot():
+    changed = v6_output()
+    changed["investment_thesis"]["hypotheses"][0]["supporting_document_ids"] = [999]
+    with pytest.raises(ValueError, match="本次上下文之外的文档"):
+        _validate_investment_thesis_output(changed, v5_item(), required=True)
 
 
 def test_v5_business_values_are_tied_to_business_composition_fact():

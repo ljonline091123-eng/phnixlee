@@ -12,6 +12,7 @@ from app.models.selection import SelectionCandidate, SelectionDimensionResult, S
 from app.schemas.selection import SelectionProfileUpdate
 from app.services.model_hub import seed_default_skills
 from app.services.selection_scoring import (
+    _industry_context,
     clone_profile,
     publish_profile,
     refresh_candidate_evaluations,
@@ -148,6 +149,50 @@ def test_primary_theme_trend_can_support_industry_dimension_when_peers_are_spars
     assert industry["coverage"] == 1
     assert industry["observed_score"] == pytest.approx(34.13)
     assert industry["metrics"]["primary_theme"]["label"] == "存储芯片"
+
+
+def test_theme_with_better_coverage_cannot_replace_missing_business_match(db):
+    groups = [
+        {"key": "industry", "items": [{"code": "BK0001", "label": "专用设备"}]},
+        {"key": "theme", "items": [{"code": "BK9999", "label": "热门主题"}]},
+    ]
+    enriched = [{"key": "theme", "items": [{
+        "code": "BK9999", "label": "热门主题", "trend_pct": 8.8,
+        "quote_observed_count": 300, "member_count": 320,
+    }]}]
+    with patch("app.services.stock_classification.build_classification_groups", return_value=groups), \
+            patch("app.services.stock_classification.enrich_classification_groups_with_members", return_value=enriched):
+        context = _industry_context(db, "CN_A", "000001", datetime(2026, 1, 2, tzinfo=timezone.utc), {})
+    assert context["status"] == "INSUFFICIENT"
+    assert context["primary_theme"] is None
+    assert context["theme_selection_basis"] == "NO_BUSINESS_MATCH"
+    assert "不会按标签顺序或数据完整度选择主题补位" in context["warning"]
+
+
+def test_only_business_grounded_core_theme_can_supplement_sparse_industry(db):
+    groups = [
+        {"key": "industry", "items": [{"code": "BK0001", "label": "专用设备"}]},
+        {"key": "theme", "items": [
+            {"code": "BK9999", "label": "热门主题"},
+            {"code": "BK1137", "label": "存储芯片"},
+        ]},
+    ]
+    enriched = [{"key": "theme", "items": [
+        {"code": "BK9999", "label": "热门主题", "trend_pct": 8.8, "quote_observed_count": 300},
+        {"code": "BK1137", "label": "存储芯片", "trend_pct": -4.5, "quote_observed_count": 192},
+    ]}]
+    analysis = {"model": {"investment_thesis": {"classifications": [{
+        "role": "CORE_THEME", "code": "BK1137", "name": "存储芯片", "relevance_score": 0.9,
+    }]}}}
+    with patch("app.services.stock_classification.build_classification_groups", return_value=groups), \
+            patch("app.services.stock_classification.enrich_classification_groups_with_members", return_value=enriched):
+        context = _industry_context(
+            db, "CN_A", "000001", datetime(2026, 1, 2, tzinfo=timezone.utc), analysis,
+        )
+    assert context["status"] == "SUPPORTED"
+    assert context["primary_theme"]["label"] == "存储芯片"
+    assert context["theme_selection_basis"] == "INVESTMENT_THESIS_CORE_THEME"
+    assert context["theme_trend_pct"] == -4.5
 
 
 @pytest.mark.parametrize("analysis", [
