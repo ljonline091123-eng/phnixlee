@@ -687,6 +687,23 @@ DEFAULT_MODEL_SKILLS_V2 = (
                         "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "VALUE_CHAIN_TRANSMISSION_V1"},
     },
     {
+        "skill_code": "HOLISTIC_INVESTMENT_THESIS_ANALYST",
+        "skill_name": "主营驱动的整体投资逻辑分析",
+        "description": "以主营、收入和利润为起点，联动行业、公司行为、产业链、估值、量价和机构预期形成可验证的整体结论。",
+        "instructions": (
+            "你是整体投资逻辑编排智能体。分析顺序必须是主营业务与收入利润结构、盈利质量、核心业务行业、"
+            "公司行为与治理、产业链传导、估值和机构预期，最后才使用量价资金判断交易状态。"
+            "先说明公司靠什么赚钱，再提出最多三条可验证投资假设；新闻、公告、图谱、财务、研报和行情只作为"
+            "支持证据或反证，不得分别堆砌成孤立结论。行业与主题按主营占比、增长贡献、客户订单、研发和战略相关度判断，"
+            "不得因为某标签行情数据更完整或排序靠前而将其选为核心主题。数据不足时明确返回INSUFFICIENT。"
+            "每条假设必须列出支持证据、反证、置信度、失效条件和观察条件；机构预测只代表市场预期，不代表已实现业绩。"
+            "整体结论必须能追溯到本次白名单文档、事实或关系ID，禁止使用模型常识填补市场份额、客户关系或财务数字。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
+                        "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "HOLISTIC_THESIS_V1"},
+    },
+    {
         "skill_code": "FINANCIAL_QUALITY_SCORER",
         "skill_name": "基本面与盈利质量评分",
         "description": "按结构化财务事实计算盈利质量，并保留字段口径、期次和缺失状态。",

@@ -11,7 +11,76 @@ from app.db.session import get_db
 from app.main import app
 from app.models.market_data import DataSource, StockKline, StockSymbol
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
-from app.models.selection import SelectionCandidate
+from app.models.selection import SelectionCandidate, SelectionRun
+
+
+def test_selection_history_groups_stocks_and_keeps_cross_run_versions():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        older = SelectionRun(
+            market="CN_A", data_mode="MOCK", status="COMPLETED", analysis_mode="MODEL",
+            model_instance_code="MODEL_A", criteria_json={"analysis_contract": "MULTI_SOURCE_VALUE_CHAIN_V5"},
+            as_of=datetime(2026, 9, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 9, 1, 2, tzinfo=timezone.utc),
+        )
+        latest = SelectionRun(
+            market="CN_A", data_mode="MOCK", status="COMPLETED", analysis_mode="MODEL",
+            model_instance_code="MODEL_B", criteria_json={"analysis_contract": "FUNDAMENTAL_THESIS_V6"},
+            as_of=datetime(2026, 10, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 10, 1, 2, tzinfo=timezone.utc),
+        )
+        other = SelectionRun(
+            market="HK", data_mode="MOCK", status="COMPLETED", analysis_mode="MODEL",
+            criteria_json={"analysis_contract": "FUNDAMENTAL_THESIS_V6"},
+            as_of=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 10, 2, 2, tzinfo=timezone.utc),
+        )
+        db.add_all([older, latest, other])
+        db.flush()
+        common = {"model_output_status": "SUCCESS", "analysis_validation_status": "PASSED"}
+        first = SelectionCandidate(
+            run_id=older.id, market="CN_A", symbol="688627", name="精智达", evidence_json={},
+            analysis_json={**common, "analysis_contract": "MULTI_SOURCE_VALUE_CHAIN_V5",
+                           "model": {"decision": "WATCH", "headline": "旧版结论", "confidence": 0.61}},
+        )
+        second = SelectionCandidate(
+            run_id=latest.id, market="CN_A", symbol="688627", name="精智达", evidence_json={"data_cutoff": "2026-10-01"},
+            analysis_json={**common, "analysis_contract": "FUNDAMENTAL_THESIS_V6",
+                           "model": {"decision": "WATCH", "headline": "新版整体逻辑", "confidence": 0.76}},
+        )
+        third = SelectionCandidate(
+            run_id=other.id, market="HK", symbol="02533", name="黑芝麻智能", evidence_json={},
+            analysis_json={**common, "analysis_contract": "FUNDAMENTAL_THESIS_V6",
+                           "model": {"decision": "PASS", "headline": "港股结论", "confidence": 0.55}},
+        )
+        db.add_all([first, second, third])
+        db.commit()
+        app.dependency_overrides[get_db] = lambda: db
+        client = TestClient(app)
+        try:
+            result = client.get("/api/v1/selection/history", params={"query": "精智", "page_size": 10})
+            assert result.status_code == 200, result.text
+            payload = result.json()
+            assert payload["total"] == 1
+            assert payload["items"][0]["analysis_count"] == 2
+            assert payload["items"][0]["latest_candidate_id"] == second.id
+            assert payload["items"][0]["analysis_contract"] == "FUNDAMENTAL_THESIS_V6"
+            versions = client.get("/api/v1/selection/history/CN_A/688627")
+            assert versions.status_code == 200, versions.text
+            assert [row["candidate_id"] for row in versions.json()] == [second.id, first.id]
+            assert [row["analysis_contract"] for row in versions.json()] == [
+                "FUNDAMENTAL_THESIS_V6", "MULTI_SOURCE_VALUE_CHAIN_V5",
+            ]
+            candidate = client.get(f"/api/v1/selection/candidates/{first.id}")
+            assert candidate.status_code == 200
+            assert candidate.json()["analysis_json"]["model"]["headline"] == "旧版结论"
+            hk = client.get("/api/v1/selection/history", params={"market": "HK"}).json()
+            assert hk["total"] == 1 and hk["items"][0]["symbol"] == "02533"
+        finally:
+            client.close()
+            app.dependency_overrides.pop(get_db, None)
+    engine.dispose()
 
 
 def test_http_selection_review_tracking_contract():

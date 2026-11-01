@@ -7,6 +7,7 @@ import { SelectionAnalysis, type AnalysisDimension } from "./SelectionAnalysis";
 import { DataGapDecisionDialog, type DataGapDecision } from "./DataGapDecisionDialog";
 import type { SelectionPreflight } from "./selectionApi";
 import { StockDetailDrawer } from "./StockDetailDrawer";
+import { SelectionHistoryDialog } from "./SelectionHistoryDialog";
 
 const message = (error: unknown) => error instanceof Error ? error.message : "请求失败，请重试";
 const modelConnectivityLabel = (item: ModelInstance) => item.availability_label || ({
@@ -180,6 +181,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const [newSelection, setNewSelection] = useState(false);
   const [showData, setShowData] = useState(false);
   const [showRunScope, setShowRunScope] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [detail, setDetail] = useState<SelectionCandidate | null>(null);
@@ -485,9 +487,10 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   if (advanced) return <><button className="batch-return" onClick={() => setAdvanced(false)}>← 返回选股工作台</button><AdvancedWorkbench mode={mode} initialCreate={newSelection} initialModelCode={analysisModelCode || run?.model_instance_code || ""} onCreated={created => {setRun(created); setRuns(current => [created, ...current]); setAdvanced(false); setNewSelection(false);}} /></>;
   return <main className="batch-workbench">
     {dataGapPrompt && <DataGapDecisionDialog preflight={dataGapPrompt} onDecision={resolveDataGapDecision} />}
+    {historyOpen && <SelectionHistoryDialog onClose={() => setHistoryOpen(false)} onOpenStock={stock => { setHistoryOpen(false); setDetailStock(stock); }} />}
     {run && <button type="button" className="batch-scope-button" onClick={() => setShowRunScope(true)}>查看本次任务股票与参数</button>}
     {mode === "selection" && <ModelMultiPicker models={modelInstances} providers={modelProviders} selected={analysisModelCodes} disabled={busy || running} testingCode={testingModelCode} onTest={item => void testUnavailableModel(item)} onChange={codes => { setAnalysisModelCodes(codes); setAnalysisModelCode(codes[0] || ""); }} />}
-    <header className="batch-heading"><div><p className="eyebrow">多源证据 · 可追溯分析</p><h1>选股分析工作台</h1><p>选择股票与知识范围 → 后台分析 → 核对结论与原文</p><small className="batch-model-picker-hint">分析模型请在上方多选；勾选顺序同时用于首选模型和失败重试顺序。</small></div><div className="batch-actions"><button onClick={() => {setNewSelection(false); setAdvanced(true);}}>高级工作台</button>
+    <header className="batch-heading"><div><p className="eyebrow">多源证据 · 可追溯分析</p><h1>选股分析工作台</h1><p>选择股票与知识范围 → 后台分析 → 核对结论与原文</p><small className="batch-model-picker-hint">分析模型请在上方多选；勾选顺序同时用于首选模型和失败重试顺序。</small></div><div className="batch-actions"><button onClick={() => setHistoryOpen(true)}>历史分析</button><button onClick={() => {setNewSelection(false); setAdvanced(true);}}>高级工作台</button>
       {mode === "selection" ? <><button disabled={busy || loading || running || !acceptance?.prepared} onClick={() => void start()}>{preflightBusy ? "正在检查数据与模型…" : busy ? "提交中…" : "验证20股样本"}</button><button className="primary-button" onClick={() => {setNewSelection(true); setAdvanced(true);}}>新建选股</button></> : <button className="primary-button" disabled={busy || loading} onClick={() => void refreshTracking()}>刷新跟踪</button>}</div></header>
     {error && <p className="batch-alert error" role="alert">{error}</p>}{notice && <p className="batch-alert" role="status">{notice}</p>}
     {preflight && !run && <section className="batch-preflight" aria-label="分析前检查结果"><strong>分析前检查</strong><span>模型：{text((preflight.model || {}).title) || (preflight.model_ready ? "可用" : "不可用")}</span><span>数据：{preflight.data_ready ? "齐备" : `部分缺失（${Number((preflight.data as SelectionRecord)?.missing_symbols?.length || 0)} 只）`}</span>{(Array.isArray(preflight.blockers) ? preflight.blockers : []).map((item, index) => <p className="batch-alert error" key={index}>{text(item)}</p>)}{(Array.isArray(preflight.warnings) ? preflight.warnings : []).slice(0, 3).map((item, index) => <p className="batch-note" key={index}>{text(item)}</p>)}</section>}

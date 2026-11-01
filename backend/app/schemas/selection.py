@@ -242,6 +242,59 @@ class SelectionValueChainAnalysis(BaseModel):
     watch_conditions: list[str] = Field(default_factory=list, max_length=6)
 
 
+class SelectionBusinessClassification(BaseModel):
+    """A business-grounded classification, not an ordered provider tag."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    role: Literal["PRIMARY_INDUSTRY", "SECONDARY_INDUSTRY", "CORE_THEME", "OPTIONAL_THEME", "NOISE_TAG"]
+    name: str = Field(min_length=1, max_length=160)
+    code: str | None = Field(default=None, max_length=80)
+    relevance_score: float = Field(ge=0, le=1)
+    rationale: str = Field(min_length=1, max_length=500)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+
+
+class SelectionInvestmentHypothesis(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    title: str = Field(min_length=1, max_length=120)
+    thesis: str = Field(min_length=1, max_length=800)
+    status: Literal["SUPPORTED", "MIXED", "CONTRADICTED", "INSUFFICIENT"]
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    horizon: Literal["SHORT", "MEDIUM", "LONG", "MULTI_PERIOD", "UNKNOWN"]
+    confidence: float = Field(ge=0, le=1)
+    supporting_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    supporting_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    supporting_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+    counter_document_ids: list[int] = Field(default_factory=list, max_length=12)
+    counter_fact_ids: list[str] = Field(default_factory=list, max_length=12)
+    counter_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+    invalidation_conditions: list[str] = Field(default_factory=list, max_length=4)
+    watch_conditions: list[str] = Field(default_factory=list, max_length=4)
+
+
+class SelectionInvestmentThesis(BaseModel):
+    """Human-facing investment logic assembled before dimension scoring."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    status: Literal["SUPPORTED", "PARTIAL", "INSUFFICIENT"]
+    primary_business: str = Field(min_length=1, max_length=400)
+    earning_engine_summary: str = Field(min_length=1, max_length=1000)
+    profit_quality_summary: str = Field(min_length=1, max_length=800)
+    industry_chain_summary: str = Field(min_length=1, max_length=800)
+    valuation_summary: str = Field(min_length=1, max_length=600)
+    institution_view_summary: str = Field(min_length=1, max_length=600)
+    market_timing_summary: str = Field(min_length=1, max_length=600)
+    overall_logic: str = Field(min_length=1, max_length=1600)
+    classifications: list[SelectionBusinessClassification] = Field(default_factory=list, max_length=10)
+    hypotheses: list[SelectionInvestmentHypothesis] = Field(default_factory=list, max_length=3)
+    confidence: float = Field(ge=0, le=1)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=24)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=32)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=24)
+
+
 class SelectionModelRecommendation(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     symbol: str
@@ -270,6 +323,7 @@ class SelectionModelRecommendation(BaseModel):
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
     business_quality: SelectionBusinessQualityAnalysis | None = None
     value_chain_analysis: SelectionValueChainAnalysis | None = None
+    investment_thesis: SelectionInvestmentThesis | None = None
     # Event linkage is an optional semantic enrichment.  A linkage failure
     # must not invalidate independently verified dimensions.
     semantic_linkage_status: Literal["PASSED", "PARTIAL", "UNAVAILABLE"] = "UNAVAILABLE"
@@ -370,6 +424,52 @@ class SelectionRunRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     candidates: list[SelectionCandidateRead] = Field(default_factory=list)
+
+
+class SelectionHistoryItem(BaseModel):
+    market: str
+    symbol: str
+    name: str | None
+    analysis_count: int
+    latest_candidate_id: int
+    latest_run_id: int
+    run_status: str
+    analysis_status: str
+    decision: str
+    recommendation: str | None = None
+    headline: str | None = None
+    trusted_score: float | None = None
+    confidence: float | None = None
+    model_instance_code: str | None = None
+    analysis_contract: str | None = None
+    data_cutoff: str | None = None
+    analyzed_at: datetime
+
+
+class SelectionHistoryPage(BaseModel):
+    items: list[SelectionHistoryItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class SelectionHistoryVersion(BaseModel):
+    candidate_id: int
+    run_id: int
+    market: str
+    symbol: str
+    name: str | None
+    run_status: str
+    analysis_status: str
+    decision: str
+    recommendation: str | None = None
+    headline: str | None = None
+    trusted_score: float | None = None
+    confidence: float | None = None
+    model_instance_code: str | None = None
+    analysis_contract: str | None = None
+    data_cutoff: str | None = None
+    analyzed_at: datetime
 
 
 class SelectionTrackingRead(BaseModel):

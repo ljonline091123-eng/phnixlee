@@ -79,6 +79,16 @@ GENERAL_WEIGHTS = {
     "GOVERNANCE_STABILITY": 8.0,
     "SUPPLY_CHAIN_RESILIENCE": 11.0,
 }
+FUNDAMENTAL_THESIS_WEIGHTS = {
+    "FUNDAMENTAL_QUALITY": 40.0,
+    "VALUATION_EXPECTATION": 15.0,
+    "INDUSTRY_MOMENTUM": 15.0,
+    "PRICE_RISK": 6.0,
+    "CAPITAL_BEHAVIOR": 4.0,
+    "EVENT_DISCLOSURE": 5.0,
+    "GOVERNANCE_STABILITY": 5.0,
+    "SUPPLY_CHAIN_RESILIENCE": 10.0,
+}
 
 SKILLS = {
     "FUNDAMENTAL_QUALITY": "FINANCIAL_QUALITY_SCORER",
@@ -141,6 +151,27 @@ def seed_selection_scoring(db: Session) -> None:
         db.add(profile)
         db.flush()
         for code, weight in GENERAL_WEIGHTS.items():
+            db.add(SelectionStrategyProfileItem(
+                profile_id=profile.id, dimension_code=code, weight=weight,
+                minimum_coverage=0.4, minimum_confidence=0.35,
+                skill_code=SKILLS[code], skill_version="1.0.0",
+            ))
+    if db.scalar(select(SelectionStrategyProfile.id).where(
+        SelectionStrategyProfile.profile_code == "FUNDAMENTAL_THESIS",
+        SelectionStrategyProfile.version == "1.0.0",
+    )) is None:
+        profile = SelectionStrategyProfile(
+            profile_code="FUNDAMENTAL_THESIS", profile_name="基本面主线综合",
+            version="1.0.0", horizon_code="RESEARCH_T10", status="ENABLED", enabled=True,
+            published_at=_now(), market_scope_json=["CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"],
+            description=(
+                "以主营、收入利润和盈利质量为主线；行业、治理与产业链验证成长逻辑，"
+                "估值、机构预期及量价资金用于定价和交易时点校验。"
+            ),
+        )
+        db.add(profile)
+        db.flush()
+        for code, weight in FUNDAMENTAL_THESIS_WEIGHTS.items():
             db.add(SelectionStrategyProfileItem(
                 profile_id=profile.id, dimension_code=code, weight=weight,
                 minimum_coverage=0.4, minimum_confidence=0.35,
@@ -415,7 +446,20 @@ def _bar_metrics(bars: list[dict[str, Any]]) -> dict[str, float | None]:
     }
 
 
-def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) -> dict[str, Any]:
+def _industry_context(
+    db: Session, market: str, symbol: str, as_of: datetime,
+    analysis: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    model = (analysis or {}).get("model") if isinstance((analysis or {}).get("model"), dict) else {}
+    thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
+    thesis_classifications = [
+        row for row in thesis.get("classifications") or []
+        if isinstance(row, dict) and row.get("role") in {"PRIMARY_INDUSTRY", "CORE_THEME"}
+        and isinstance(row.get("relevance_score"), (int, float))
+    ]
+    thesis_classifications.sort(key=lambda row: float(row.get("relevance_score") or 0), reverse=True)
+    business_industry = next((row for row in thesis_classifications if row.get("role") == "PRIMARY_INDUSTRY"), None)
+    core_themes = [row for row in thesis_classifications if row.get("role") == "CORE_THEME"]
     stock = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
     if stock is None:
         return {"status": "INSUFFICIENT", "warning": "股票主数据不存在"}
@@ -450,7 +494,7 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         if theme_items:
             enriched = enrich_classification_groups_with_members(
                 db,
-                [{"key": "theme", "title": "概念板块", "items": [dict(theme_items[0])]}],
+                [{"key": "theme", "title": "概念板块", "items": [dict(row) for row in theme_items[:24]]}],
                 fetch_remote=False,
                 include_members=False,
             )
@@ -545,7 +589,18 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
     usable_themes = [row for row in theme_contexts
                      if isinstance(row.get("trend_pct"), (int, float))
                      and int(row.get("quote_observed_count") or 0) >= 5]
-    primary_theme = usable_themes[0] if usable_themes else None
+
+    def normalized(value: Any) -> str:
+        return str(value or "").strip().casefold().replace(" ", "")
+
+    def theme_relevance(theme: dict[str, Any]) -> float:
+        identifiers = {normalized(theme.get("code")), normalized(theme.get("label")), normalized(theme.get("name"))} - {""}
+        return max((float(row.get("relevance_score") or 0) for row in core_themes
+                    if identifiers & {normalized(row.get("code")), normalized(row.get("name"))}), default=-1.0)
+
+    matched_themes = [row for row in usable_themes if theme_relevance(row) >= 0.5]
+    matched_themes.sort(key=theme_relevance, reverse=True)
+    primary_theme = matched_themes[0] if matched_themes else None
     warning = None
     if own is None:
         warning = f"行业标签已确认（{industry}），但该股近20个交易日行情不足，无法计算行业相对强弱。"
@@ -555,8 +610,13 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         warning = f"行业标签已确认（{industry}），当前仅有{len(peer_values)}只同行具备近20个交易日行情，行业动量暂不评分。"
     if not peer_supported and primary_theme is not None:
         warning = (
-            f"标准行业同行行情覆盖不足；改用可追溯概念板块“{primary_theme.get('label') or primary_theme.get('name')}”"
-            "的当日成分股涨跌幅简单平均作为补充口径，不等同于证券公司自建板块指数。"
+            f"标准行业同行行情覆盖不足；使用主营证据匹配的核心主题“{primary_theme.get('label') or primary_theme.get('name')}”"
+            "作为独立补充口径，不替代标准行业，也不等同于证券公司自建板块指数。"
+        )
+    elif not peer_supported and usable_themes and primary_theme is None:
+        warning = (
+            f"{warning + ' ' if warning else ''}存在可用主题行情，但没有主题通过主营证据相关度门槛；"
+            "系统不会按标签顺序或数据完整度选择主题补位。"
         )
     return {
         "status": "SUPPORTED" if peer_supported or primary_theme is not None else "INSUFFICIENT",
@@ -566,6 +626,8 @@ def _industry_context(db: Session, market: str, symbol: str, as_of: datetime) ->
         "stock_return_20d": own, "peer_median_return_20d": peer_median,
         "excess_return_20d": excess, "positive_breadth": breadth,
         "primary_theme": primary_theme,
+        "business_industry": business_industry,
+        "theme_selection_basis": "INVESTMENT_THESIS_CORE_THEME" if primary_theme else "NO_BUSINESS_MATCH",
         "theme_trend_pct": primary_theme.get("trend_pct") if primary_theme else None,
         "theme_quote_observed_count": int(primary_theme.get("quote_observed_count") or 0) if primary_theme else 0,
         "theme_contexts": theme_contexts,
@@ -706,7 +768,7 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     ))
     run = db.get(SelectionRun, candidate.run_id)
     scoring_as_of = run.as_of if run is not None else candidate.created_at or _now()
-    industry = _industry_context(db, candidate.market, candidate.symbol, scoring_as_of)
+    industry = _industry_context(db, candidate.market, candidate.symbol, scoring_as_of, analysis)
     excess = industry.get("excess_return_20d")
     breadth = industry.get("positive_breadth")
     industry_parts: list[float] = []
@@ -726,7 +788,12 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
         "score": industry_score, "coverage": industry_coverage,
         "confidence": industry_confidence,
         "direction": "POSITIVE" if industry_score is not None and industry_score >= 60 else "NEGATIVE" if industry_score is not None and industry_score < 40 else "NEUTRAL" if industry_score is not None else "UNKNOWN",
-        "method": "RULE", "summary": f"{industry.get('industry') or '行业未识别'}：比较个股与同行20日表现及上涨广度。",
+        "method": "RULE", "summary": (
+            f"标准行业“{industry.get('industry') or '未识别'}”比较个股与同行20日表现及上涨广度；"
+            f"核心业务行业“{(industry.get('business_industry') or {}).get('name')}”仅用于解释主营归属。"
+            if industry.get("business_industry") else
+            f"标准行业“{industry.get('industry') or '未识别'}”比较个股与同行20日表现及上涨广度。"
+        ),
         "metrics": industry, "evidence": {"classification_id": industry.get("classification_id")},
         "warnings": [industry["warning"]] if industry.get("warning") else [],
     }
@@ -886,8 +953,10 @@ def score_candidate(db: Session, candidate: SelectionCandidate, profile: Selecti
     coverage = sum(float(row["weight"]) * float(row["coverage"]) for row in rows) / 100
     evidence_confidence = sum(float(row["weight"]) * float(row["coverage"]) * float(row["evidence_confidence"]) for row in rows) / 100
     trusted_score = 50 + (base_score - 50) * evidence_confidence if base_score is not None else None
-    critical = {row["dimension_code"]: row["status"] for row in rows if row["dimension_code"] in {"PRICE_RISK", "EVENT_DISCLOSURE"}}
-    status = "PASSED" if supported_weight >= 60 and critical.get("PRICE_RISK") == "SUPPORTED" else "PARTIAL"
+    critical = {row["dimension_code"]: row["status"] for row in rows
+                if row["dimension_code"] in {"FUNDAMENTAL_QUALITY", "PRICE_RISK", "EVENT_DISCLOSURE"}}
+    critical_dimension = "FUNDAMENTAL_QUALITY" if profile.profile_code == "FUNDAMENTAL_THESIS" else "PRICE_RISK"
+    status = "PASSED" if supported_weight >= 60 and critical.get(critical_dimension) == "SUPPORTED" else "PARTIAL"
     snapshot = serialize_profile(db, profile)
     result = {
         "contract_version": "SELECTION_SCORECARD_V1", "status": status,
@@ -897,7 +966,10 @@ def score_candidate(db: Session, candidate: SelectionCandidate, profile: Selecti
         "coverage": round(coverage, 4), "evidence_confidence": round(evidence_confidence, 4),
         "supported_weight": round(supported_weight, 2), "dimensions": rows,
         "profile_snapshot": snapshot, "as_of": scoring_as_of.isoformat(),
-        "explanation": "可信评分会按覆盖率和证据置信度向中性50分收缩；它不是收益概率。",
+        "explanation": (
+            "可信评分会按覆盖率和证据置信度向中性50分收缩；基本面主线方案必须先通过主营与盈利质量门槛。"
+            "该分数不是收益概率。"
+        ),
     }
     # Keep the persisted UI flags in sync with the scorecard. A reanalysis may
     # start with stale ``conclusion_available=false`` from an earlier model

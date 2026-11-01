@@ -40,6 +40,14 @@ def test_scoring_profile_lifecycle_and_candidate_publication_gate():
             assert dimensions.status_code == 200 and len(dimensions.json()) == 8
             profiles = client.get("/api/v1/selection/scoring/profiles")
             assert profiles.status_code == 200
+            fundamental = next(row for row in profiles.json() if row["profile_code"] == "FUNDAMENTAL_THESIS")
+            assert fundamental["enabled"] is True and fundamental["weight_total"] == 100
+            assert {item["dimension_code"]: item["weight"] for item in fundamental["items"]} == {
+                "FUNDAMENTAL_QUALITY": 40.0, "VALUATION_EXPECTATION": 15.0,
+                "INDUSTRY_MOMENTUM": 15.0, "PRICE_RISK": 6.0,
+                "CAPITAL_BEHAVIOR": 4.0, "EVENT_DISCLOSURE": 5.0,
+                "GOVERNANCE_STABILITY": 5.0, "SUPPLY_CHAIN_RESILIENCE": 10.0,
+            }
             enabled = next(row for row in profiles.json() if row["enabled"])
             assert enabled["weight_total"] == 100
 
