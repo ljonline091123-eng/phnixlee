@@ -234,9 +234,15 @@ def resolve_profile(db: Session, profile_id: int | None = None, market: str | No
             raise ValueError("所选评价权重方案尚未发布或已停用")
     else:
         profile = db.scalar(select(SelectionStrategyProfile).where(
+            SelectionStrategyProfile.profile_code == "FUNDAMENTAL_THESIS",
             SelectionStrategyProfile.enabled.is_(True),
             SelectionStrategyProfile.status == "ENABLED",
         ).order_by(SelectionStrategyProfile.published_at.desc(), SelectionStrategyProfile.id.desc()))
+        if profile is None:
+            profile = db.scalar(select(SelectionStrategyProfile).where(
+                SelectionStrategyProfile.enabled.is_(True),
+                SelectionStrategyProfile.status == "ENABLED",
+            ).order_by(SelectionStrategyProfile.published_at.desc(), SelectionStrategyProfile.id.desc()))
         if profile is None:
             raise LookupError("没有已发布的评价权重方案")
     if market and profile.market_scope_json and market.upper() not in profile.market_scope_json:
@@ -446,6 +452,18 @@ def _bar_metrics(bars: list[dict[str, Any]]) -> dict[str, float | None]:
     }
 
 
+def _period_market_metrics(evidence: dict[str, Any], fallback: dict[str, float | None]) -> dict[str, Any]:
+    observations = evidence.get("structured_observations") or {}
+    market = _records(observations.get("market"))
+    properties = (market[0].get("properties") or {}) if market else {}
+    summary = properties.get("period_summary") if isinstance(properties.get("period_summary"), dict) else {}
+    return {
+        **fallback,
+        **{key: value for key, value in summary.items() if key != "sampled_curve"},
+        "event_reactions": _records(properties.get("event_reactions")),
+    }
+
+
 def _industry_context(
     db: Session, market: str, symbol: str, as_of: datetime,
     analysis: dict[str, Any] | None = None,
@@ -649,13 +667,29 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     shareholder = _records(observations.get("shareholder"))
     fund_flow = _records(observations.get("fund_flow"))
     bars = _bars(evidence)
-    bar_metrics = _bar_metrics(bars)
+    bar_metrics = _period_market_metrics(evidence, _bar_metrics(bars))
     model = analysis.get("model") or {}
     business_quality = model.get("business_quality") if isinstance(model.get("business_quality"), dict) else {}
     value_chain = model.get("value_chain_analysis") if isinstance(model.get("value_chain_analysis"), dict) else {}
+    investment_thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
+    thesis_assessments = {
+        str(row.get("assessment_code")): row
+        for row in investment_thesis.get("deep_assessments") or [] if isinstance(row, dict)
+    }
     model_confidence = model.get("confidence_breakdown") or {}
     event_confidence = float(model_confidence.get("final_confidence") or 0)
     result: dict[str, dict[str, Any]] = {}
+
+    def assessment_signal(code: str) -> tuple[float | None, float, float, str]:
+        row = thesis_assessments.get(code) or {}
+        direction = str(row.get("direction") or "UNKNOWN")
+        score = {"POSITIVE": 68.0, "NEGATIVE": 32.0, "MIXED": 50.0, "NEUTRAL": 50.0}.get(direction)
+        confidence = float(row.get("confidence") or 0) if score is not None else 0
+        references = sum(len(row.get(key) or []) for key in (
+            "evidence_document_ids", "evidence_fact_ids", "evidence_relation_ids",
+        ))
+        coverage = min(0.75, 0.3 + references * 0.08) if score is not None and references else 0
+        return score, coverage, confidence, str(row.get("conclusion") or "")
 
     financial_payload = [row.get("properties") or {} for row in financial]
     research_payload = [row.get("properties") or {} for row in forecast_rows]
@@ -778,37 +812,59 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     theme_trend = industry.get("theme_trend_pct")
     if isinstance(theme_trend, (int, float)):
         industry_parts.append(_clamp(50 + float(theme_trend) * 3))
+    track_score, track_coverage, track_confidence, track_conclusion = assessment_signal("INDUSTRY_OUTLOOK")
+    if track_score is not None:
+        industry_parts.append(track_score)
     industry_score = round(sum(industry_parts) / len(industry_parts), 2) if industry_parts else None
     industry_coverage = max(
         min(1.0, float(industry.get("priced_peer_count") or 0) / 10),
         min(1.0, float(industry.get("theme_quote_observed_count") or 0) / 20),
+        track_coverage,
     )
-    industry_confidence = min(0.85, 0.45 + industry_coverage * 0.35) if industry_score is not None else 0
+    industry_confidence = max(
+        min(0.85, 0.45 + industry_coverage * 0.35) if industry_score is not None else 0,
+        min(0.8, track_confidence * 0.85),
+    )
     result["INDUSTRY_MOMENTUM"] = {
         "score": industry_score, "coverage": industry_coverage,
         "confidence": industry_confidence,
         "direction": "POSITIVE" if industry_score is not None and industry_score >= 60 else "NEGATIVE" if industry_score is not None and industry_score < 40 else "NEUTRAL" if industry_score is not None else "UNKNOWN",
-        "method": "RULE", "summary": (
+        "method": "HYBRID", "summary": " ".join(filter(None, [(
             f"标准行业“{industry.get('industry') or '未识别'}”比较个股与同行20日表现及上涨广度；"
             f"核心业务行业“{(industry.get('business_industry') or {}).get('name')}”仅用于解释主营归属。"
             if industry.get("business_industry") else
             f"标准行业“{industry.get('industry') or '未识别'}”比较个股与同行20日表现及上涨广度。"
-        ),
+        ), track_conclusion]))[:800],
         "metrics": industry, "evidence": {"classification_id": industry.get("classification_id")},
-        "warnings": [industry["warning"]] if industry.get("warning") else [],
+        "warnings": ([industry["warning"]] if industry.get("warning") else []) + (
+            [] if industry.get("industry_peer_status") == "SUPPORTED"
+            else ["标准行业成分行情不足；业务赛道结论来自主营和来源证据，不冒充标准行业行情"]
+        ),
     }
 
     classification_fact_ids = [row.get("id") for row in research
                                if str(row.get("fact_type") or "").upper() == "CLASSIFICATION_OBSERVATION"]
     result["INDUSTRY_MOMENTUM"]["evidence"]["fact_ids"] = classification_fact_ids
     price_score = None
-    if bar_metrics.get("return_20d") is not None:
-        price_score = 50 + float(bar_metrics["return_20d"]) * 0.8 + float(bar_metrics.get("return_5d") or 0) * 0.5
-        price_score += max(-12, float(bar_metrics.get("max_drawdown") or 0) * 0.6)
-        price_score -= max(0, float(bar_metrics.get("volatility") or 0) - 3) * 1.5
+    return_20d = bar_metrics.get("return_20d_pct", bar_metrics.get("return_20d"))
+    if return_20d is not None:
+        price_score = 50 + float(return_20d) * 0.45
+        return_60d = bar_metrics.get("return_60d_pct")
+        return_120d = bar_metrics.get("return_120d_pct")
+        if isinstance(return_60d, (int, float)):
+            price_score += float(return_60d) * 0.18
+        if isinstance(return_120d, (int, float)):
+            price_score += float(return_120d) * 0.08
+        drawdown = bar_metrics.get("max_drawdown_pct", bar_metrics.get("max_drawdown"))
+        price_score += max(-18, float(drawdown or 0) * 0.35)
+        annualized_volatility = bar_metrics.get("annualized_volatility_pct")
+        if isinstance(annualized_volatility, (int, float)):
+            price_score -= max(0, float(annualized_volatility) - 35) * 0.18
         price_score = _clamp(price_score)
     result["PRICE_RISK"] = {
-        "score": price_score, "coverage": min(1.0, float(bar_metrics.get("bar_count") or 0) / 20),
+        "score": price_score, "coverage": min(1.0,
+            0.4 * min(1.0, float(bar_metrics.get("bar_count") or 0) / 20)
+            + 0.6 * max(0.0, float(bar_metrics.get("bar_count") or 0) - 20) / 230),
         "confidence": 0.9 if price_score is not None else 0,
         "direction": "POSITIVE" if price_score is not None and price_score >= 60 else "NEGATIVE" if price_score is not None and price_score < 40 else "NEUTRAL" if price_score is not None else "UNKNOWN",
         "method": "RULE", "summary": "按同源日线计算区间收益、波动和回撤，不跨来源比较成交量。",
@@ -820,12 +876,12 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
         "net_inflow", "main_net_inflow", "主力净流入", "主力净流入净额", "主力净额",
     ))
     positive_ratio = sum(value > 0 for value in flow_values) / len(flow_values) if flow_values else None
-    volume_ratio = bar_metrics.get("volume_ratio")
+    volume_ratio = bar_metrics.get("recent_20d_vs_previous_20d_volume_ratio", bar_metrics.get("volume_ratio"))
     capital_score = None
     if flow_values or volume_ratio is not None:
         capital_score = 50 + ((positive_ratio - 0.5) * 36 if positive_ratio is not None else 0)
         if volume_ratio is not None:
-            trend = float(bar_metrics.get("return_5d") or 0)
+            trend = float(bar_metrics.get("return_20d_pct", bar_metrics.get("return_5d")) or 0)
             capital_score += min(12, max(-12, (float(volume_ratio) - 1) * 8 * (1 if trend >= 0 else -1)))
         capital_score = _clamp(capital_score)
     result["CAPITAL_BEHAVIOR"] = {
@@ -857,15 +913,24 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
 
     company = legacy.get("COMPANY")
     governance_score = _direction_score(company)
+    governance_assessment_score, governance_assessment_coverage, governance_assessment_confidence, governance_conclusion = assessment_signal("GOVERNANCE_AND_SHAREHOLDER")
+    if governance_assessment_score is not None:
+        governance_score = (0.45 * governance_score + 0.55 * governance_assessment_score
+                            if governance_score is not None else governance_assessment_score)
+    governance_events = _records(evidence.get("governance_event_timeline"))
     if governance_score is None and shareholder:
         governance_score = 50
     result["GOVERNANCE_STABILITY"] = {
         "score": _clamp(governance_score) if governance_score is not None else None,
-        "coverage": min(1.0, len(shareholder) * 0.25 + (0.35 if company and company.get("status") != "INSUFFICIENT" else 0)),
-        "confidence": 0.72 if shareholder and company else 0.55 if shareholder or company else 0,
+        "coverage": max(governance_assessment_coverage, min(1.0, len(shareholder) * 0.25
+                        + min(0.35, len(governance_events) * 0.08)
+                        + (0.25 if company and company.get("status") != "INSUFFICIENT" else 0))),
+        "confidence": max(0.72 if shareholder and company else 0.55 if shareholder or company else 0,
+                          min(0.82, governance_assessment_confidence * 0.9)),
         "direction": str((company or {}).get("direction") or ("NEUTRAL" if shareholder else "UNKNOWN")),
-        "method": "HYBRID", "summary": _summary(company, fallback="仅检测到股东/F10来源记录，尚无足够语义证据判断治理方向。"),
-        "metrics": {"shareholder_records": len(shareholder)},
+        "method": "HYBRID", "summary": " ".join(filter(None, [governance_conclusion,
+            _summary(company, fallback="仅检测到股东/F10来源记录，尚无足够语义证据判断治理方向。")]))[:800],
+        "metrics": {"shareholder_records": len(shareholder), "period_governance_events": len(governance_events)},
         "evidence": {"fact_ids": [row.get("id") for row in shareholder]}, "warnings": [],
     }
 
@@ -894,20 +959,28 @@ def _score_dimensions(db: Session, candidate: SelectionCandidate, profile: Selec
     relation_fact_ids = list(dict.fromkeys(
         str(value) for row in verified_impacts for value in row.get("relation_fact_ids") or []
     ))
+    semantic_chain_score, semantic_chain_coverage, semantic_chain_confidence, semantic_chain_conclusion = assessment_signal("VALUE_CHAIN_RESILIENCE")
+    if semantic_chain_score is not None:
+        relation_score = (0.65 * relation_score + 0.35 * semantic_chain_score
+                          if relation_score is not None else semantic_chain_score)
     result["SUPPLY_CHAIN_RESILIENCE"] = {
         "score": relation_score,
-        "coverage": min(1.0, len(verified_paths) / 5 + len(verified_impacts) / 2),
-        "confidence": max(0.72 if verified_paths else 0, min(0.9, chain_confidence)),
+        "coverage": max(semantic_chain_coverage, min(1.0, len(verified_paths) / 5 + len(verified_impacts) / 2)),
+        "confidence": max(0.72 if verified_paths else 0, min(0.9, chain_confidence),
+                          min(0.75, semantic_chain_confidence * 0.8)),
         "direction": str((verified_impacts[0].get("direction") if len(verified_impacts) == 1 else None)
                          or (graph or {}).get("direction") or ("NEUTRAL" if verified_paths else "UNKNOWN")),
-        "method": "HYBRID", "summary": str(value_chain.get("summary") or _summary(
-            graph, fallback="图谱存在关系线索，但仅已核验且具业务含义的关系参与覆盖计算。"))[:800],
+        "method": "HYBRID", "summary": " ".join(filter(None, [semantic_chain_conclusion,
+            str(value_chain.get("summary") or _summary(
+                graph, fallback="图谱存在关系线索，但仅已核验且具业务含义的关系参与覆盖计算。"))]))[:800],
         "metrics": {"verified_business_relations": len(verified_paths),
                     "verified_transmission_impacts": len(verified_impacts),
                     "candidate_business_relations": len(business_paths) - len(verified_paths),
                     "risk_relations": risk_count, "average_transmission_impact": chain_impact},
         "evidence": {"relation_ids": [row.get("id") for row in verified_paths], "fact_ids": relation_fact_ids},
-        "warnings": [] if verified_paths or verified_impacts else ["缺少已核验的产业链关系及关联公司事件；候选关系不参与评分"],
+        "warnings": [] if verified_paths or verified_impacts else [
+            "尚无已审核客户、供应商或合作关系；赛道位置可用于研究解释，但不证明具体公司间传导"
+        ],
     }
 
     profile_items = {row.dimension_code: row for row in _profile_items(db, profile.id)}

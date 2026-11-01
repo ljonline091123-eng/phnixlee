@@ -8,6 +8,7 @@ import re
 from urllib.parse import parse_qs, urljoin, urlparse
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
+import unicodedata
 
 import httpx
 from bs4 import BeautifulSoup
@@ -42,6 +43,22 @@ def document_body(row) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
+def readable_source_text(content: str, *, minimum_characters: int = 40) -> bool:
+    """Reject PDF font-map output that is non-empty but semantically unreadable."""
+    normalized = "".join(content.split())
+    if len(normalized) < minimum_characters:
+        return False
+    useful = sum(
+        character.isascii() or "\u3400" <= character <= "\u9fff"
+        for character in normalized
+    )
+    private_or_control = sum(
+        unicodedata.category(character) in {"Cc", "Co", "Cs"}
+        for character in normalized
+    )
+    return useful / len(normalized) >= 0.55 and private_or_control / len(normalized) <= 0.08
 
 
 def _news_search_record(row) -> bool:
@@ -156,13 +173,22 @@ def official_notice_body(row: StockNotice) -> tuple[str, dict]:
             response.raise_for_status()
             for block in response.iter_bytes():
                 binary.extend(block)
-                if len(binary) > 8 * 1024 * 1024:
-                    raise ValueError("公告 PDF 超过单次 8MB 限额")
+                if len(binary) > 32 * 1024 * 1024:
+                    raise ValueError("公告 PDF 超过单次 32MB 安全限额")
     extracted = extract_pdf_text(bytes(binary))
     content = str(extracted.get("content") or "").strip()
     if not content:
         raise ValueError("公告为扫描件或无文本，需要 OCR")
-    return content, {key: value for key, value in extracted.items() if key not in {"content", "pages"}}
+    if not readable_source_text(content):
+        raise ValueError("公告 PDF 字体映射异常，提取文本不可读，需要 OCR 或人工核验")
+    return content, {
+        **{key: value for key, value in extracted.items() if key not in {"content", "pages"}},
+        "source_url": candidate,
+        "binary_sha256": sha256(binary).hexdigest(),
+        "binary_size": len(binary),
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "extraction_status": "TEXT_AVAILABLE",
+    }
 
 
 def _stamp(row, value: dict) -> None:

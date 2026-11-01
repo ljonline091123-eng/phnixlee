@@ -96,6 +96,8 @@ def v5_item():
                  "name": "测试设备", "revenue": 100.0, "revenue_ratio": 0.6,
                  "profit": 30.0, "profit_ratio": 0.7, "gross_margin": 0.3,
              }]}]}},
+            {"id": "market-1", "fact_type": "MARKET_OBSERVATION", "status": "SOURCE",
+             "properties": {"period_summary": {"return_20d_pct": 5.0, "bar_count": 245}}},
             {"id": "relation-1", "fact_type": "SUPPLIES_TO", "status": "ACCEPTED",
              "properties": {"product": "测试设备"}},
         ],
@@ -193,6 +195,63 @@ def test_v6_rejects_evidence_outside_current_snapshot():
     changed["investment_thesis"]["hypotheses"][0]["supporting_document_ids"] = [999]
     with pytest.raises(ValueError, match="本次上下文之外的文档"):
         _validate_investment_thesis_output(changed, v5_item(), required=True)
+
+
+def v7_output():
+    output = deepcopy(v6_output())
+    thesis = output["investment_thesis"]
+    thesis.update(
+        primary_track_outlook="测试设备赛道需求取决于客户资本开支，当前只能确认主营匹配。",
+        company_position_summary="公司已形成测试设备收入，但市场份额和客户集中度仍待核验。",
+        second_curve_summary="暂无独立第二曲线的可核验收入贡献。",
+    )
+    evidence_by_code = {
+        "BUSINESS_OUTLOOK": (["business-1", "business-2"], [], "NEUTRAL"),
+        "INDUSTRY_OUTLOOK": (["business-1"], [1], "MIXED"),
+        "COMPETITIVE_POSITION": (["business-2"], [1], "NEUTRAL"),
+        "VALUE_CHAIN_RESILIENCE": (["business-1", "relation-1"], [], "MIXED"),
+        "VALUATION": ([], [], "UNKNOWN"),
+        "INSTITUTION_EXPECTATION": ([], [], "UNKNOWN"),
+        "MARKET_AND_CAPITAL": (["market-1"], [], "NEUTRAL"),
+        "GOVERNANCE_AND_SHAREHOLDER": ([], [], "UNKNOWN"),
+        "SECOND_CURVE": (["business-1"], [], "NEUTRAL"),
+    }
+    thesis["deep_assessments"] = [{
+        "assessment_code": code, "conclusion": f"{code}的一年期证据结论。",
+        "direction": direction, "confidence": 0.6 if direction != "UNKNOWN" else 0.2,
+        "time_horizon": "MULTI_PERIOD", "evidence_document_ids": document_ids,
+        "evidence_fact_ids": fact_ids, "evidence_relation_ids": [],
+        "supporting_points": [], "risks": [], "watch_conditions": [],
+    } for code, (fact_ids, document_ids, direction) in evidence_by_code.items()]
+    thesis["hypotheses"][0]["evidence_items"] = [{
+        "reference_type": "DOCUMENT", "reference_id": "2", "stance": "SUPPORT",
+        "claim": "关联公司宣布扩产", "company_specific_effect": "若已审核供货关系持续，可能形成设备需求线索。",
+        "quote": "关联公司宣布扩产。", "rationale": "扩产与设备需求假设方向一致，但不等于订单已经兑现。",
+    }]
+    return output
+
+
+def test_v7_requires_complete_deep_assessments_and_auditable_document_stance():
+    _validate_investment_thesis_output(
+        v7_output(), v5_item(), required=True, require_deep_assessments=True,
+    )
+    missing = v7_output()
+    missing["investment_thesis"]["deep_assessments"].pop()
+    with pytest.raises(ValueError, match="缺少深度评价维度"):
+        _validate_investment_thesis_output(
+            missing, v5_item(), required=True, require_deep_assessments=True,
+        )
+
+
+def test_v7_rejects_supporting_quote_misfiled_as_counter_evidence():
+    changed = v7_output()
+    hypothesis = changed["investment_thesis"]["hypotheses"][0]
+    hypothesis["supporting_document_ids"] = []
+    hypothesis["counter_document_ids"] = [2]
+    with pytest.raises(ValueError, match="标为支持的证据明细"):
+        _validate_investment_thesis_output(
+            changed, v5_item(), required=True, require_deep_assessments=True,
+        )
 
 
 def test_v5_business_values_are_tied_to_business_composition_fact():

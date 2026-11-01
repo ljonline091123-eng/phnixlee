@@ -13,13 +13,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ModelCallLog, ModelSkill
-from app.models.market_data import DataSource, StockNews, StockSymbol
+from app.models.market_data import DataSource, StockNews, StockNotice, StockSymbol
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
     _apply_model_analysis, _candidate_needs_data_refresh, _compact_reduce_batch_context,
     _compact_retry_model_context, _evidence_data_gate, _model_candidate_context, _prepare_selection_data,
+    _load_disclosure_bodies,
     _refresh_selection_snapshot,
+    _selection_output_contract_guide,
     _split_model_candidate_context,
     _preflight_selection_models, _selection_result_counts, _sync_selection_data,
     create_selection_run, execute_failed_selection_reanalysis,
@@ -147,10 +149,62 @@ def test_contract_retry_context_keeps_business_and_notice_citations_below_budget
     compact = _compact_retry_model_context(item)
     encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
     evidence = compact["evidence_json"]
-    assert len(encoded) < 18_000
+    assert len(encoded) <= 12_000
     assert {row["id"] for row in evidence["documents"] if row["source_table"] == "stock_notice"} == {0, 1}
     assert set(evidence["citation_allowlist"]["notice_document_ids"]) == {0, 1}
     assert set(evidence["citation_allowlist"]["business_fact_ids"]) == {"stock_f10_cache:56", "stock_f10_cache:51"}
+
+
+def test_one_year_retry_uses_all_segment_digests_under_hard_budget():
+    documents = [
+        {"id": index, "source_table": "stock_notice" if index < 61 else "stock_news",
+         "title": f"年度资料{index}", "published_at": "2026-10-30",
+         "content_state": "TEXT_AVAILABLE", "content": BODY * 20}
+        for index in range(125)
+    ]
+    facts = [
+        {"id": f"fact:{index}", "fact_type": "FINANCIAL_OBSERVATION",
+         "properties": {"report_period": "2026H1", "value": index, "detail": BODY * 20}}
+        for index in range(14)
+    ]
+    allowlist = {
+        "document_ids": list(range(125)), "notice_document_ids": list(range(61)),
+        "news_document_ids": list(range(61, 125)), "fact_ids": [row["id"] for row in facts],
+        "financial_fact_ids": [row["id"] for row in facts],
+    }
+    item = {"market": "HK", "symbol": "02533", "name": "黑芝麻智能", "analysis_json": {},
+            "hard_rules_json": {"large": BODY * 100},
+            "evidence_json": {"documents": documents, "facts": facts, "citation_allowlist": allowlist}}
+    digests = [{
+        "segment": {"index": index, "total": 8},
+        "analyzed_document_ids": list(range((index - 1) * 16, min(index * 16, 125))),
+        "findings": [{
+            "dimension": "NEWS", "direction": "MIXED", "summary": BODY * 4,
+            "evidence_document_ids": [min((index - 1) * 16, 124)],
+            "evidence_fact_ids": [f"fact:{min(index - 1, 13)}"], "evidence_relation_ids": [],
+            "evidence_quotes": [BODY],
+        } for _ in range(5)],
+        "conflicts": [BODY], "limitations": [BODY],
+    } for index in range(1, 9)]
+    summary = {"symbol": "02533", "evidence_json": {
+        "citation_allowlist": allowlist, "evidence_segment_digests": digests,
+    }}
+
+    compact = _compact_retry_model_context(item, summary_item=summary)
+    rendered = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+
+    assert len(rendered) <= 12_000
+    assert [row["segment"]["index"] for row in compact["evidence_json"]["evidence_segment_digests"]] == list(range(1, 9))
+    assert compact["evidence_json"]["citation_allowlist"]["document_ids"] == list(range(125))
+    assert compact["evidence_json"]["prompt_compaction"]["all_segment_digests_included"] is True
+
+
+def test_v7_prompt_uses_compact_field_guide_instead_of_full_json_schema():
+    guide = _selection_output_contract_guide("FUNDAMENTAL_THESIS_V7")
+    assert len(guide) < 5_000
+    assert "deep_assessments恰好九项" in guide
+    assert "primary_track_outlook" in guide
+    assert "$defs" not in guide
 
 
 def test_model_context_balances_all_research_fact_types():
@@ -580,6 +634,73 @@ def test_sync_appends_documents_once_and_keeps_single_stock_graph_scope(isolated
     assert run.criteria_json["queued_as_of"] == cutoff.isoformat()
 
 
+def test_reused_local_data_projects_full_window_and_deduplicates_disclosures(isolated):
+    db = isolated
+    sources = [
+        DataSource(source_code=f"NOTICE_{index}", source_name=f"公告来源{index}", adapter_type="MOCK")
+        for index in range(2)
+    ]
+    base = KnowledgeBase(kb_code="NOTICE_KB", kb_name="公告证据", source_tables=["stock_notice"])
+    db.add_all([*sources, base])
+    db.flush()
+    graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="NOTICE_GRAPH", graph_name="公告图谱",
+                           source_tables=["stock_notice"], governance_status="GOVERNED")
+    db.add(graph)
+    db.flush()
+    for source in sources:
+        db.add(StockNotice(market="HK", symbol="02533", title="股份回购进展",
+                           notice_date=datetime.now().date().isoformat(), source_id=source.id,
+                           content_json={"content": BODY, "NEWS_ID": "same-disclosure"}))
+    run = SelectionRun(market="HK", status="RUNNING", data_mode="REAL",
+                       as_of=datetime.now(timezone.utc) - timedelta(days=1),
+                       knowledge_base_ids_json=[base.id], graph_ids_json=[graph.id],
+                       criteria_json={"symbols": ["02533"], "period_months": 12})
+    db.add(run)
+    db.commit()
+
+    result = _prepare_selection_data(db, run, force_refresh=False)
+
+    documents = list(db.scalars(select(KnowledgeDocument)))
+    assert result["status"] == "SKIPPED"
+    assert result["added_source_documents"] == 1
+    assert result["deduplicated_source_records"] == 1
+    assert result["projected_source_counts"] == {"stock_notice": 1}
+    assert len(documents) == 1 and documents[0].content == BODY
+    assert documents[0].metadata_json["business_dedupe_key"].startswith("stock_notice:HK:02533")
+
+
+def test_cached_unreadable_notice_does_not_repeat_remote_download(isolated):
+    db = isolated
+    source = DataSource(source_code="HKEX_TEST", source_name="港交所", adapter_type="MOCK")
+    base = KnowledgeBase(kb_code="HKEX_KB", kb_name="港股公告", source_tables=["stock_notice"])
+    db.add_all([source, base])
+    db.flush()
+    notice = StockNotice(
+        market="HK", symbol="02533", title="核心员工增持公告", notice_date="2026-10-15",
+        url="https://www1.hkexnews.hk/test.pdf", source_id=source.id,
+        content_json={"LONG_TEXT": "公告及通告", "FILE_INFO": "130KB"},
+    )
+    db.add(notice)
+    db.flush()
+    broken = "\u0e3f\u0294\u036a\u0fc1\u03aa\u0349\u02ae\u0453" * 20
+    document = KnowledgeDocument(
+        knowledge_base_id=base.id, source_table="stock_notice", source_record_id=notice.id,
+        market="HK", symbol="02533", title=notice.title, content=broken,
+        metadata_json={"content_scope": "OFFICIAL_SOURCE_TEXT"},
+    )
+    db.add(document)
+    db.commit()
+    evidence = {"documents": [{"id": document.id, "source_table": "stock_notice",
+                                "source_record_id": notice.id, "market": "HK", "symbol": "02533"}]}
+
+    with patch("app.services.document_event_governance.official_notice_body") as download:
+        _load_disclosure_bodies(db, evidence, "HK", "02533")
+
+    assert download.call_count == 0
+    assert evidence["analysis_originals"][str(document.id)]["content_state"] == "METADATA_ONLY"
+    assert "字体映射异常" in evidence["analysis_originals"][str(document.id)]["read_error"]
+
+
 def test_initial_run_executes_sync_preflight_analysis_in_order(isolated):
     db = isolated
     source = DataSource(source_code="ORDER_TEST", source_name="隔离来源", adapter_type="MOCK")
@@ -662,7 +783,7 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence,
     db.expire_all()
     actual = db.get(SelectionCandidate, candidate.id)
     actual_run = db.get(SelectionRun, run.id)
-    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_THESIS_V6"
+    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_THESIS_V7"
     assert stages == (["DATA", "MODEL_PREFLIGHT", "ANALYSIS"] if has_evidence else ["DATA"])
     # The retry decision uses the candidate's persisted evidence before the
     # new local read. Both parameterizations start with usable evidence, so a
