@@ -400,6 +400,17 @@ def test_whole_run_retry_reuses_ready_candidate_data_without_remote_collection(i
             app.dependency_overrides.pop(get_db, None)
 
 
+def test_fresh_run_explicit_reuse_never_starts_remote_collection(isolated):
+    with isolated() as db:
+        payload = request().model_copy(update={"preflight_data_action": "REUSE_EXISTING"})
+        queued = queue_selection_run(db, payload)
+        with patch("app.services.selection._prepare_selection_data") as prepare:
+            execute_selection_job({"selection_run_id": queued.id})
+        assert prepare.call_args.kwargs == {
+            "symbols": ["DEMO001"], "force_refresh": False,
+        }
+
+
 def test_failed_stock_retry_keeps_successful_stock_evidence_and_rejects_duplicate(isolated):
     with isolated() as db:
         run = SelectionRun(market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL")

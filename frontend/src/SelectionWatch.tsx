@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider, type StockSymbol } from "./api";
-import { SelectionAnalysis, type AnalysisDimension } from "./SelectionAnalysis";
+import { SelectionAnalysis, SelectionDiagnostics, type AnalysisDimension } from "./SelectionAnalysis";
 import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionPreflight, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionRunCreate, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
 import { StockDetailDrawer } from "./StockDetailDrawer";
 import "./SelectionWatch.css";
@@ -330,6 +330,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const [scopeError, setScopeError] = useState("");
   const [proofDocument, setProofDocument] = useState<SelectionRecord | null>(null);
   const [candidate, setCandidate] = useState<SelectionCandidate | null>(null);
+  const [candidateTab, setCandidateTab] = useState<"CONCLUSION" | "DIAGNOSTICS" | "EVIDENCE" | "AUDIT">("CONCLUSION");
   const [candidateAudit, setCandidateAudit] = useState<SelectionAudit | null>(null);
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditError, setAuditError] = useState("");
@@ -342,7 +343,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const [preparation, setPreparation] = useState<SelectionPreflight | null>(null);
   const [preparationBusy, setPreparationBusy] = useState(false);
   const [preparationError, setPreparationError] = useState("");
-  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 3, strategy_profile_id: null as number | null, model_instance_code: initialModelCode, use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
+  const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, period_months: 12, strategy_profile_id: null as number | null, model_instance_code: initialModelCode, use_model: false, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const selectAllMatchesRef = useRef<HTMLInputElement>(null);
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
   async function reload() {
@@ -461,7 +462,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     } catch (err) { setError(errorOf(err)); }
   }
   function openReview(item: SelectionCandidate) {
-    setCandidate(item); setCandidateAudit(null); setAuditError(""); setError("");
+    setCandidate(item); setCandidateTab("CONCLUSION"); setProofDocument(null); setCandidateAudit(null); setAuditError(""); setError("");
     setReview({ target_price: item.target_price?.toString() || textOf(item.analysis_json.target_price), stop_price: item.stop_price?.toString() || textOf(item.analysis_json.stop_price), confidence: item.confidence?.toString() || textOf(item.analysis_json.confidence), notes: item.review_notes || "" });
     setAuditBusy(true);
     void selectionApi.candidateAudit(item.id).then(setCandidateAudit).catch(err => setAuditError(errorOf(err))).finally(() => setAuditBusy(false));
@@ -574,7 +575,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     if (busy || backfillActive || ["QUEUED", "RUNNING"].includes(run.status)) { setError("后台任务正在执行，请查看进度后继续。"); return; }
     setBusy(true); setError(""); setNotice("");
     try {
-      const next = await selectionApi.backfill(run.id, { candidate_ids: candidateIds, dimensions, period_months: Number(run.criteria_json.period_months || 3), rerun_analysis: true });
+      const next = await selectionApi.backfill(run.id, { candidate_ids: candidateIds, dimensions, period_months: Number(run.criteria_json.period_months || 12), rerun_analysis: true });
       setRun(next);
       setNotice(candidateIds.length ? "已提交该股票的数据补齐；完成后会创建新的分析批次，旧结论继续保留。" : "已提交本批次缺失数据补齐；完成后会创建新的分析批次，旧结论继续保留。");
     } catch (err) { setError(errorOf(err)); }
@@ -588,6 +589,19 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       setNotice("八维评分已生成，原分析证据和历史结论未被覆盖。");
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
+  }
+  function openCandidateDocument(id: number) {
+    if (!candidate) return;
+    const doc = [
+      ...records(candidate.evidence_json.documents),
+      ...records(candidate.evidence_json.related_security_documents),
+      ...records(candidate.evidence_json.evidence_context?.documents),
+      ...records(candidate.evidence_json.evidence_context?.related_security_documents),
+    ].find(row => Number(row.id) === Number(id));
+    setProofDocument({ id, title: doc?.title, loading: true });
+    void selectionApi.candidateDocument(candidate.id, id)
+      .then(setProofDocument)
+      .catch(err => setProofDocument({ id, title: doc?.title, error: errorOf(err) }));
   }
   return <div className="selection-workbench">
     {error && !createOpen && !candidate && <div className="form-error" role="alert">{error} <button type="button" disabled={loading} onClick={() => setLoadVersion(value => value + 1)}>重新加载</button></div>}{notice && <p className="selection-notice" role="status">{notice}</p>}
@@ -624,7 +638,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
         </section>}
         <div className="selection-toolbar"><label>历史选股批次 <select aria-label="选股批次" value={run?.id ?? ""} disabled={busy} onChange={event => void selectRun(Number(event.target.value))}><option value="" disabled>暂无选股批次</option>{runs.map(item => <option key={item.id} value={item.id}>#{item.id} · {nameOf(item.market)} · {dateOf(item.created_at)} · {item.candidate_count} 只</option>)}</select></label>{run && <div><Badge value={run.analysis_mode} /> <Badge value={run.status} /></div>}</div>
         {run ? <>
-          <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 3)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
+          <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 12)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
           {["QUEUED", "RUNNING"].includes(run.status) && (() => { const progress = (run.criteria_json.progress || {}) as SelectionRecord; const heartbeat = textOf(progress.heartbeat_at || progress.updated_at); const age = heartbeatAge(progress.heartbeat_at); const stale = age != null && age > 15; return <div className={`batch-progress${stale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{textOf(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{textOf(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsed(progress, activityTick))}</span><span>实际模型：{textOf(progress.model_instance_code) || run.model_instance_code || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>{Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}{Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}<span>最近心跳：{heartbeat ? `${age ?? 0} 秒前` : "尚未记录"}</span></div>{stale && <strong className="batch-progress-warning">最近 {age} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>进度百分比表示阶段；系统会持续写入后台活动和心跳。</small>{records(progress.process_steps).length > 0 && <div className="batch-process-steps"><strong>后台处理记录</strong><ol>{records(progress.process_steps).slice(-8).reverse().map((step, index) => <li key={`${textOf(step.at)}-${index}`}><span>{textOf(step.message) || "处理中"}</span><small>{textOf(step.stage)} · {Number(step.percent || 0)}% · {textOf(step.at) ? dateOf(textOf(step.at)) : "刚刚"}</small></li>)}</ol></div>}</div>; })()}
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
@@ -656,7 +670,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       </>}
     </section>
     {createOpen && <Dialog title="新建选股" busy={busy} close={() => setCreateOpen(false)}><form className="selection-form" onSubmit={create}>
-      <div className="selection-form-grid"><label>市场<select value={form.market} onChange={event => {setForm({ ...form, market: event.target.value }); setChosenStocks([]); setStockQuery("");}}>{["CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"].map(market => <option key={market} value={market}>{nameOf(market)}</option>)}</select></label><label>候选数量上限<input type="number" required min={1} max={50} value={form.candidate_limit} onChange={event => setForm({ ...form, candidate_limit: Number(event.target.value) })} /></label><label>分析周期（月）<input type="number" required min={1} max={60} step={1} value={form.period_months} onChange={event => setForm({ ...form, period_months: Math.max(1, Math.floor(Number(event.target.value) || 1)) })} /><small>默认读取最近 3 个自然月，可填写 1–60 的自然数。</small></label></div>
+      <div className="selection-form-grid"><label>市场<select value={form.market} onChange={event => {setForm({ ...form, market: event.target.value }); setChosenStocks([]); setStockQuery("");}}>{["CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"].map(market => <option key={market} value={market}>{nameOf(market)}</option>)}</select></label><label>候选数量上限<input type="number" required min={1} max={50} value={form.candidate_limit} onChange={event => setForm({ ...form, candidate_limit: Number(event.target.value) })} /></label><label>分析周期（月）<input type="number" required min={1} max={60} step={1} value={form.period_months} onChange={event => setForm({ ...form, period_months: Math.max(1, Math.floor(Number(event.target.value) || 1)) })} /><small>默认读取最近 12 个自然月，可填写 1–60 的自然数。</small></label></div>
       <div className="selection-stock-picker">
         <label>1. 选择股票<input aria-label="选股股票搜索" role="combobox" aria-expanded={!!stockMatches.length} aria-controls="selection-stock-options" value={stockQuery} placeholder="代码、中文名称、英文名、拼音或首字母" onChange={event => setStockQuery(event.target.value)} /></label>
         {stockMatches.length > 0 && <div className="selection-select-all"><label><input ref={selectAllMatchesRef} type="checkbox" checked={allMatchesSelected} aria-checked={allMatchesSelected ? true : selectedMatchCount ? "mixed" : false} onChange={event => toggleVisibleMatches(event.target.checked)} />全选当前 {stockMatches.length} 条结果</label><span>本页已选 {selectedMatchCount} 只 · 搜索最多显示 50 条</span></div>}
@@ -704,7 +718,32 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
       <div className="batch-dialog-feedback" aria-live="polite">{error && <p className="form-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{busy && <p>正在提交，请稍候…</p>}{backfillActive && <><strong>{textOf(backfillProgress.message)}</strong><progress aria-label="弹窗数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /></>}</div>
-      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><SelectionAnalysis candidate={candidate} backfillDisabled={busy || backfillActive || ["QUEUED", "RUNNING"].includes(run?.status || "")} onBackfillAll={() => void backfill([candidate.id])} onRescore={() => void rescore(candidate)} onBackfillDimension={dimension => void backfill([candidate.id], [dimension])} onDocument={id => {const doc = [...records(candidate.evidence_json.documents), ...records(candidate.evidence_json.related_security_documents), ...records(candidate.evidence_json.evidence_context?.documents), ...records(candidate.evidence_json.evidence_context?.related_security_documents)].find(row => row.id === id); setProofDocument({id, title: doc?.title, loading: true}); void selectionApi.candidateDocument(candidate.id, id).then(setProofDocument).catch(err => setProofDocument({id, error: errorOf(err)}));}} />{strings(candidate.evidence_json.missing_data).length > 0 && <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p></section>}{proofDocument && <article className="selection-evidence"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}<details><summary>查看原文、事实及血缘明细</summary><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} /></details>
+      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p>
+      <nav className="selection-analysis-tabs" aria-label="候选分析内容">
+        {([
+          ["CONCLUSION", "结论分析"],
+          ["DIAGNOSTICS", "数据事实与问题"],
+          ["EVIDENCE", "原文、事实与血缘"],
+          ["AUDIT", "执行审计"],
+        ] as const).map(([key, label]) => <button type="button" key={key} className={candidateTab === key ? "active" : ""} onClick={() => setCandidateTab(key)}>{label}</button>)}
+      </nav>
+      {candidateTab === "CONCLUSION" && <SelectionAnalysis
+        candidate={candidate}
+        backfillDisabled={busy || backfillActive || ["QUEUED", "RUNNING"].includes(run?.status || "")}
+        onBackfillAll={() => void backfill([candidate.id])}
+        onRescore={() => void rescore(candidate)}
+        onBackfillDimension={dimension => void backfill([candidate.id], [dimension])}
+        onDocument={id => { setCandidateTab("EVIDENCE"); openCandidateDocument(id); }}
+      />}
+      {candidateTab === "DIAGNOSTICS" && <>
+        <SelectionDiagnostics candidate={candidate} />
+        {strings(candidate.evidence_json.missing_data).length > 0 ? <section className="selection-recovery"><div className="selection-scope-heading"><strong>该股票有 {strings(candidate.evidence_json.missing_data).length} 项数据待补齐</strong><button type="button" disabled={busy} onClick={() => void backfill([candidate.id])}>补齐该股票并重新分析</button></div><p className="selection-help">补齐会读取已登记数据源，并创建新分析批次；当前证据快照和结论不会被覆盖。</p><ul>{strings(candidate.evidence_json.missing_data).map((item, index) => <li key={index}>{item}</li>)}</ul></section> : <p className="selection-diagnostic-ok">本轮最低分析数据门槛已通过；增强数据和质量提示见上方诊断。</p>}
+      </>}
+      {candidateTab === "EVIDENCE" && <>
+        {proofDocument && <article className="selection-evidence selection-proof-document"><h3>{textOf(proofDocument.title) || `原文 #${proofDocument.id}`}</h3><p>{proofDocument.loading ? "正在读取原文…" : proofDocument.error || proofDocument.content}</p><button type="button" onClick={() => setProofDocument(null)}>收起原文</button></article>}
+        <Evidence candidate={candidate} />
+      </>}
+      {candidateTab === "AUDIT" && <AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} />}
       {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price || !candidate.analysis_json.publication?.conclusion_available}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
     </Dialog>}
     {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<RetrospectiveTrail rows={detailRetrospectives} error={detailAuditError} /><div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}

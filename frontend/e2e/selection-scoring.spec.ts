@@ -38,6 +38,7 @@ test("真实候选展示八维雷达图和证据下钻", async ({ page }) => {
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator(".score-radar svg")).toBeVisible();
   await expect(page.getByText(/可信综合分/)).toBeVisible();
+  await page.locator(".analysis-deep-dive > summary").click();
   await page.getByText("查看八维评分依据、覆盖与权重").click();
   await expect(page.locator(".scorecard-grid article")).toHaveCount(8);
   const dialogOverflow = await page.locator(".batch-detail").evaluate(element => element.scrollWidth > element.clientWidth + 1);

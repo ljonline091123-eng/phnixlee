@@ -2,6 +2,14 @@ from app.models.market_data import StockNotice
 from app.services import document_event_governance as governor
 
 
+def test_readable_source_text_rejects_broken_pdf_font_mapping():
+    broken = "\u0e3f\u0294\u036a\u0fc1\u03aa\u0349\u02ae\u0453" * 20
+    readable = "Black Sesame International Holding Limited 核心员工拟增持本公司股份。" * 5
+
+    assert governor.readable_source_text(broken) is False
+    assert governor.readable_source_text(readable) is True
+
+
 def test_linked_cninfo_notice_reconstructs_pdf_url(monkeypatch):
     requested = []
 
