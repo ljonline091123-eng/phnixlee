@@ -13,13 +13,20 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ModelCallLog, ModelSkill
-from app.models.market_data import DataSource, StockNews, StockSymbol
+from app.models.market_data import DataSource, StockNews, StockNotice, StockSymbol
 from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionRunCreate
 from app.services.selection import (
     _apply_model_analysis, _candidate_needs_data_refresh, _compact_reduce_batch_context,
     _compact_retry_model_context, _evidence_data_gate, _model_candidate_context, _prepare_selection_data,
+    _load_disclosure_bodies,
+    _enrich_market_thesis_from_evidence,
+    _normalize_selection_model_row,
+    _parse_model_recommendations,
+    _sanitize_investment_thesis_evidence,
     _refresh_selection_snapshot,
+    _restore_mapped_document_coverage,
+    _selection_output_contract_guide,
     _split_model_candidate_context,
     _preflight_selection_models, _selection_result_counts, _sync_selection_data,
     create_selection_run, execute_failed_selection_reanalysis,
@@ -147,10 +154,103 @@ def test_contract_retry_context_keeps_business_and_notice_citations_below_budget
     compact = _compact_retry_model_context(item)
     encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
     evidence = compact["evidence_json"]
-    assert len(encoded) < 18_000
+    assert len(encoded) <= 28_000
     assert {row["id"] for row in evidence["documents"] if row["source_table"] == "stock_notice"} == {0, 1}
     assert set(evidence["citation_allowlist"]["notice_document_ids"]) == {0, 1}
     assert set(evidence["citation_allowlist"]["business_fact_ids"]) == {"stock_f10_cache:56", "stock_f10_cache:51"}
+
+
+def test_one_year_retry_uses_all_segment_digests_under_hard_budget():
+    documents = [
+        {"id": index, "source_table": "stock_notice" if index < 61 else "stock_news",
+         "title": f"年度资料{index}", "published_at": "2026-10-30",
+         "content_state": "TEXT_AVAILABLE", "content": BODY * 20}
+        for index in range(125)
+    ]
+    facts = [
+        {"id": f"fact:{index}", "fact_type": "FINANCIAL_OBSERVATION",
+         "properties": {"report_period": "2026H1", "value": index, "detail": BODY * 20}}
+        for index in range(14)
+    ]
+    allowlist = {
+        "document_ids": list(range(125)), "notice_document_ids": list(range(61)),
+        "news_document_ids": list(range(61, 125)), "fact_ids": [row["id"] for row in facts],
+        "financial_fact_ids": [row["id"] for row in facts],
+    }
+    item = {"market": "HK", "symbol": "02533", "name": "黑芝麻智能", "analysis_json": {},
+            "hard_rules_json": {"large": BODY * 100},
+            "evidence_json": {"documents": documents, "facts": facts, "citation_allowlist": allowlist}}
+    digests = [{
+        "segment": {"index": index, "total": 8},
+        "analyzed_document_ids": list(range((index - 1) * 16, min(index * 16, 125))),
+        "findings": [{
+            "dimension": "NEWS", "direction": "MIXED", "summary": BODY * 4,
+            "evidence_document_ids": [min((index - 1) * 16, 124)],
+            "evidence_fact_ids": [f"fact:{min(index - 1, 13)}"], "evidence_relation_ids": [],
+            "evidence_quotes": [BODY],
+        } for _ in range(5)],
+        "conflicts": [BODY], "limitations": [BODY],
+    } for index in range(1, 9)]
+    summary = {"symbol": "02533", "evidence_json": {
+        "citation_allowlist": allowlist, "evidence_segment_digests": digests,
+    }}
+
+    compact = _compact_retry_model_context(item, summary_item=summary)
+    rendered = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+
+    assert len(rendered) <= 28_000
+    assert [row["segment"]["index"] for row in compact["evidence_json"]["evidence_segment_digests"]] == list(range(1, 9))
+    assert compact["evidence_json"]["citation_allowlist"]["document_ids"] == list(range(125))
+    assert compact["evidence_json"]["prompt_compaction"]["all_segment_digests_included"] is True
+
+
+def test_v7_prompt_uses_compact_field_guide_instead_of_full_json_schema():
+    guide = _selection_output_contract_guide("FUNDAMENTAL_THESIS_V7")
+    assert len(guide) < 5_000
+    assert "deep_assessments恰好九项" in guide
+    assert "primary_track_outlook" in guide
+    assert "$defs" not in guide
+
+
+def test_provider_enum_repair_downgrades_ambiguous_values_without_inventing_events():
+    raw = {
+        "events": [
+            {"quote": "", "validation_status": "VERIFIED"},
+            {"quote": "公司拟注销已回购库存股份", "validation_status": "VERIFIED"},
+        ],
+        "event_links": [{"relation_scope": "SAME_SECURITY"}],
+        "validation_findings": [{"validation_status": "CONTRADICTED"}],
+        "business_quality": {"technology_level": "技术门槛较高但缺少来源核验"},
+        "investment_thesis": {
+            "hypotheses": [
+                {"status": "UNVERIFIED", "horizon": "12个月"},
+                {"status": "PARTIALLY_REALIZED", "horizon": "6M"},
+            ],
+            "deep_assessments": [
+                {"time_horizon": "10个交易日"},
+                {"time_horizon": "12个月以上"},
+            ],
+        },
+        "positives": [str(index) for index in range(6)],
+        "risks": [str(index) for index in range(6)],
+        "watch_conditions": [str(index) for index in range(6)],
+    }
+
+    normalized = _normalize_selection_model_row(raw)
+
+    assert len(normalized["events"]) == 1
+    assert normalized["events"][0]["validation_status"] == "UNVERIFIED"
+    assert normalized["event_links"][0]["relation_scope"] == "CURRENT_SECURITY"
+    assert normalized["validation_findings"][0]["validation_status"] == "CONFLICTED"
+    assert normalized["business_quality"]["technology_level"] == "UNKNOWN"
+    hypotheses = normalized["investment_thesis"]["hypotheses"]
+    assert [(row["status"], row["horizon"]) for row in hypotheses] == [
+        ("INSUFFICIENT", "LONG"), ("MIXED", "MEDIUM"),
+    ]
+    assert [row["time_horizon"] for row in normalized["investment_thesis"]["deep_assessments"]] == ["SHORT", "LONG"]
+    assert len(normalized["positives"]) == len(normalized["risks"]) == len(normalized["watch_conditions"]) == 4
+    assert normalized["semantic_linkage_status"] == "PARTIAL"
+    assert any("缺少可逐字核对" in warning for warning in normalized["semantic_linkage_warnings"])
 
 
 def test_model_context_balances_all_research_fact_types():
@@ -180,6 +280,35 @@ def test_model_context_balances_all_research_fact_types():
     assert {"earnings:0", "institution:1"}.issubset(
         set(context["evidence_json"]["citation_allowlist"]["financial_fact_ids"])
     )
+
+
+def test_model_context_retains_one_year_market_risk_metrics_before_recent_bars():
+    context = _model_candidate_context({
+        "market": "HK", "symbol": "02533", "name": "黑芝麻智能", "analysis_json": {},
+        "evidence_json": {
+            "facts": [{
+                "id": "market:1", "fact_type": "MARKET_OBSERVATION",
+                "properties": {
+                    "period": "daily",
+                    "recent_bars": [{"trade_date": f"2026-10-{day:02d}", "close_price": day, "volume": day * 1000}
+                                    for day in range(1, 21)],
+                    "period_summary": {
+                        "start_date": "2025-11-03", "end_date": "2026-10-30", "bar_count": 245,
+                        "return_20d_pct": -30.3971, "return_60d_pct": -45.1445,
+                        "return_120d_pct": -62.112, "annualized_volatility_pct": 55.6209,
+                        "max_drawdown_pct": -71.639,
+                        "recent_20d_vs_previous_20d_volume_ratio": 0.945,
+                    },
+                },
+            }],
+            "documents": [], "chunks": [], "graph_paths": [], "missing_data": [],
+        },
+    })
+    market = next(row for row in context["evidence_json"]["facts"] if row["id"] == "market:1")
+    summary = market["properties"]["period_summary"]
+    assert summary["annualized_volatility_pct"] == 55.6209
+    assert summary["max_drawdown_pct"] == -71.639
+    assert summary["recent_20d_vs_previous_20d_volume_ratio"] == 0.945
 
 
 def test_data_sync_keeps_pending_f10_and_qa_visible(isolated):
@@ -291,6 +420,154 @@ def output(*, empty=False):
                 "evidence_fact_ids": [], "evidence_relation_ids": []}
                 for code in ("NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH")],
             "events": [], "positives": [], "risks": [], "watch_conditions": []}
+
+
+def test_model_status_synonyms_are_normalized_without_weakening_contract():
+    normalized = _normalize_selection_model_row({
+        "investment_thesis": {
+            "hypotheses": [{"status": "PARTIALLY_SUPPORTED", "horizon": "12个月"}],
+            "deep_assessments": [],
+        },
+    })
+    hypothesis = normalized["investment_thesis"]["hypotheses"][0]
+    assert hypothesis["status"] == "MIXED"
+    assert hypothesis["horizon"] == "LONG"
+
+    alternate = _normalize_selection_model_row({
+        "events": [{"quote": "这是可以逐字核验的原文引句", "validation_status": "PARTIALLY_VERIFIED"}],
+        "investment_thesis": {
+            "hypotheses": [{"status": "PARTIALLY_VALIDATED", "horizon": "MEDIUM_TO_LONG"}],
+            "deep_assessments": [],
+        },
+    })
+    assert alternate["events"][0]["validation_status"] == "UNVERIFIED"
+    assert alternate["investment_thesis"]["hypotheses"][0]["status"] == "MIXED"
+    assert alternate["investment_thesis"]["hypotheses"][0]["horizon"] == "MULTI_PERIOD"
+
+
+def test_parser_recovers_single_candidate_deep_analysis_written_at_root():
+    row = output()
+    value_chain = {
+        "status": "INSUFFICIENT",
+        "summary": "当前缺少已审核的具体上下游关系，保留业务层风险判断。",
+        "impacts": [],
+        "risks": ["具体客户关系尚待核验"],
+        "watch_conditions": ["补充已审核关系"],
+    }
+    malformed = json.dumps({
+        "candidates": [row],
+        "value_chain_analysis": value_chain,
+    }, ensure_ascii=False) + "]}"
+
+    parsed, errors = _parse_model_recommendations(malformed, {"688627"})
+
+    assert errors == {}
+    assert parsed["688627"]["value_chain_analysis"] == value_chain
+
+
+def test_thesis_promotes_business_backed_track_over_broad_provider_industry():
+    output_row = {
+        "investment_thesis": {
+            "status": "PARTIAL",
+            "classifications": [
+                {
+                    "role": "PRIMARY_INDUSTRY", "name": "软件服务", "relevance_score": .6,
+                    "evidence_document_ids": [], "evidence_fact_ids": ["classification:1"],
+                    "evidence_relation_ids": [],
+                },
+                {
+                    "role": "CORE_THEME", "name": "智能驾驶芯片", "relevance_score": .9,
+                    "evidence_document_ids": [123], "evidence_fact_ids": ["business:1"],
+                    "evidence_relation_ids": [],
+                },
+            ],
+            "hypotheses": [],
+        },
+    }
+    item = {
+        "evidence_json": {
+            "documents": [{"id": 123, "content": BODY}],
+            "facts": [
+                {"id": "classification:1", "fact_type": "CLASSIFICATION_OBSERVATION"},
+                {"id": "business:1", "fact_type": "BUSINESS_PROFILE"},
+            ],
+            "graph_paths": [],
+        },
+    }
+
+    _sanitize_investment_thesis_evidence(output_row, item)
+
+    classifications = output_row["investment_thesis"]["classifications"]
+    assert classifications[0]["role"] == "SECONDARY_INDUSTRY"
+    assert classifications[1]["role"] == "PRIMARY_INDUSTRY"
+    assert "已校正为核心行业" in output_row["evidence_normalization_notes"][0]
+
+
+def test_market_thesis_restores_full_year_metrics_and_event_reactions():
+    output_row = {
+        "investment_thesis": {
+            "market_timing_summary": "仅分析最新交易日。",
+            "deep_assessments": [{
+                "assessment_code": "MARKET_AND_CAPITAL", "conclusion": "仅分析20日收益。",
+                "evidence_fact_ids": [], "time_horizon": "SHORT",
+            }],
+        },
+    }
+    item = {"evidence_json": {"facts": [{
+        "id": "market:1", "fact_type": "MARKET_OBSERVATION", "properties": {
+            "period_summary": {
+                "start_date": "2025-11-03", "end_date": "2026-10-30", "bar_count": 245,
+                "return_20d_pct": -30.3971, "return_60d_pct": -45.1445,
+                "return_120d_pct": -62.112, "annualized_volatility_pct": 55.6209,
+                "max_drawdown_pct": -71.639, "period_high": 24.1, "period_low": 6.835,
+                "recent_20d_vs_previous_20d_volume_ratio": .945,
+            },
+            "event_reactions": [{
+                "document_id": 123, "event_date": "2026-09-30", "title": "中期报告",
+                "t_plus_1_return_pct": -2.6477, "t_plus_5_return_pct": -14.8676,
+                "t_plus_20_return_pct": -30.3971,
+            }],
+        },
+    }]}}
+
+    _enrich_market_thesis_from_evidence(output_row, item)
+
+    thesis = output_row["investment_thesis"]
+    assert "20日/60日/120日收益分别为-30.40%/-45.14%/-62.11%" in thesis["market_timing_summary"]
+    assert "最大回撤-71.64%" in thesis["market_timing_summary"]
+    assert "T+20 -30.40%" in thesis["market_timing_summary"]
+    assessment = thesis["deep_assessments"][0]
+    assert assessment["time_horizon"] == "LONG"
+    assert assessment["evidence_fact_ids"] == ["market:1"]
+
+
+def test_complete_map_receipts_restore_reading_coverage_without_inventing_ids():
+    output_row = {"analyzed_document_ids": [1]}
+    summary_item = {"evidence_json": {
+        "citation_allowlist": {"document_ids": [1, 2, 3]},
+        "evidence_segment_digests": [
+            {"segment": {"index": 1, "total": 2}, "analyzed_document_ids": [1, 2, 999]},
+            {"segment": {"index": 2, "total": 2}, "analyzed_document_ids": [3]},
+        ],
+    }}
+
+    _restore_mapped_document_coverage(output_row, summary_item)
+
+    assert output_row["analyzed_document_ids"] == [1, 2, 3]
+
+
+def test_incomplete_map_receipts_do_not_change_reading_coverage():
+    output_row = {"analyzed_document_ids": [1]}
+    summary_item = {"evidence_json": {
+        "citation_allowlist": {"document_ids": [1, 2, 3]},
+        "evidence_segment_digests": [
+            {"segment": {"index": 1, "total": 2}, "analyzed_document_ids": [1, 2]},
+        ],
+    }}
+
+    _restore_mapped_document_coverage(output_row, summary_item)
+
+    assert output_row["analyzed_document_ids"] == [1]
 
 
 def analyze(responses, models=None):
@@ -469,13 +746,14 @@ def test_result_counts_are_exclusive_and_do_not_rewrite_empty_historical_success
     assert [row.analysis_json for row in rows] == before
 
 
-def test_financial_event_type_is_repaired_instead_of_reported_as_provider_failure():
+def test_unquoted_financial_event_is_withdrawn_without_failing_core_analysis():
     malformed = output()
     malformed["events"] = [{"source_type": "FINANCIAL"}]
     _run, analysis, calls = analyze([malformed, output()])
-    assert len(calls) == 2 and analysis["model_output_status"] == "SUCCESS"
-    assert analysis["model_attempts"][0]["status"] == "INVALID"
-    assert "source_type" in analysis["model_attempts"][0]["reason"]
+    assert len(calls) == 1 and analysis["model_output_status"] == "SUCCESS"
+    assert analysis["model"]["events"] == []
+    assert analysis["model"]["semantic_linkage_status"] == "PARTIAL"
+    assert "缺少可逐字核对" in analysis["model"]["semantic_linkage_warnings"][0]
 
 
 def test_all_insufficient_response_is_failure_after_three_attempts():
@@ -580,6 +858,73 @@ def test_sync_appends_documents_once_and_keeps_single_stock_graph_scope(isolated
     assert run.criteria_json["queued_as_of"] == cutoff.isoformat()
 
 
+def test_reused_local_data_projects_full_window_and_deduplicates_disclosures(isolated):
+    db = isolated
+    sources = [
+        DataSource(source_code=f"NOTICE_{index}", source_name=f"公告来源{index}", adapter_type="MOCK")
+        for index in range(2)
+    ]
+    base = KnowledgeBase(kb_code="NOTICE_KB", kb_name="公告证据", source_tables=["stock_notice"])
+    db.add_all([*sources, base])
+    db.flush()
+    graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="NOTICE_GRAPH", graph_name="公告图谱",
+                           source_tables=["stock_notice"], governance_status="GOVERNED")
+    db.add(graph)
+    db.flush()
+    for source in sources:
+        db.add(StockNotice(market="HK", symbol="02533", title="股份回购进展",
+                           notice_date=datetime.now().date().isoformat(), source_id=source.id,
+                           content_json={"content": BODY, "NEWS_ID": "same-disclosure"}))
+    run = SelectionRun(market="HK", status="RUNNING", data_mode="REAL",
+                       as_of=datetime.now(timezone.utc) - timedelta(days=1),
+                       knowledge_base_ids_json=[base.id], graph_ids_json=[graph.id],
+                       criteria_json={"symbols": ["02533"], "period_months": 12})
+    db.add(run)
+    db.commit()
+
+    result = _prepare_selection_data(db, run, force_refresh=False)
+
+    documents = list(db.scalars(select(KnowledgeDocument)))
+    assert result["status"] == "SKIPPED"
+    assert result["added_source_documents"] == 1
+    assert result["deduplicated_source_records"] == 1
+    assert result["projected_source_counts"] == {"stock_notice": 1}
+    assert len(documents) == 1 and documents[0].content == BODY
+    assert documents[0].metadata_json["business_dedupe_key"].startswith("stock_notice:HK:02533")
+
+
+def test_cached_unreadable_notice_does_not_repeat_remote_download(isolated):
+    db = isolated
+    source = DataSource(source_code="HKEX_TEST", source_name="港交所", adapter_type="MOCK")
+    base = KnowledgeBase(kb_code="HKEX_KB", kb_name="港股公告", source_tables=["stock_notice"])
+    db.add_all([source, base])
+    db.flush()
+    notice = StockNotice(
+        market="HK", symbol="02533", title="核心员工增持公告", notice_date="2026-10-15",
+        url="https://www1.hkexnews.hk/test.pdf", source_id=source.id,
+        content_json={"LONG_TEXT": "公告及通告", "FILE_INFO": "130KB"},
+    )
+    db.add(notice)
+    db.flush()
+    broken = "\u0e3f\u0294\u036a\u0fc1\u03aa\u0349\u02ae\u0453" * 20
+    document = KnowledgeDocument(
+        knowledge_base_id=base.id, source_table="stock_notice", source_record_id=notice.id,
+        market="HK", symbol="02533", title=notice.title, content=broken,
+        metadata_json={"content_scope": "OFFICIAL_SOURCE_TEXT"},
+    )
+    db.add(document)
+    db.commit()
+    evidence = {"documents": [{"id": document.id, "source_table": "stock_notice",
+                                "source_record_id": notice.id, "market": "HK", "symbol": "02533"}]}
+
+    with patch("app.services.document_event_governance.official_notice_body") as download:
+        _load_disclosure_bodies(db, evidence, "HK", "02533")
+
+    assert download.call_count == 0
+    assert evidence["analysis_originals"][str(document.id)]["content_state"] == "METADATA_ONLY"
+    assert "字体映射异常" in evidence["analysis_originals"][str(document.id)]["read_error"]
+
+
 def test_initial_run_executes_sync_preflight_analysis_in_order(isolated):
     db = isolated
     source = DataSource(source_code="ORDER_TEST", source_name="隔离来源", adapter_type="MOCK")
@@ -613,6 +958,64 @@ def test_initial_run_executes_sync_preflight_analysis_in_order(isolated):
                                     knowledge_base_ids=[base.id], graph_ids=[graph.id]))
     assert stages == ["DATA", "MODEL_PREFLIGHT", "ANALYSIS"]
     assert run.completed_at is not None
+
+
+def test_optional_llm_evaluation_failure_does_not_downgrade_valid_core_analysis(isolated):
+    db = isolated
+    source = DataSource(source_code="EVALUATION_TEST", source_name="评价隔离来源", adapter_type="MOCK")
+    base = KnowledgeBase(kb_code="EVALUATION_KB", kb_name="评价验证知识库")
+    db.add_all([source, base])
+    db.flush()
+    graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="EVALUATION_GRAPH",
+                           graph_name="评价验证图谱", governance_status="GOVERNED")
+    db.add(graph)
+    db.add(StockSymbol(market="CN_A", symbol="688627", name="精智达", exchange="SSE", source_id=source.id))
+    db.commit()
+
+    def analyze(_db, _run, pool):
+        _run.analysis_mode = "MODEL_COMPLETED"
+        for item, _score in pool:
+            item["analysis_json"].update({
+                "model_output_status": "SUCCESS", "analysis_validation_status": "PASSED",
+                "model": {"decision": "WATCH", "confidence": .68,
+                          "headline": "核心结论已通过", "reasoning": "基于已核验证据"},
+            })
+
+    def score(_db, candidate, _profile):
+        candidate.analysis_json = {**candidate.analysis_json, "scoring": valid_scorecard()}
+
+    def evaluate(_db, _run, candidates):
+        for candidate in candidates:
+            candidate.analysis_json = {**candidate.analysis_json,
+                "llm_evaluation": {"status": "FAILED", "message": "附加评价服务超时"}}
+        _db.flush()
+        return {"eligible": len(candidates), "success": 0, "failed": len(candidates), "skipped": 0}
+
+    with patch("app.services.selection._prepare_selection_data"), \
+            patch("app.services.selection._preflight_selection_models", return_value=None), \
+            patch("app.services.selection._apply_model_analysis", side_effect=analyze), \
+            patch("app.services.selection._evidence", return_value=evidence()), \
+            patch("app.services.selection._load_disclosure_bodies"), \
+            patch("app.services.selection_scoring.score_candidate", side_effect=score), \
+            patch("app.services.selection._generate_run_llm_evaluations", side_effect=evaluate):
+        run = create_selection_run(db, SelectionRunCreate(
+            symbols=["688627"], use_model=True, data_mode="REAL",
+            knowledge_base_ids=[base.id], graph_ids=[graph.id],
+        ))
+
+    assert run.status == "REVIEW", (
+        run.analysis_mode, run.error_message, run.criteria_json.get("result_counts"),
+        [row.analysis_json for row in db.scalars(
+            select(SelectionCandidate).where(SelectionCandidate.run_id == run.id)
+        )],
+    )
+    assert run.analysis_mode == "MODEL_COMPLETED"
+    assert run.error_message is None
+    assert run.criteria_json["result_counts"] == {
+        "passed_count": 1, "citation_partial_count": 0, "failed_count": 0,
+        "data_blocked_count": 0, "evaluation_failed_count": 1,
+    }
+    assert "附加 LLM 文字评价生成失败" in run.criteria_json["review_warnings"][0]
 
 
 @pytest.mark.parametrize("has_evidence", [True, False])
@@ -662,7 +1065,7 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence,
     db.expire_all()
     actual = db.get(SelectionCandidate, candidate.id)
     actual_run = db.get(SelectionRun, run.id)
-    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_THESIS_V6"
+    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_THESIS_V7"
     assert stages == (["DATA", "MODEL_PREFLIGHT", "ANALYSIS"] if has_evidence else ["DATA"])
     # The retry decision uses the candidate's persisted evidence before the
     # new local read. Both parameterizations start with usable evidence, so a

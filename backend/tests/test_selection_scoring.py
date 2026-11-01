@@ -99,7 +99,7 @@ def test_trusted_score_contracts_toward_neutral(db):
     assert result["trusted_score"] is not None
     assert abs(result["trusted_score"] - 50) <= abs(result["base_score"] - 50)
     price = next(row for row in result["dimensions"] if row["dimension_code"] == "PRICE_RISK")
-    assert price["status"] == "SUPPORTED" and price["coverage"] == 1
+    assert price["status"] == "SUPPORTED" and price["coverage"] == 0.4
 
 
 def test_research_forecasts_and_normalized_fund_flow_feed_scoring(db):

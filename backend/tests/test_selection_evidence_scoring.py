@@ -17,6 +17,7 @@ from app.models.selection import SelectionCandidate, SelectionRun
 from app.schemas.selection import SelectionBackfillRequest, SelectionReviewRequest
 from app.services.selection import (
     _normalize_business_composition_output,
+    _sanitize_investment_thesis_evidence,
     _validate_business_value_chain_output,
     _validate_investment_thesis_output,
     execute_selection_data_backfill,
@@ -96,6 +97,8 @@ def v5_item():
                  "name": "测试设备", "revenue": 100.0, "revenue_ratio": 0.6,
                  "profit": 30.0, "profit_ratio": 0.7, "gross_margin": 0.3,
              }]}]}},
+            {"id": "market-1", "fact_type": "MARKET_OBSERVATION", "status": "SOURCE",
+             "properties": {"period_summary": {"return_20d_pct": 5.0, "bar_count": 245}}},
             {"id": "relation-1", "fact_type": "SUPPLIES_TO", "status": "ACCEPTED",
              "properties": {"product": "测试设备"}},
         ],
@@ -195,12 +198,83 @@ def test_v6_rejects_evidence_outside_current_snapshot():
         _validate_investment_thesis_output(changed, v5_item(), required=True)
 
 
+def v7_output():
+    output = deepcopy(v6_output())
+    thesis = output["investment_thesis"]
+    thesis.update(
+        primary_track_outlook="测试设备赛道需求取决于客户资本开支，当前只能确认主营匹配。",
+        company_position_summary="公司已形成测试设备收入，但市场份额和客户集中度仍待核验。",
+        second_curve_summary="暂无独立第二曲线的可核验收入贡献。",
+    )
+    evidence_by_code = {
+        "BUSINESS_OUTLOOK": (["business-1", "business-2"], [], "NEUTRAL"),
+        "INDUSTRY_OUTLOOK": (["business-1"], [1], "MIXED"),
+        "COMPETITIVE_POSITION": (["business-2"], [1], "NEUTRAL"),
+        "VALUE_CHAIN_RESILIENCE": (["business-1", "relation-1"], [], "MIXED"),
+        "VALUATION": ([], [], "UNKNOWN"),
+        "INSTITUTION_EXPECTATION": ([], [], "UNKNOWN"),
+        "MARKET_AND_CAPITAL": (["market-1"], [], "NEUTRAL"),
+        "GOVERNANCE_AND_SHAREHOLDER": ([], [], "UNKNOWN"),
+        "SECOND_CURVE": (["business-1"], [], "NEUTRAL"),
+    }
+    thesis["deep_assessments"] = [{
+        "assessment_code": code, "conclusion": f"{code}的一年期证据结论。",
+        "direction": direction, "confidence": 0.6 if direction != "UNKNOWN" else 0.2,
+        "time_horizon": "MULTI_PERIOD", "evidence_document_ids": document_ids,
+        "evidence_fact_ids": fact_ids, "evidence_relation_ids": [],
+        "supporting_points": [], "risks": [], "watch_conditions": [],
+    } for code, (fact_ids, document_ids, direction) in evidence_by_code.items()]
+    thesis["hypotheses"][0]["evidence_items"] = [{
+        "reference_type": "DOCUMENT", "reference_id": "2", "stance": "SUPPORT",
+        "claim": "关联公司宣布扩产", "company_specific_effect": "若已审核供货关系持续，可能形成设备需求线索。",
+        "quote": "关联公司宣布扩产。", "rationale": "扩产与设备需求假设方向一致，但不等于订单已经兑现。",
+    }]
+    return output
+
+
+def test_v7_requires_complete_deep_assessments_and_auditable_document_stance():
+    _validate_investment_thesis_output(
+        v7_output(), v5_item(), required=True, require_deep_assessments=True,
+    )
+    missing = v7_output()
+    missing["investment_thesis"]["deep_assessments"].pop()
+    with pytest.raises(ValueError, match="缺少深度评价维度"):
+        _validate_investment_thesis_output(
+            missing, v5_item(), required=True, require_deep_assessments=True,
+        )
+
+
+def test_v7_rejects_supporting_quote_misfiled_as_counter_evidence():
+    changed = v7_output()
+    hypothesis = changed["investment_thesis"]["hypotheses"][0]
+    hypothesis["supporting_document_ids"] = []
+    hypothesis["counter_document_ids"] = [2]
+    with pytest.raises(ValueError, match="标为支持的证据明细"):
+        _validate_investment_thesis_output(
+            changed, v5_item(), required=True, require_deep_assessments=True,
+        )
+
+
 def test_v5_business_values_are_tied_to_business_composition_fact():
     _validate_business_value_chain_output(v5_output(), v5_item(), required=True)
     changed = v5_output()
     changed["business_quality"]["revenue_mix"][0]["revenue_ratio"] = 0.9
     with pytest.raises(ValueError, match="与来源事实不一致"):
         _validate_business_value_chain_output(changed, v5_item(), required=True)
+
+
+def test_v5_business_accepts_documents_from_bounded_evidence_context():
+    item = v5_item()
+    item["evidence_json"]["evidence_context"] = {
+        "documents": [{
+            "id": 9, "source_table": "stock_news", "content_state": "FULLTEXT",
+            "content": "公司披露主营产品量产及客户验证进展。",
+        }],
+    }
+    changed = v5_output()
+    changed["business_quality"]["evidence_document_ids"] = [9]
+
+    _validate_business_value_chain_output(changed, item, required=True)
 
 
 def test_v5_business_display_rounding_restores_exact_source_values():
@@ -239,15 +313,42 @@ def test_v5_business_large_numeric_error_is_not_normalized_or_accepted():
         _validate_business_value_chain_output(changed, v5_item(), required=True)
 
 
-def test_v5_business_unknown_source_is_not_normalized_or_accepted():
+def test_v5_business_unknown_source_is_withdrawn_without_inventing_a_segment():
     changed = v5_output()
     changed["business_quality"]["revenue_mix"][0]["evidence_fact_id"] = "missing-fact"
 
     _normalize_business_composition_output(changed, v5_item())
 
     assert "evidence_normalizations" not in changed
-    with pytest.raises(ValueError, match="未在引用的BUSINESS_COMPOSITION事实中找到"):
-        _validate_business_value_chain_output(changed, v5_item(), required=True)
+    assert changed["business_quality"]["revenue_mix"] == []
+    assert "已撤销该条目" in changed["evidence_normalization_notes"][0]
+    _validate_business_value_chain_output(changed, v5_item(), required=True)
+
+
+def test_v7_invalid_hypothesis_quote_is_withdrawn_and_hypothesis_downgraded():
+    output = {"investment_thesis": {"status": "SUPPORTED", "hypotheses": [{
+        "title": "毛利率相对优势", "status": "SUPPORTED", "direction": "POSITIVE", "confidence": .8,
+        "supporting_document_ids": [101], "supporting_fact_ids": [], "supporting_relation_ids": [],
+        "counter_document_ids": [], "counter_fact_ids": [], "counter_relation_ids": [],
+        "evidence_items": [{
+            "reference_type": "DOCUMENT", "reference_id": "101", "stance": "SUPPORT",
+            "claim": "毛利率逆势提升", "company_specific_effect": "相对竞争力改善",
+            "quote": "原文中不存在的改写句", "rationale": "行业承压下的公司相对优势",
+        }],
+    }]}}
+    item = {"evidence_json": {
+        "documents": [{"id": 101, "content": "行业总体利润承压，但公司毛利率同比提升。"}],
+        "facts": [], "graph_paths": [],
+    }}
+
+    _sanitize_investment_thesis_evidence(output, item)
+
+    hypothesis = output["investment_thesis"]["hypotheses"][0]
+    assert hypothesis["supporting_document_ids"] == []
+    assert hypothesis["evidence_items"] == []
+    assert hypothesis["status"] == "INSUFFICIENT"
+    assert hypothesis["direction"] == "UNKNOWN"
+    assert output["investment_thesis"]["status"] == "PARTIAL"
 
 
 def test_v5_market_share_without_source_is_rejected():

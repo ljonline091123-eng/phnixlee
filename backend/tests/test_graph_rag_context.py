@@ -12,7 +12,52 @@ from app.models.foundation import (
 )
 from app.models.lakehouse import DocumentChunkVersion, LakeDataset, LakeDatasetVersion, LakeLineageEvent, LakeObject
 from app.models.market_data import DataSource, StockF10Cache, StockFinancialReport, StockKline, StockRealtimeQuote, StockSymbol
-from app.services.graph_rag import build_selection_context
+from app.services.graph_rag import _governance_event_timeline, build_selection_context
+
+
+def test_governance_timeline_does_not_treat_broker_rating_as_shareholder_increase():
+    rows = [
+        {"id": 1, "source_table": "stock_news", "published_at": "2026-09-20",
+         "title": "机构维持增持评级", "content": "券商给予增持评级，目标价不变。"},
+        {"id": 2, "source_table": "stock_notice", "published_at": "2026-09-21",
+         "title": "核心员工增持股份计划", "content": "核心员工拟增持公司股份。"},
+    ]
+
+    events = _governance_event_timeline(rows)
+
+    assert [row["document_id"] for row in events] == [2]
+    assert events[0]["event_types"] == ["SHAREHOLDER_INCREASE"]
+
+
+def test_context_collapses_duplicate_disclosure_documents_and_prefers_full_text():
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    now = datetime(2026, 9, 25, tzinfo=timezone.utc)
+    with Session(engine) as db:
+        kb = KnowledgeBase(kb_code="DEDUP_KB", kb_name="去重知识库", source_tables=["stock_notice"])
+        db.add(kb)
+        db.flush()
+        metadata = {"notice_date": "2026-09-24", "url": "https://example.test/a.pdf",
+                    "external_record_id": "HKEX-1"}
+        for index, content in enumerate(("", "公告完整正文，包含股份回购数量和金额。"), start=1):
+            row = KnowledgeDocument(
+                knowledge_base_id=kb.id, source_table="stock_notice", source_record_id=index,
+                market="HK", symbol="02533", title="股份回购公告", content=content,
+                metadata_json=metadata, created_at=now, updated_at=now,
+            )
+            db.add(row)
+        db.commit()
+
+        context = build_selection_context(
+            db, "HK", "02533", knowledge_base_ids=[kb.id], as_of=now + timedelta(days=1),
+            period_start=now.date() - timedelta(days=365), period_end=now.date(),
+        )
+
+        assert context["counts"]["period_disclosures"] == 1
+        assert len(context["documents"]) == 1
+        assert context["documents"][0]["content_state"] == "TEXT_AVAILABLE"
+        assert "完整正文" in context["documents"][0]["content"]
+    engine.dispose()
 
 
 def test_context_contains_structured_observations_and_precise_lakehouse_lineage():
@@ -155,7 +200,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             db, "CN_A", "000001", as_of=now + timedelta(days=1), max_facts=10,
         )
 
-        assert context["context_version"] == "GRAPH_RAG_CONTEXT_V5"
+        assert context["context_version"] == "GRAPH_RAG_CONTEXT_V6"
         business = context["structured_observations"]["business"]
         assert {row["fact_type"] for row in business} == {"BUSINESS_PROFILE", "BUSINESS_COMPOSITION"}
         composition = next(row for row in business if row["fact_type"] == "BUSINESS_COMPOSITION")
@@ -175,7 +220,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
         assert context["chunks"][0]["section_title"] == "测试章节"
         assert context["chunk_coverage"]["coverage_ratio"] == 1.0
         assert context["chunk_coverage"]["context_inclusion_ratio"] == 1.0
-        assert context["context_version"].endswith("V5")
+        assert context["context_version"].endswith("V6")
 
         empty = build_selection_context(db, "CN_A", "999999", as_of=now + timedelta(days=1))
         assert empty["chunk_coverage"]["coverage_status"] == "NO_DOCUMENTS"

@@ -9,9 +9,10 @@ test("选股结果和高级工作台可以打开股票详情抽屉", async ({ pa
 
   const stockLinks = page.locator('button[title="打开股票详细信息"]');
   await expect(stockLinks.first()).toBeVisible();
+  const firstSymbol = (await stockLinks.first().locator("small").textContent())?.trim() || "";
   await stockLinks.first().click();
   await expect(page.locator(".stock-detail-drawer")).toBeVisible();
-  await expect(page.locator(".stock-detail-drawer h2")).toContainText("688627");
+  await expect(page.locator(".stock-detail-drawer h2")).toContainText(firstSymbol);
   await page.locator(".stock-detail-drawer .detail-head-actions").getByRole("button", { name: "关闭" }).click();
   await expect(page.locator(".stock-detail-drawer")).toHaveCount(0);
 
@@ -19,27 +20,31 @@ test("选股结果和高级工作台可以打开股票详情抽屉", async ({ pa
   await expect(page.getByRole("heading", { name: "候选池与人工复选" })).toBeVisible();
   const advancedLinks = page.locator('button[title="打开股票详细信息"]');
   await expect(advancedLinks.first()).toBeVisible();
+  const advancedSymbolText = (await advancedLinks.first().locator("small").textContent())?.trim() || "";
+  const advancedSymbol = advancedSymbolText.match(/[0-9A-Za-z]{5,}/)?.[0] || advancedSymbolText;
   await advancedLinks.first().click();
   await expect(page.locator(".stock-detail-drawer")).toBeVisible();
-  await expect(page.locator(".stock-detail-drawer h2")).toContainText("688627");
+  await expect(page.locator(".stock-detail-drawer h2")).toContainText(advancedSymbol);
 });
 
-test("数据覆盖缺口与模型校验失败分开呈现", async ({ page }) => {
+test("结论、数据诊断和一年期深度分析分开呈现", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${baseUrl}/#/research/selection`);
   await expect(page.getByRole("heading", { name: "选股分析工作台" })).toBeVisible();
 
-  const dataPhase = page.locator(".selection-phase").filter({ hasText: "数据检查及同步" });
-  await expect(dataPhase).toContainText("部分完成");
-  await expect(dataPhase).toContainText("正文补取失败");
-
   await page.getByRole("button", { name: "分析与证据" }).first().click();
   const dialog = page.getByRole("dialog", { name: /分析与证据/ });
-  await expect(dialog.getByText("模型分析失败，不能显示模型结论、方向、目标价或评分。")).toBeVisible();
-  await expect(dialog.getByText("最低分析门槛已通过，不等于所有数据源均完整")).toBeVisible();
-  await expect(dialog.getByText("本轮失败环节：模型输出与证据引用校验")).toBeVisible();
-  await expect(dialog.getByText("模型输入容量限制（1）")).toBeVisible();
-  await expect(dialog.getByText("可选增强数据尚未覆盖（4）")).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "整体投资逻辑" })).toBeVisible();
+  await expect(dialog.getByText("第一步 · 主营赛道")).toBeVisible();
+  await expect(dialog.locator(".analysis-deep-assessments article")).toHaveCount(9);
+  await expect(dialog.getByText("数据覆盖与分析输入", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText("事件前后联动尚未完全核验", { exact: true })).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "数据事实" }).click();
+  await expect(dialog.getByText("数据覆盖与分析输入", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("事件前后联动尚未完全核验", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/部分前后事件的发生顺序|部分事件尚未找到可相互核验/)).toBeVisible();
+  await expect(dialog.getByText("source_document_ids", { exact: true })).toHaveCount(0);
   const overflow = await dialog.evaluate(element => element.scrollWidth > element.clientWidth + 1);
   expect(overflow).toBeFalsy();
 });
