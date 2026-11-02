@@ -8,6 +8,7 @@ import re
 from urllib.parse import parse_qs, urljoin, urlparse
 from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
+import unicodedata
 
 import httpx
 from bs4 import BeautifulSoup
@@ -42,6 +43,77 @@ def document_body(row) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
+def readable_source_text(content: str, *, minimum_characters: int = 40) -> bool:
+    """Reject PDF font-map output that is non-empty but semantically unreadable."""
+    normalized = "".join(content.split())
+    if len(normalized) < minimum_characters:
+        return False
+    useful = sum(
+        character.isascii() or "\u3400" <= character <= "\u9fff"
+        for character in normalized
+    )
+    private_or_control = sum(
+        unicodedata.category(character) in {"Cc", "Co", "Cs"}
+        for character in normalized
+    )
+    return useful / len(normalized) >= 0.55 and private_or_control / len(normalized) <= 0.08
+
+
+def _download_official_pdf(candidate: str) -> tuple[bytes, dict]:
+    parsed = urlparse(candidate)
+    if (parsed.scheme != "https" or parsed.hostname not in {"static.cninfo.com.cn", "www1.hkexnews.hk"}
+            or parsed.username or parsed.password or parsed.port not in {None, 443}
+            or not parsed.path.lower().endswith(".pdf")):
+        raise ValueError("缺少可读取的官方公告 PDF 地址")
+    binary = bytearray()
+    # Redirects stay disabled so an allow-listed host cannot route downloads to
+    # a private or unregistered destination.
+    with httpx.Client(timeout=12, follow_redirects=False) as client:
+        with client.stream("GET", candidate) as response:
+            response.raise_for_status()
+            for block in response.iter_bytes():
+                binary.extend(block)
+                if len(binary) > 32 * 1024 * 1024:
+                    raise ValueError("公告 PDF 超过单次 32MB 安全限额")
+    extracted = extract_pdf_text(bytes(binary))
+    return bytes(binary), extracted
+
+
+def _hkex_english_pdf_candidates(candidate: str) -> list[str]:
+    """Bounded official-language fallback for an unreadable HKEX Chinese PDF."""
+
+    parsed = urlparse(candidate)
+    if parsed.hostname != "www1.hkexnews.hk":
+        return []
+    match = re.search(r"(?P<prefix>.*/)(?P<number>\d+)_c\.pdf$", parsed.path, re.IGNORECASE)
+    if not match:
+        return []
+    number = match.group("number")
+    width = len(number)
+    # HKEX publishes the paired English filing immediately before the Chinese
+    # filing. Do not probe same/next identifiers: those can be a different
+    # announcement from the same issuer and would weaken evidence identity.
+    identifiers = [int(number) - 1]
+    return [parsed._replace(path=f"{match.group('prefix')}{value:0{width}d}.pdf").geturl()
+            for value in identifiers if value >= 0]
+
+
+def _hkex_english_notice_matches(row: StockNotice, content: str) -> bool:
+    """Prevent a neighbouring HKEX filing from being accepted as the pair."""
+
+    compact = re.sub(r"\s+", " ", content).strip()
+    symbol = str(row.symbol or "").lstrip("0") or "0"
+    stock_code = re.compile(rf"(?:stock\s+code|股份代號|股份代码)\s*[:：]?\s*0*{re.escape(symbol)}\b", re.I)
+    if not stock_code.search(compact):
+        return False
+    topic = f"{row.title or ''} {row.notice_type or ''}".casefold()
+    if any(term in topic for term in ("董事", "行政職能", "行政职能", "人事", "director", "president")):
+        return any(term in compact.casefold() for term in (
+            "director", "president", "chief executive officer", "re-designation", "redesignation",
+        ))
+    return True
 
 
 def _news_search_record(row) -> bool:
@@ -148,21 +220,51 @@ def official_notice_body(row: StockNotice) -> tuple[str, dict]:
             parsed = urlparse(candidate)
     if parsed.scheme != "https" or parsed.hostname not in {"static.cninfo.com.cn", "www1.hkexnews.hk"} or not parsed.path.lower().endswith(".pdf"):
         raise ValueError("缺少可读取的官方公告 PDF 地址")
-    binary = bytearray()
-    # Redirects are deliberately disabled so the allow-listed host cannot route
-    # downloads to a private or unregistered destination.
-    with httpx.Client(timeout=12, follow_redirects=False) as client:
-        with client.stream("GET", candidate) as response:
-            response.raise_for_status()
-            for block in response.iter_bytes():
-                binary.extend(block)
-                if len(binary) > 8 * 1024 * 1024:
-                    raise ValueError("公告 PDF 超过单次 8MB 限额")
-    extracted = extract_pdf_text(bytes(binary))
-    content = str(extracted.get("content") or "").strip()
-    if not content:
-        raise ValueError("公告为扫描件或无文本，需要 OCR")
-    return content, {key: value for key, value in extracted.items() if key not in {"content", "pages"}}
+    primary_error = None
+    try:
+        binary, extracted = _download_official_pdf(candidate)
+        content = str(extracted.get("content") or "").strip()
+        if not content:
+            raise ValueError("公告为扫描件或无文本，需要 OCR")
+        if not readable_source_text(content):
+            raise ValueError("公告 PDF 字体映射异常，提取文本不可读，需要 OCR 或人工核验")
+    except Exception as exc:
+        primary_error = str(exc)
+        fallback = None
+        for alternate in _hkex_english_pdf_candidates(candidate):
+            try:
+                alternate_binary, alternate_extracted = _download_official_pdf(alternate)
+                alternate_content = str(alternate_extracted.get("content") or "").strip()
+                if (readable_source_text(alternate_content)
+                        and _hkex_english_notice_matches(row, alternate_content)):
+                    fallback = (alternate, alternate_binary, alternate_extracted, alternate_content)
+                    break
+            except Exception:
+                continue
+        if fallback is None:
+            raise ValueError(primary_error) from exc
+        alternate, binary, extracted, content = fallback
+        return content, {
+            **{key: value for key, value in extracted.items() if key not in {"content", "pages"}},
+            "source_url": alternate,
+            "requested_source_url": candidate,
+            "paired_source_url": candidate,
+            "source_language": "en",
+            "source_pair_method": "HKEX_SEQUENCE_AND_STOCK_CODE",
+            "primary_extraction_error": primary_error,
+            "binary_sha256": sha256(binary).hexdigest(),
+            "binary_size": len(binary),
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "extraction_status": "TEXT_AVAILABLE",
+        }
+    return content, {
+        **{key: value for key, value in extracted.items() if key not in {"content", "pages"}},
+        "source_url": candidate,
+        "binary_sha256": sha256(binary).hexdigest(),
+        "binary_size": len(binary),
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+        "extraction_status": "TEXT_AVAILABLE",
+    }
 
 
 def _stamp(row, value: dict) -> None:

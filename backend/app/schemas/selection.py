@@ -16,7 +16,7 @@ class SelectionRunCreate(BaseModel):
     # Natural calendar months are used for the evidence window.  The run's
     # ``as_of`` remains the availability cutoff, so historical runs stay
     # reproducible even when they are opened later.
-    period_months: int = Field(default=3, ge=1, le=60)
+    period_months: int = Field(default=12, ge=1, le=60)
     model_instance_code: str | None = Field(default=None, max_length=64)
     model_instance_codes: list[str] = Field(default_factory=list, max_length=10)
     strategy_profile_id: int | None = Field(default=None, gt=0)
@@ -52,7 +52,7 @@ class SelectionScopePreview(BaseModel):
     symbols: list[str] = Field(default_factory=list, max_length=500)
     knowledge_base_ids: list[int] = Field(default_factory=list, max_length=20)
     graph_ids: list[int] = Field(default_factory=list, max_length=50)
-    period_months: int = Field(default=3, ge=1, le=60)
+    period_months: int = Field(default=12, ge=1, le=60)
 
 
 class SelectionPreflightRequest(SelectionScopePreview):
@@ -93,7 +93,7 @@ class SelectionDimension(BaseModel):
     # A single NEWS or NOTICE dimension can legitimately cover every document
     # loaded for the period analysis. Keep this aligned with the bounded
     # 80-document context and the 100-item analyzed-document contract.
-    evidence_document_ids: list[int] = Field(default_factory=list, max_length=100)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=300)
     evidence_fact_ids: list[str] = Field(default_factory=list, max_length=12)
     evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
     evidence_assessments: list[SelectionEvidenceAssessment] = Field(default_factory=list, max_length=124)
@@ -256,6 +256,40 @@ class SelectionBusinessClassification(BaseModel):
     evidence_relation_ids: list[int] = Field(default_factory=list, max_length=12)
 
 
+class SelectionThesisEvidence(BaseModel):
+    """One auditable claim and its stance toward an investment hypothesis."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    reference_type: Literal["DOCUMENT", "FACT", "RELATION"]
+    reference_id: str = Field(min_length=1, max_length=128)
+    stance: Literal["SUPPORT", "COUNTER", "MIXED"]
+    claim: str = Field(min_length=1, max_length=500)
+    company_specific_effect: str = Field(min_length=1, max_length=600)
+    quote: str | None = Field(default=None, max_length=500)
+    rationale: str = Field(min_length=1, max_length=600)
+
+
+class SelectionThesisAssessment(BaseModel):
+    """Human-facing conclusion for one link in the holistic investment chain."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    assessment_code: Literal[
+        "BUSINESS_OUTLOOK", "INDUSTRY_OUTLOOK", "COMPETITIVE_POSITION",
+        "VALUE_CHAIN_RESILIENCE", "VALUATION", "INSTITUTION_EXPECTATION",
+        "MARKET_AND_CAPITAL", "GOVERNANCE_AND_SHAREHOLDER", "SECOND_CURVE",
+    ]
+    conclusion: str = Field(min_length=1, max_length=1000)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"]
+    confidence: float = Field(ge=0, le=1)
+    time_horizon: Literal["SHORT", "MEDIUM", "LONG", "MULTI_PERIOD", "UNKNOWN"]
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=40)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=40)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=24)
+    supporting_points: list[str] = Field(default_factory=list, max_length=6)
+    risks: list[str] = Field(default_factory=list, max_length=6)
+    watch_conditions: list[str] = Field(default_factory=list, max_length=6)
+
+
 class SelectionInvestmentHypothesis(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     title: str = Field(min_length=1, max_length=120)
@@ -270,6 +304,7 @@ class SelectionInvestmentHypothesis(BaseModel):
     counter_document_ids: list[int] = Field(default_factory=list, max_length=12)
     counter_fact_ids: list[str] = Field(default_factory=list, max_length=12)
     counter_relation_ids: list[int] = Field(default_factory=list, max_length=12)
+    evidence_items: list[SelectionThesisEvidence] = Field(default_factory=list, max_length=24)
     invalidation_conditions: list[str] = Field(default_factory=list, max_length=4)
     watch_conditions: list[str] = Field(default_factory=list, max_length=4)
 
@@ -286,9 +321,13 @@ class SelectionInvestmentThesis(BaseModel):
     valuation_summary: str = Field(min_length=1, max_length=600)
     institution_view_summary: str = Field(min_length=1, max_length=600)
     market_timing_summary: str = Field(min_length=1, max_length=600)
+    primary_track_outlook: str | None = Field(default=None, max_length=1000)
+    company_position_summary: str | None = Field(default=None, max_length=1000)
+    second_curve_summary: str | None = Field(default=None, max_length=1000)
     overall_logic: str = Field(min_length=1, max_length=1600)
     classifications: list[SelectionBusinessClassification] = Field(default_factory=list, max_length=10)
     hypotheses: list[SelectionInvestmentHypothesis] = Field(default_factory=list, max_length=3)
+    deep_assessments: list[SelectionThesisAssessment] = Field(default_factory=list, max_length=9)
     confidence: float = Field(ge=0, le=1)
     evidence_document_ids: list[int] = Field(default_factory=list, max_length=24)
     evidence_fact_ids: list[str] = Field(default_factory=list, max_length=32)
@@ -319,7 +358,7 @@ class SelectionModelRecommendation(BaseModel):
     event_timeline: list[SelectionTimelineEvent] = Field(default_factory=list, max_length=4)
     event_links: list[SelectionEventLink] = Field(default_factory=list, max_length=4)
     validation_findings: list[SelectionValidationFinding] = Field(default_factory=list, max_length=4)
-    analyzed_document_ids: list[int] = Field(default_factory=list, max_length=100)
+    analyzed_document_ids: list[int] = Field(default_factory=list, max_length=300)
     confidence_breakdown: SelectionConfidenceBreakdown | None = None
     business_quality: SelectionBusinessQualityAnalysis | None = None
     value_chain_analysis: SelectionValueChainAnalysis | None = None

@@ -380,6 +380,8 @@ class StockNoticeRead(BaseModel):
     source_urls: list[str] = Field(default_factory=list)
     source_count: int = 1
     duplicate_count: int = 0
+    version_record_ids: list[int] = Field(default_factory=list)
+    version_history: list[dict[str, Any]] = Field(default_factory=list)
     fetched_at: datetime
 
 

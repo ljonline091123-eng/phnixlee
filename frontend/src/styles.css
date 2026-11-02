@@ -4660,6 +4660,13 @@ textarea:focus {
 .financial-report-gaps summary { cursor: pointer; font-weight: 600; }
 .notice-reference-dialog .f10-detail-row { align-items: flex-start; gap: 20px; }
 .notice-reference-dialog .f10-detail-row span { overflow-wrap: anywhere; text-align: right; }
+.notice-version-history { margin: 12px 0; border: 1px solid #dfe6e1; background: #f8faf9; }
+.notice-version-history > summary { padding: 10px 12px; color: #345344; cursor: pointer; font-size: 12px; font-weight: 700; }
+.notice-version-history > div { padding: 0 12px 10px; }
+.notice-version-history p { display: grid; grid-template-columns: 64px minmax(130px, auto) minmax(0, 1fr); gap: 10px; align-items: start; margin: 0; padding: 8px 0; border-top: 1px solid #e5ebe7; font-size: 11px; }
+.notice-version-history p > span { color: #52665a; font-weight: 700; }
+.notice-version-history p > small { color: #6e7a73; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .notice-version-history p { grid-template-columns: 64px minmax(0, 1fr); } .notice-version-history p > small { grid-column: 1 / -1; } }
 .notice-latest-badge { color: #fff; background: #e4393c; }
 .research-section-grid { display: grid; gap: 12px; margin-bottom: 14px; }
 .research-industry-panel { min-width: 0; padding: 16px 18px; border: 1px solid var(--line, #dfe6df); border-radius: 8px; background: #fff; }

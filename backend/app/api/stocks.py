@@ -124,6 +124,7 @@ def _notice_read_payload(
     provenance = canonical.metadata() if canonical is not None else {
         "source_ids": [row.source_id], "source_urls": [row.url] if row.url else [],
         "source_count": 1, "duplicate_count": 0,
+        "version_record_ids": [row.id], "version_history": [],
     }
     return {
         "id": row.id,
@@ -143,6 +144,8 @@ def _notice_read_payload(
         "source_urls": provenance["source_urls"],
         "source_count": provenance["source_count"],
         "duplicate_count": provenance["duplicate_count"],
+        "version_record_ids": provenance["version_record_ids"],
+        "version_history": provenance["version_history"],
         "fetched_at": row.fetched_at,
     }
 
@@ -2108,7 +2111,13 @@ def get_stock_notice(
     row = db.get(StockNotice, notice_id)
     if row is None or row.market != normalized_market or row.symbol != normalized_symbol:
         raise HTTPException(status_code=404, detail="未找到该股票的公告记录")
-    return _notice_read_payload(row)
+    rows = list(db.scalars(select(StockNotice).where(
+        StockNotice.market == normalized_market,
+        StockNotice.symbol == normalized_symbol,
+    )).all())
+    canonical = next((item for item in deduplicate_notice_rows(rows)
+                      if notice_id in item.version_record_ids), None)
+    return _notice_read_payload(canonical.row, canonical=canonical) if canonical else _notice_read_payload(row)
 
 
 @router.get("/{market}/{symbol}/news/page", response_model=StockNewsPage)

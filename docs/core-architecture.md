@@ -61,16 +61,20 @@ trusted_score = 50 + (base_score - 50) × evidence_confidence
 
 评价方案使用 `DRAFT -> ENABLED -> RETIRED` 生命周期。新任务冻结方案、权重及 Skill 版本快照；历史候选不会因新权重静默变化，只能显式补算。LLM 可以提出优化建议，但不能发布权重。人工确认候选后，系统按真实后续交易日生成 T+3/T+5/T+7 收益、回撤和方向命中；行情未到时保持 `PENDING_DATA`。
 
-新分析使用 `FUNDAMENTAL_THESIS_V6` / `GRAPH_RAG_CONTEXT_V5`。旧版 `MULTI_SOURCE_VALUE_CHAIN_V5` 历史结果保持只读兼容；新任务增加 `investment_thesis`，先形成“主营与收入利润 → 盈利质量 → 核心行业与主题 → 公司行为 → 产业链 → 估值和机构预期 → 量价资金”的整体逻辑，再计算分项评分。页面首屏展示整体逻辑、最多三条投资假设、支持证据、反证和失效条件，复杂维度与证据默认折叠。
+新分析使用 `FUNDAMENTAL_THESIS_V7` / `GRAPH_RAG_CONTEXT_V6`，默认读取最近 12 个自然月。旧版 V5/V6 历史结果保持只读兼容；V7 先形成“主营赛道趋势 → 公司竞争位置 → 收入利润持续性 → 第二曲线 → 治理与股东 → 估值和机构预期 → 一年量价与事件响应”的整体逻辑，再计算分项评分。页面的“结论分析”只展示投资判断；数据缺口、模型失败和质量诊断进入独立页签。
+
+核心结论、评分和附加 LLM 文字评价采用分离状态：前两者通过证据契约后批次进入人工复核；附加评价的网络、额度或空响应失败只写入 `llm_evaluation` 和诊断页签，不反向污染核心分析状态。产业链维度在缺少 `ACCEPTED` 关系事实时必须显示中文缺口说明并保持 `INSUFFICIENT`，不得为补齐雷达轴而推造客户或供应商传导。
 
 生产默认评价方案为 `FUNDAMENTAL_THESIS / 基本面主线综合`：基本面与盈利质量 40%、估值与盈利预期 15%、行业与板块景气 15%、产业链与外部韧性 10%、价格趋势与风险收益 6%、事件催化与信披 5%、治理与股东稳定性 5%、资金与交易行为 4%。该方案以基本面与盈利质量作为发布门禁；价格趋势用于交易状态校验，不再替代主营价值判断。历史候选继续冻结当时权重快照，不静默重算。
 
-V6 保留并复用两个可审计的语义模块：
+V7 保留并复用两个可审计的语义模块：
 
 - `business_quality`：主营业务、产品/服务、最新收入构成、技术含量、竞争壁垒、商业化、市场地位和中长线影响。市场占有率必须同时具备数值、单位、统计范围、日期、来源和证据 ID；否则保持 `MISSING/UNVERIFIED`。
 - `value_chain_analysis`：关联对象、关系类型、审核状态、重大事件、传导机制、方向、-100 至 100 影响分、周期、置信度、假设和失效条件。`VERIFIED` 必须引用 `ACCEPTED FoundationFact` 和对应关联证券原文；候选关系方向为 `UNKNOWN`、不计分。
 
 这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，`HOLISTIC_INVESTMENT_THESIS_ANALYST` 负责将其与财务、治理、估值、机构预期和交易状态编排成整体投资逻辑，三者均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
+
+一年期资料超过单次上下文预算时，系统按文档/事实记录边界分段读取，再将每段的证据 ID、逐字引句、方向、冲突和限制汇总进入最终研判。原文不被摘要覆盖。最终生成与契约重试只使用分段摘要、结构化数值、证据白名单和精简输出契约，单次模型输入硬限制为 60,000 字符；完整 JSON Schema 留在服务端做严格校验。
 
 对应数据表为 `selection_dimension_definition`、`selection_strategy_profile`、`selection_strategy_profile_item`、`selection_dimension_result` 和 `selection_evaluation_metric`。管理入口为 `AI能力中心 -> 评价体系`，候选雷达图和证据下钻位于 `投研工作台 -> 选股与复选`。
 

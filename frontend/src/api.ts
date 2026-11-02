@@ -220,6 +220,15 @@ export type StockNotice = {
   source_urls?: string[];
   source_count?: number;
   duplicate_count?: number;
+  version_record_ids?: number[];
+  version_history?: Array<{
+    record_id: number;
+    notice_date: string;
+    title: string;
+    notice_type: string;
+    url: string;
+    revision_status: "CURRENT" | "DUPLICATE_SOURCE" | "SUPERSEDED" | string;
+  }>;
   fetched_at: string;
 };
 

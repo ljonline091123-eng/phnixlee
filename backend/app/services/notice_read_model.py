@@ -61,6 +61,34 @@ def normalize_notice_url(value: Any) -> str:
         return text.rstrip("/")
 
 
+def _hkex_document_identity(value: Any) -> str | None:
+    """Return the immutable HKEX PDF identity used across filing revisions."""
+
+    url = normalize_notice_url(value)
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return None
+    host = (parsed.hostname or "").lower()
+    if host != "hkexnews.hk" and not host.endswith(".hkexnews.hk"):
+        return None
+    match = re.search(r"/([^/]+\.pdf)$", parsed.path, re.IGNORECASE)
+    return match.group(1).lower() if match else None
+
+
+_SUPERSEDED_NOTICE_TERMS = (
+    "取消", "標題已被取代及更換", "标题已被取代及更换",
+    "cancelled", "canceled", "superseded and replaced", "title has been superseded",
+)
+
+
+def notice_revision_status(row: Any) -> str:
+    """Identify an explicit source cancellation without discarding the record."""
+
+    text = f"{_value(row, 'title', '')} {_value(row, 'notice_type', '')}".casefold()
+    return "SUPERSEDED" if any(term.casefold() in text for term in _SUPERSEDED_NOTICE_TERMS) else "ACTIVE"
+
+
 def notice_source_name(row: Any) -> str:
     """Name the actual disclosure provider, not a numeric source count."""
     host = urlsplit(normalize_notice_url(_value(row, "url", ""))).hostname or ""
@@ -93,6 +121,12 @@ def canonical_notice_key(row: Any) -> tuple[str, str, str, str]:
     notice_date = str(_value(row, "notice_date", "") or "").strip()[:10]
     title = normalize_notice_title(_value(row, "title", ""))
     url = normalize_notice_url(_value(row, "url", ""))
+    hkex_document = _hkex_document_identity(url)
+    if hkex_document:
+        # HKEX publishes cancellation/replacement rows on a later date while
+        # retaining the same PDF identity. Treat them as one auditable version
+        # chain and project only the newest non-cancelled version.
+        return market, symbol, "HKEX_FILE", hkex_document
     identity = title or url
     # A title is the preferred cross-provider identity.  For malformed rows
     # with no title, the URL still prevents unrelated rows collapsing.
@@ -127,6 +161,8 @@ class CanonicalNotice:
     source_ids: tuple[int, ...]
     source_urls: tuple[str, ...]
     duplicate_count: int
+    version_record_ids: tuple[int, ...] = ()
+    version_history: tuple[dict[str, Any], ...] = ()
 
     @property
     def source_count(self) -> int:
@@ -139,6 +175,8 @@ class CanonicalNotice:
             "source_urls": list(self.source_urls),
             "source_count": self.source_count,
             "duplicate_count": self.duplicate_count,
+            "version_record_ids": list(self.version_record_ids),
+            "version_history": list(self.version_history),
         }
 
 
@@ -160,15 +198,37 @@ def deduplicate_notice_rows(rows: Iterable[Any]) -> list[CanonicalNotice]:
 
     result: list[CanonicalNotice] = []
     for key, variants in groups.items():
-        representative = max(variants, key=_completeness)
+        representative = max(variants, key=lambda item: (
+            notice_revision_status(item) == "ACTIVE",
+            str(_value(item, "notice_date", "") or "")[:10],
+            _completeness(item),
+        ))
         source_ids = sorted({int(_value(item, "source_id", 0) or 0) for item in variants})
         source_urls = sorted({normalize_notice_url(_value(item, "url", "")) for item in variants if normalize_notice_url(_value(item, "url", ""))})
+        variant_rows = sorted(variants, key=lambda item: (
+            str(_value(item, "notice_date", "") or "")[:10],
+            int(_value(item, "id", 0) or 0),
+        ), reverse=True)
+        representative_id = int(_value(representative, "id", 0) or 0)
+        version_history = tuple({
+            "record_id": int(_value(item, "id", 0) or 0),
+            "notice_date": str(_value(item, "notice_date", "") or "")[:10],
+            "title": str(_value(item, "title", "") or ""),
+            "notice_type": str(_value(item, "notice_type", "") or ""),
+            "url": normalize_notice_url(_value(item, "url", "")),
+            "revision_status": (
+                "CURRENT" if int(_value(item, "id", 0) or 0) == representative_id
+                else ("SUPERSEDED" if notice_revision_status(item) == "SUPERSEDED" else "DUPLICATE_SOURCE")
+            ),
+        } for item in variant_rows)
         result.append(CanonicalNotice(
             row=representative,
             key=key,
             source_ids=tuple(source_ids),
             source_urls=tuple(source_urls),
             duplicate_count=max(0, len(variants) - 1),
+            version_record_ids=tuple(int(_value(item, "id", 0) or 0) for item in variant_rows),
+            version_history=version_history,
         ))
 
     def order(item: CanonicalNotice) -> tuple[str, int]:

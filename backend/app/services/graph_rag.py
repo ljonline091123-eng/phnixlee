@@ -13,7 +13,10 @@ import hashlib
 import json
 import ast
 import calendar
+import re
 from datetime import date, datetime, timezone
+from math import sqrt
+from statistics import mean, median
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
@@ -49,7 +52,7 @@ from app.services.lakehouse import current_knowledge_document_chunks, knowledge_
 from app.services.news_identity import check_news_identity
 
 
-CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V5"
+CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V6"
 
 
 def _iso(value: Any) -> str | None:
@@ -149,6 +152,247 @@ def _compact(value: Any, *, max_items: int = 24, max_chars: int = 1600) -> Any:
     return value
 
 
+def _consistent_daily_bars(rows: list[StockKline]) -> list[StockKline]:
+    """Choose one adjustment series so returns never mix incompatible closes."""
+
+    by_adjust: dict[str, dict[str, StockKline]] = {}
+    for row in rows:
+        key = str(row.adjust or "")
+        current = by_adjust.setdefault(key, {}).get(row.trade_date)
+        if current is None or _aware(row.fetched_at) > _aware(current.fetched_at):
+            by_adjust[key][row.trade_date] = row
+    if not by_adjust:
+        return []
+    priority = {"qfq": 3, "": 2, "hfq": 1}
+    selected = max(by_adjust, key=lambda key: (len(by_adjust[key]), priority.get(key.lower(), 0)))
+    return sorted(by_adjust[selected].values(), key=lambda row: row.trade_date)
+
+
+def _daily_market_summary(rows: list[StockKline]) -> dict[str, Any]:
+    """Create compact, deterministic one-year market features for model interpretation."""
+
+    rows = [row for row in rows if isinstance(row.close_price, (int, float)) and row.close_price > 0]
+    if not rows:
+        return {}
+    closes = [float(row.close_price) for row in rows]
+    volumes = [float(row.volume) if isinstance(row.volume, (int, float)) and row.volume >= 0 else None for row in rows]
+    daily_returns = [closes[index] / closes[index - 1] - 1 for index in range(1, len(closes))]
+
+    def session_return(sessions: int) -> float | None:
+        return round((closes[-1] / closes[-sessions - 1] - 1) * 100, 4) if len(closes) > sessions else None
+
+    peak, max_drawdown = closes[0], 0.0
+    for close in closes:
+        peak = max(peak, close)
+        max_drawdown = min(max_drawdown, close / peak - 1)
+    avg_return = mean(daily_returns) if daily_returns else 0.0
+    volatility = (
+        sqrt(mean([(value - avg_return) ** 2 for value in daily_returns])) * sqrt(252) * 100
+        if daily_returns else None
+    )
+    recent_volumes = [value for value in volumes[-20:] if value is not None]
+    previous_volumes = [value for value in volumes[-40:-20] if value is not None]
+    volume_ratio = (
+        mean(recent_volumes) / mean(previous_volumes)
+        if recent_volumes and previous_volumes and mean(previous_volumes) > 0 else None
+    )
+    sampled_indices = sorted({0, len(rows) - 1, *[
+        round(index * (len(rows) - 1) / 11) for index in range(12)
+    ]})
+    return {
+        "adjust": rows[-1].adjust,
+        "start_date": rows[0].trade_date,
+        "end_date": rows[-1].trade_date,
+        "bar_count": len(rows),
+        "latest_close": closes[-1],
+        "return_20d_pct": session_return(20),
+        "return_60d_pct": session_return(60),
+        "return_120d_pct": session_return(120),
+        "return_250d_pct": session_return(250),
+        "annualized_volatility_pct": round(volatility, 4) if volatility is not None else None,
+        "max_drawdown_pct": round(max_drawdown * 100, 4),
+        "period_high": max(closes),
+        "period_low": min(closes),
+        "ma20": round(mean(closes[-20:]), 6) if len(closes) >= 20 else None,
+        "ma60": round(mean(closes[-60:]), 6) if len(closes) >= 60 else None,
+        "median_close": round(median(closes), 6),
+        "recent_20d_vs_previous_20d_volume_ratio": round(volume_ratio, 4) if volume_ratio is not None else None,
+        "sampled_curve": [{"trade_date": rows[index].trade_date, "close_price": closes[index]}
+                          for index in sampled_indices],
+        "inference_boundary": "收益、波动、回撤和成交量变化由同一复权口径日线确定性计算，不代表未来走势。",
+    }
+
+
+def _event_market_reactions(
+    bars: list[StockKline], documents: list[dict[str, Any]], *, max_events: int = 24,
+) -> list[dict[str, Any]]:
+    """Measure post-disclosure returns without asserting that the event caused them."""
+
+    if not bars:
+        return []
+    dates = [row.trade_date for row in bars]
+    closes = [float(row.close_price) for row in bars]
+    results: list[dict[str, Any]] = []
+    for document in sorted(documents, key=lambda row: str(row.get("published_at") or ""), reverse=True):
+        if document.get("source_table") not in {"stock_news", "stock_notice"}:
+            continue
+        event_date = str(document.get("published_at") or "")[:10]
+        if not event_date:
+            continue
+        index = next((position for position, trade_date in enumerate(dates) if trade_date >= event_date), None)
+        if index is None:
+            continue
+        reactions: dict[str, float | None] = {}
+        for horizon in (1, 5, 20):
+            reactions[f"t_plus_{horizon}_return_pct"] = (
+                round((closes[index + horizon] / closes[index] - 1) * 100, 4)
+                if index + horizon < len(closes) else None
+            )
+        results.append({
+            "document_id": document.get("id"),
+            "event_date": event_date,
+            "first_trade_date": dates[index],
+            "title": document.get("title"),
+            **reactions,
+            "inference_boundary": "仅记录披露后市场表现，不据此认定事件与价格存在因果。",
+        })
+        if len(results) >= max_events:
+            break
+    return results
+
+
+def _management_change_details(title: str, body: str) -> dict[str, Any]:
+    """Extract conservative role-transition fields from an official filing."""
+
+    text = re.sub(r"\s+", " ", f"{title} {body}").strip()
+    details: dict[str, Any] = {}
+    english = re.search(
+        r"(?P<person>Mr\.?\s+(?-i:[A-Z][A-Za-z-]+(?:\s+[A-Z][A-Za-z-]+){0,3}))(?=\s+(?:has|was|is)\b).{0,180}?"
+        r"re-?designated\s+from\s+an?\s+(?P<old>[^.;]{3,80}?)\s+to\s+an?\s+(?P<new>[^.;]{3,80}?)"
+        r"(?=\s+and\s+has\s+ceased|\s*,?\s*effective|[.;])"
+        r"(?:\s+and\s+has\s+ceased\s+to\s+serve\s+as\s+the\s+(?P<ceased>[^,.;]{3,80}))?"
+        r"(?:,?\s+effective\s+from\s+(?P<effective>[^.;]{4,40}))?",
+        text, re.IGNORECASE,
+    )
+    if english:
+        details.update({
+            "person": english.group("person").strip(),
+            "previous_role": english.group("old").strip(),
+            "new_role": english.group("new").strip(),
+            "ceased_role": (english.group("ceased") or "").strip() or None,
+            "effective_at": (english.group("effective") or "").strip() or None,
+        })
+        # The operative sentence may use the abbreviated “Mr. Liu” after the
+        # filing introduced “Mr. Liu Weihong”. Prefer that earlier full name,
+        # but only when the surname is identical.
+        short_parts = details["person"].replace(".", "").split()
+        if len(short_parts) == 2:
+            full_name = re.search(
+                rf"Mr\.?\s+{re.escape(short_parts[-1])}\s+(?-i:[A-Z][A-Za-z-]+)", text, re.I,
+            )
+            if full_name:
+                details["person"] = full_name.group(0).strip()
+    chinese_person = re.search(r"([\u4e00-\u9fff]{2,4})(?:先生|女士).{0,100}?(?:由|從)([^，。；]{2,30})(?:調任|调整|調整|改任|轉任)為([^，。；]{2,30})", text)
+    if chinese_person and not details.get("person"):
+        details.update({
+            "person": chinese_person.group(1),
+            "previous_role": chinese_person.group(2).strip(),
+            "new_role": chinese_person.group(3).strip(),
+        })
+    if not details.get("person"):
+        simple_name = re.search(r"(Mr\.?\s+[A-Z][A-Za-z-]+(?:\s+[A-Z][A-Za-z-]+){0,3}|[\u4e00-\u9fff]{2,4}(?:先生|女士))", text)
+        if simple_name:
+            details["person"] = simple_name.group(1).strip()
+    ceased = re.search(r"(?:ceased\s+to\s+serve\s+as\s+the|不再擔任|不再担任)([^,.;，。；]{2,60})", text, re.I)
+    if ceased and not details.get("ceased_role"):
+        details["ceased_role"] = ceased.group(1).strip()
+    effective = re.search(r"(?:effective\s+from|自)(January|February|March|April|May|June|July|August|September|October|November|December)?\s*([0-9]{1,4}[年\-/ ](?:[0-9]{1,2}[月\-/ ])?[0-9]{1,4}(?:日)?)", text, re.I)
+    if effective and not details.get("effective_at"):
+        details["effective_at"] = " ".join(value for value in effective.groups() if value).strip()
+    consultant = re.search(r"(?:act\s+as\s+a|擔任|担任)(?:公司)?(?:的)?(consultant|顧問|顾问)", text, re.I)
+    if consultant:
+        details["continuing_role"] = consultant.group(1)
+    if re.search(r"one\s+of\s+the\s+founders|co-?founder|聯合創始人|联合创始人|創始人|创始人", text, re.I):
+        details["founder_status"] = True
+    successor = re.search(
+        r"(?P<person>Mr\.?\s+(?-i:[A-Z][A-Za-z-]+(?:\s+[A-Z][A-Za-z-]+){0,3})|[\u4e00-\u9fff]{2,4}(?:先生|女士)?)"
+        r".{0,80}?(?:assume|concurrently serve as|兼任|接任)(?:the\s+)?(?P<role>president|總裁|总裁)",
+        text, re.I,
+    )
+    if successor:
+        details["successor"] = successor.group("person").strip()
+        details["successor_role"] = successor.group("role").strip()
+    return {key: value for key, value in details.items() if value not in (None, "")}
+
+
+def _governance_event_timeline(
+    documents: list[dict[str, Any]],
+    *,
+    issuer_aliases: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    event_terms = {
+        "SHARE_REPURCHASE": ("回购", "repurchase", "buy-back", "buyback"),
+        "SHARE_CANCELLATION": ("注销库存股", "注销股份", "cancelled treasury", "cancellation of treasury"),
+        # Generic “增持/减持” also appears in broker ratings. Require a company
+        # actor, plan or explicit shareholding phrase before treating it as a
+        # governance action.
+        "SHAREHOLDER_INCREASE": ("增持公司股份", "增持本公司", "增持股份", "增持计划", "计划增持", "拟增持",
+                                   "股东增持", "高管增持", "员工增持", "increase in shareholding"),
+        "SHAREHOLDER_DECREASE": ("减持公司股份", "减持本公司", "减持股份", "减持计划", "计划减持", "拟减持",
+                                   "股东减持", "高管减持", "decrease in shareholding"),
+        "LOCKUP_RELEASE": ("解禁", "限售股上市", "lock-up", "lockup"),
+        "LOCKUP_EXTENSION": ("延长禁售", "延长禁售承诺", "延长锁定", "extended lock-up"),
+        "MANAGEMENT_CHANGE": ("董事辞任", "高管辞职", "行政总裁辞任", "委任董事", "委任行政总裁",
+                              "任命董事", "任命高管", "董事調任", "董事调任", "人事任免",
+                              "director resignation", "appointed as director", "appointed as ceo",
+                              "re-designation of director", "redesignation of director", "re-designated"),
+        "EQUITY_INCENTIVE": ("股权激励", "share incentive", "option scheme"),
+    }
+    events: list[dict[str, Any]] = []
+    for document in documents:
+        if document.get("source_table") not in {"stock_news", "stock_notice"}:
+            continue
+        title = str(document.get("title") or "")
+        body = str(document.get("content") or document.get("excerpt") or "")
+        if document.get("source_table") == "stock_notice":
+            # Official notice titles describe the filing purpose. Full PDFs
+            # contain standard legal wording (appointment, resignation and
+            # repurchase mandates) that must not become unrelated events.
+            text = title.lower()
+        elif issuer_aliases:
+            contexts = [title]
+            lower_body = body.lower()
+            for alias in {str(value).strip().lower() for value in issuer_aliases if str(value).strip()}:
+                start = 0
+                while alias and (position := lower_body.find(alias, start)) >= 0:
+                    contexts.append(body[max(0, position - 180):position + len(alias) + 280])
+                    start = position + len(alias)
+                    if len(contexts) >= 8:
+                        break
+                if len(contexts) >= 8:
+                    break
+            text = " ".join(contexts).lower()
+        else:
+            text = f"{title} {body}".lower()
+        types = [event_type for event_type, terms in event_terms.items() if any(term.lower() in text for term in terms)]
+        if re.search(r"注销.{0,24}(?:库存股|库存股份|股份)", text) and "SHARE_CANCELLATION" not in types:
+            types.append("SHARE_CANCELLATION")
+        if not types:
+            continue
+        event = {
+            "document_id": document.get("id"), "event_date": str(document.get("published_at") or "")[:10],
+            "event_types": types, "title": document.get("title"), "source_table": document.get("source_table"),
+            "content_state": document.get("content_state"),
+        }
+        if "MANAGEMENT_CHANGE" in types and body:
+            details = _management_change_details(title, body)
+            if details:
+                event["event_details"] = details
+        events.append(event)
+    events.sort(key=lambda row: (str(row.get("event_date") or ""), int(row.get("document_id") or 0)), reverse=True)
+    return events[:40]
+
+
 def _relation_provenance(
     row: KnowledgeRelation,
     subject: KnowledgeEntity | None,
@@ -236,6 +480,13 @@ def ranked_documents(db: Session, query, *, per_source: int = 12) -> list[Knowle
 def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dict[str, Any]:
     metadata = row.metadata_json or {}
     content = row.content or ""
+    content_state = document_content_state(content)
+    if "".join(content.split()) == "".join(str(row.title or "").split()):
+        content_state = "METADATA_ONLY"
+    if str(metadata.get("content_scope") or "").startswith("OFFICIAL_SOURCE"):
+        from app.services.document_event_governance import readable_source_text
+        if not readable_source_text(content):
+            content_state = "METADATA_ONLY"
     return {
         "id": row.id,
         "title": row.title,
@@ -245,8 +496,8 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
         "symbol": row.symbol,
         "graph_id": row.graph_id,
         "knowledge_base_id": row.knowledge_base_id,
-        "content": content[:3000] if include_content else None,
-        "content_state": document_content_state(content),
+        "content": ("" if content_state == "METADATA_ONLY" else content[:3000]) if include_content else None,
+        "content_state": content_state,
         "content_truncated": len(content) > 3000 or bool(metadata.get("content_truncated")),
         "content_hash": _hash(content),
         "metadata": metadata,
@@ -257,6 +508,31 @@ def _doc_payload(row: KnowledgeDocument, *, include_content: bool = True) -> dic
         "fetched_at": metadata.get("fetched_at"),
         "updated_at": _iso(row.updated_at),
     }
+
+
+def _document_business_key(row: KnowledgeDocument, payload: dict[str, Any]) -> str:
+    """Collapse repeated provider imports without deleting historical rows."""
+    metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    external_id = str(metadata.get("external_record_id") or metadata.get("NEWS_ID") or "").strip()
+    if external_id:
+        return f"{row.source_table}:{row.market}:{row.symbol}:external:{external_id}"
+    url = str(payload.get("url") or metadata.get("source_file_path") or "").strip().casefold()
+    if url:
+        return f"{row.source_table}:{row.market}:{row.symbol}:url:{url}"
+    published = str(payload.get("published_at") or "")[:10]
+    title = "".join(str(row.title or "").casefold().split())
+    return f"{row.source_table}:{row.market}:{row.symbol}:{published}:{title}"
+
+
+def _prefer_document(candidate: KnowledgeDocument, current: KnowledgeDocument) -> bool:
+    candidate_payload = _doc_payload(candidate, include_content=False)
+    current_payload = _doc_payload(current, include_content=False)
+    rank = {"TEXT_AVAILABLE": 2, "METADATA_ONLY": 1, "EMPTY": 0}
+    candidate_state = rank.get(str(candidate_payload.get("content_state")), 0)
+    current_state = rank.get(str(current_payload.get("content_state")), 0)
+    if candidate_state != current_state:
+        return candidate_state > current_state
+    return len(candidate.content or "") > len(current.content or "")
 
 
 def _identity(db: Session, market: str, symbol: str, cutoff: datetime | None) -> dict[str, Any]:
@@ -515,6 +791,7 @@ def _structured_observations(
     }
     source_record_refs: list[str] = []
     source_tables: set[str] = set()
+    market_rows_for_reactions: list[StockKline] = []
 
     def ref(table: str, record_id: Any) -> str:
         return f"{table}:{record_id}"
@@ -714,20 +991,24 @@ def _structured_observations(
         kline_query = kline_query.where(StockKline.trade_date <= period_end.isoformat())
     kline_rows = list(db.scalars(kline_query.order_by(
         StockKline.trade_date.desc(), StockKline.fetched_at.desc(),
-    ).limit(max(40, limit * 2))).all())
+    ).limit(max(320, limit * 8))).all())
     kline_rows = [row for row in kline_rows if _known(row.fetched_at, cutoff) and _date_known(row.trade_date, cutoff)]
     if kline_rows:
-        latest = kline_rows[0]
+        consistent_rows = _consistent_daily_bars(kline_rows)
+        market_rows_for_reactions = consistent_rows
+        latest = consistent_rows[-1]
         bars = [{key: getattr(row, key) for key in (
             "trade_date", "open_price", "high_price", "low_price", "close_price",
             "volume", "amount", "turnover_rate", "adjust",
-        )} for row in kline_rows[:20]]
+        )} for row in consistent_rows]
+        recent_bars = list(reversed(bars[-20:]))
         add("market", latest, "MARKET_OBSERVATION", f"{symbol} 日线量价 · {latest.trade_date}", {
             "period": latest.period,
             "adjust": latest.adjust,
-            "latest": bars[0],
-            "recent_bars": bars,
-            "window_size": len(bars),
+            "latest": bars[-1],
+            "recent_bars": recent_bars,
+            "period_summary": _daily_market_summary(consistent_rows),
+            "window_size": len(consistent_rows),
             "fact_only": True,
         }, latest.fetched_at)
 
@@ -794,6 +1075,7 @@ def _structured_observations(
         "by_category": by_category,
         "source_record_refs": _unique(source_record_refs),
         "source_tables": source_tables,
+        "market_rows_for_reactions": market_rows_for_reactions,
         "counts": {key: len(value) for key, value in by_category.items()},
     }
 
@@ -1112,7 +1394,7 @@ def build_selection_context(
     as_of: datetime | None = None,
     period_start: date | None = None,
     period_end: date | None = None,
-    max_documents: int = 40,
+    max_documents: int = 300,
     max_relations: int = 40,
     max_facts: int = 40,
     max_chunks: int = 32,
@@ -1149,16 +1431,28 @@ def build_selection_context(
         doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
     doc_candidates = ranked_documents(db, doc_query, per_source=max(500, max_documents * 4))
     by_source: dict[str, list[KnowledgeDocument]] = {}
+    unique_disclosures: dict[str, KnowledgeDocument] = {}
     undated_documents = 0
     for row in doc_candidates:
-        published_at = _doc_payload(row, include_content=False)["published_at"]
+        payload = _doc_payload(row, include_content=False)
+        published_at = payload["published_at"]
         if not usable_document(row) or not _date_known(published_at, cutoff):
             continue
         if not _date_in_window(published_at, period_start, period_end):
             if published_at in (None, ""):
                 undated_documents += 1
             continue
+        if row.source_table in {"stock_news", "stock_notice"}:
+            business_key = _document_business_key(row, payload)
+            current = unique_disclosures.get(business_key)
+            if current is None or _prefer_document(row, current):
+                unique_disclosures[business_key] = row
+            continue
         by_source.setdefault(row.source_table, []).append(row)
+    for row in unique_disclosures.values():
+        by_source.setdefault(row.source_table, []).append(row)
+    for rows in by_source.values():
+        rows.sort(key=lambda row: str(_doc_payload(row, include_content=False).get("published_at") or ""), reverse=True)
     period_source_counts = {source: len(rows) for source, rows in by_source.items()}
     period_document_count = sum(period_source_counts.values())
     period_disclosure_count = sum(period_source_counts.get(source, 0)
@@ -1379,6 +1673,15 @@ def build_selection_context(
         if row["id"] not in document_ids:
             documents.append(row)
             document_ids.append(row["id"])
+    market_observations = structured["by_category"].get("market") or []
+    if market_observations:
+        market_properties = market_observations[0].get("properties") or {}
+        period_bars = structured.get("market_rows_for_reactions") or []
+        market_properties["event_reactions"] = _event_market_reactions(period_bars, documents)
+    from app.services.news_identity import issuer_names
+    issuer_aliases = issuer_names(master.name, master.ext_json) if master is not None else []
+    issuer_aliases.extend([symbol, f"{symbol}.HK", f"HK:{symbol}"])
+    governance_events = _governance_event_timeline(documents, issuer_aliases=issuer_aliases)
     eligible_chunks = _eligible_chunk_rows(db, context_documents, cutoff)
     chunks = _chunks(eligible_chunks, document_ids, max_chunks)
     chunk_coverage = _chunk_coverage(document_ids, eligible_chunks, chunks)
@@ -1483,6 +1786,7 @@ def build_selection_context(
         "related_security_documents": related_documents,
         "facts": facts,
         "structured_observations": structured["by_category"],
+        "governance_event_timeline": governance_events,
         "graph_paths": graph_paths,
         "chunks": chunks,
         "chunk_coverage": chunk_coverage,
@@ -1524,7 +1828,7 @@ def context_for_candidate(db: Session, candidate: Any, *, as_of: datetime | None
         from app.models.selection import SelectionRun
         run = db.get(SelectionRun, candidate.run_id)
     cutoff = as_of or getattr(run, "as_of", None) or datetime.now(timezone.utc)
-    period_months = int(((getattr(run, "criteria_json", {}) or {}).get("period_months") or 3))
+    period_months = int(((getattr(run, "criteria_json", {}) or {}).get("period_months") or 12))
     period_start, period_end = selection_period_bounds(cutoff, period_months, candidate.market)
     return build_selection_context(
         db,
@@ -1535,6 +1839,6 @@ def context_for_candidate(db: Session, candidate: Any, *, as_of: datetime | None
         as_of=cutoff,
         period_start=period_start,
         period_end=period_end,
-        max_documents=80,
+        max_documents=300,
     )
 

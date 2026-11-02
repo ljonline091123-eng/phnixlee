@@ -2778,6 +2778,14 @@ function NoticeDetailDialog({ market, symbol, noticeId, onClose }: { market: str
           <div className="f10-detail-row"><strong>披露来源</strong><span>{notice.source_name || "公告披露源"}</span></div>
           <div className="f10-detail-row"><strong>原始分类</strong><span>{notice.raw_notice_type || notice.notice_type || "来源未提供"}</span></div>
           <div className="f10-detail-row"><strong>公告记录</strong><span>#{notice.id} · {notice.market === "HK" ? "港股" : "股票"} {notice.symbol}</span></div>
+          {(notice.version_history?.length || 0) > 1 && <details className="notice-version-history">
+            <summary>已合并 {notice.version_history?.length} 条来源或修订记录</summary>
+            <div>{notice.version_history?.map((version) => <p key={version.record_id}>
+              <span>{version.revision_status === "CURRENT" ? "当前有效" : version.revision_status === "SUPERSEDED" ? "历史取消" : "重复来源"}</span>
+              <strong>{formatDate(version.notice_date)} · 记录 #{version.record_id}</strong>
+              <small>{version.notice_type || "来源未提供分类"}</small>
+            </p>)}</div>
+          </details>}
           <p className="detail-description">此处直接读取个股公告记录，F10 引用同一份披露文件。</p>
           {notice.url ? <a className="financial-report-link" href={notice.url} target="_blank" rel="noreferrer">打开公告原文</a> : <p className="missing-link">来源未提供原文链接</p>}
         </> : <p className="empty-state">{error || "正在读取对应公告…"}</p>}
