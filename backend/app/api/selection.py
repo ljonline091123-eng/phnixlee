@@ -130,7 +130,14 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
     publication = conclusion_publication(analysis_json)
     analysis_json["publication"] = publication
     analysis_json["conclusion_available"] = publication["conclusion_available"]
-    analysis_json["provisional_conclusion_available"] = publication.get("provisional_conclusion_available", False)
+    # RESEARCH_INCOMPLETE is intentionally publishable as a provisional
+    # research view, but not as a confirmed conclusion. Preserve the earlier
+    # review-context flag instead of overwriting it with a false publication
+    # value.
+    analysis_json["provisional_conclusion_available"] = bool(
+        analysis_json.get("provisional_conclusion_available")
+        or publication.get("provisional_conclusion_available", False)
+    )
     analysis_json["scoring_available"] = publication["scoring_available"]
     analysis_json["evidence_sections"] = build_evidence_sections(analysis_json, evidence_payload)
     analysis_json["evidence_coverage"] = evidence_coverage_summary(evidence_payload, analysis_json)
