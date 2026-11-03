@@ -130,6 +130,7 @@ def _candidate_read(db: Session, candidate: SelectionCandidate) -> SelectionCand
     publication = conclusion_publication(analysis_json)
     analysis_json["publication"] = publication
     analysis_json["conclusion_available"] = publication["conclusion_available"]
+    analysis_json["provisional_conclusion_available"] = publication.get("provisional_conclusion_available", False)
     analysis_json["scoring_available"] = publication["scoring_available"]
     analysis_json["evidence_sections"] = build_evidence_sections(analysis_json, evidence_payload)
     analysis_json["evidence_coverage"] = evidence_coverage_summary(evidence_payload, analysis_json)

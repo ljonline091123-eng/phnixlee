@@ -582,7 +582,7 @@ def _new_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionRun
         universe_scope=payload.universe_scope,
         candidate_limit=payload.candidate_limit,
         criteria_json={"min_abs_change_pct": payload.min_abs_change_pct, "min_volume_ratio": payload.min_volume_ratio,
-                       "symbols": symbols, "analysis_contract": "FUNDAMENTAL_THESIS_V7",
+                       "symbols": symbols, "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
                        "period_months": payload.period_months,
                        "period_start": period_start.isoformat(), "period_end": period_end.isoformat(),
                        "strategy_profile": scoring_snapshot},
@@ -1936,7 +1936,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 capture_decision_snapshot(db, row, snapshot_kind="BEFORE_REANALYSIS", as_of=run.as_of)
             # New attempts use the signed-item contract; saved snapshots retain
             # the original response and evidence from older contracts.
-            run.criteria_json = {**(run.criteria_json or {}), "analysis_contract": "FUNDAMENTAL_THESIS_V7",
+            run.criteria_json = {**(run.criteria_json or {}), "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
                                  "period_months": 12}
             db.commit()
             _prepare_selection_data(
@@ -2297,7 +2297,11 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     skill_codes = [
         "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
         "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
-        "HOLISTIC_INVESTMENT_THESIS_ANALYST",
+        "HOLISTIC_INVESTMENT_THESIS_ANALYST", "RESEARCH_QUESTION_PLANNER",
+        "EVIDENCE_GAP_DETECTOR", "MANAGEMENT_CHANGE_DEEP_DIVE",
+        "ACQUISITION_IMPACT_ANALYST", "CAPITAL_ACTION_INTENT_ANALYST",
+        "PEER_BENCHMARK_ANALYST", "COUNTER_EVIDENCE_REVIEWER",
+        "CONCLUSION_QUALITY_GATE",
     ]
     skill_rows = list(db.scalars(select(ModelSkill).where(ModelSkill.skill_code.in_(skill_codes))).all())
     skill_by_code = {row.skill_code: row for row in skill_rows}
@@ -2700,7 +2704,8 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         needles = [
             str(item.get("name") or "").strip(), str(item.get("symbol") or "").strip(),
             "收入", "利润", "毛利", "现金流", "客户", "供应", "合作", "订单",
-            "回购", "增持", "减持", "解禁", "注销", "第二曲线", "市场份额",
+            "回购", "增持", "减持", "解禁", "注销", "延长锁定", "收购", "并购",
+            "董事", "总裁", "第二曲线", "市场份额",
         ]
         positions: list[int] = []
         for needle in needles:
@@ -3194,6 +3199,7 @@ def _selection_output_contract_guide(analysis_contract: str | None) -> str:
     )
     if analysis_contract in {
         "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7",
+        "FUNDAMENTAL_RESEARCH_V8",
     }:
         guide += (
             '还要返回business_quality和value_chain_analysis。business_quality字段：status,main_business_summary,'
@@ -3206,7 +3212,7 @@ def _selection_output_contract_guide(analysis_contract: str | None) -> str:
             'current_security_document_ids,related_security_document_ids,event_summary,transmission_mechanism,direction,'
             'impact_score,horizon,confidence,assumptions,invalidation_conditions。'
         )
-    if analysis_contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"}:
+    if analysis_contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"}:
         guide += (
             '还要返回investment_thesis，字段：status,primary_business,earning_engine_summary,profit_quality_summary,'
             'industry_chain_summary,valuation_summary,institution_view_summary,market_timing_summary,overall_logic,'
@@ -3216,7 +3222,7 @@ def _selection_output_contract_guide(analysis_contract: str | None) -> str:
             'supporting_document_ids,supporting_fact_ids,supporting_relation_ids,counter_document_ids,counter_fact_ids,'
             'counter_relation_ids,invalidation_conditions,watch_conditions。'
         )
-    if analysis_contract == "FUNDAMENTAL_THESIS_V7":
+    if analysis_contract in {"FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"}:
         guide += (
             'V7的investment_thesis还必须含primary_track_outlook,company_position_summary,second_curve_summary和'
             'deep_assessments；hypothesis还必须含evidence_items。evidence_item每项含reference_type,reference_id,'
@@ -3225,6 +3231,17 @@ def _selection_output_contract_guide(analysis_contract: str | None) -> str:
             'VALUATION,INSTITUTION_EXPECTATION,MARKET_AND_CAPITAL,GOVERNANCE_AND_SHAREHOLDER,SECOND_CURVE；每项含'
             'assessment_code,conclusion,direction,confidence,time_horizon,evidence_document_ids,evidence_fact_ids,'
             'evidence_relation_ids,supporting_points,risks,watch_conditions。'
+        )
+    if analysis_contract == "FUNDAMENTAL_RESEARCH_V8":
+        guide += (
+            'V8还必须在investment_thesis中返回research_questions，且恰好四项：BUSINESS_MODEL、'
+            'MANAGEMENT_CHANGE、ACQUISITION_SECOND_CURVE、CAPITAL_ACTION_INTENT。每项字段含research_code,'
+            'question,status(COMPLETE/PARTIAL/INSUFFICIENT/NOT_APPLICABLE),conclusion,confidence,known_facts,'
+            'hypotheses,missing_evidence,external_research_plan,tracking_metrics,evidence_document_ids,'
+            'evidence_fact_ids,evidence_relation_ids。known_fact含reference_type,reference_id,'
+            'verification_status(VERIFIED/UNVERIFIED),fact,significance,quote；missing_evidence含gap_code,'
+            'description,impact_on_conclusion,required_evidence,preferred_sources,search_queries,'
+            'resolution_status。重大事件适用时至少给出两条竞争性假设；证据不足必须保留缺口和补证计划。'
         )
     return guide
 
@@ -4104,7 +4121,7 @@ def _enrich_market_thesis_from_evidence(output: dict[str, Any], item: dict[str, 
 
 def _validate_investment_thesis_output(
     output: dict[str, Any], item: dict[str, Any], *, required: bool,
-    require_deep_assessments: bool = False,
+    require_deep_assessments: bool = False, require_research_questions: bool = False,
 ) -> None:
     """Keep the holistic thesis grounded in the same immutable evidence package."""
 
@@ -4281,6 +4298,93 @@ def _validate_investment_thesis_output(
                 raise ValueError("V7投资假设存在未说明公司影响方向的支持文档")
             if counter[0] - covered_counter_documents:
                 raise ValueError("V7投资假设存在未说明公司影响方向的反证文档")
+
+    research_questions = [row for row in thesis.get("research_questions") or [] if isinstance(row, dict)]
+    research_codes = [str(row.get("research_code") or "") for row in research_questions]
+    required_research_codes = {
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    }
+    if len(research_codes) != len(set(research_codes)):
+        raise ValueError("研究问题存在重复类型")
+    if require_research_questions and set(research_codes) != required_research_codes:
+        raise ValueError(f"V8分析缺少研究问题：{sorted(required_research_codes - set(research_codes))}")
+    normalize_text = lambda value: "".join(str(value or "").split())
+    for research in research_questions:
+        code = str(research.get("research_code") or "")
+        status = str(research.get("status") or "INSUFFICIENT")
+        event_types = {
+            str(event_type)
+            for event in evidence.get("governance_event_timeline") or [] if isinstance(event, dict)
+            for event_type in event.get("event_types") or []
+        }
+        expected_event_types = {
+            "MANAGEMENT_CHANGE": {"MANAGEMENT_CHANGE"},
+            "ACQUISITION_SECOND_CURVE": {"CORPORATE_ACQUISITION"},
+            "CAPITAL_ACTION_INTENT": {
+                "SHARE_REPURCHASE", "SHARE_CANCELLATION", "SHAREHOLDER_INCREASE",
+                "SHAREHOLDER_DECREASE", "LOCKUP_RELEASE", "LOCKUP_EXTENSION", "EQUITY_INCENTIVE",
+            },
+        }
+        if status == "NOT_APPLICABLE" and event_types & expected_event_types.get(code, set()):
+            raise ValueError(f"研究问题“{code}”存在已识别重大事件，不能标为不适用")
+        docs, cited_facts, cited_relations = validate_refs(
+            research.get("evidence_document_ids") or [],
+            research.get("evidence_fact_ids") or [],
+            research.get("evidence_relation_ids") or [],
+            f"研究问题“{code}”",
+        )
+        known_facts = [row for row in research.get("known_facts") or [] if isinstance(row, dict)]
+        for known in known_facts:
+            reference_type = str(known.get("reference_type") or "")
+            reference_id = str(known.get("reference_id") or "")
+            verified = str(known.get("verification_status") or "") == "VERIFIED"
+            if reference_type == "DOCUMENT":
+                if not reference_id.isdigit() or int(reference_id) not in documents:
+                    raise ValueError(f"研究问题“{code}”引用了本次上下文之外的文档")
+                if int(reference_id) not in docs:
+                    raise ValueError(f"研究问题“{code}”的事实明细未列入问题证据清单")
+                quote = normalize_text(known.get("quote"))
+                body = normalize_text(documents[int(reference_id)].get("content") or documents[int(reference_id)].get("excerpt"))
+                if verified and (not quote or quote not in body):
+                    raise ValueError(f"研究问题“{code}”的已核验文档事实必须逐字引用连续原句")
+            elif reference_type == "FACT":
+                if reference_id not in facts or reference_id not in cited_facts:
+                    raise ValueError(f"研究问题“{code}”引用了问题证据清单之外的事实")
+            elif reference_type == "RELATION":
+                if not reference_id.isdigit() or int(reference_id) not in relations or int(reference_id) not in cited_relations:
+                    raise ValueError(f"研究问题“{code}”引用了问题证据清单之外的关系")
+        question_hypotheses = [row for row in research.get("hypotheses") or [] if isinstance(row, dict)]
+        if status in {"COMPLETE", "PARTIAL"} and code != "BUSINESS_MODEL" and len(question_hypotheses) < 2:
+            raise ValueError(f"研究问题“{code}”适用时必须给出至少两条竞争性解释")
+        for hypothesis in question_hypotheses:
+            supporting = validate_refs(
+                hypothesis.get("supporting_document_ids") or [],
+                hypothesis.get("supporting_fact_ids") or [],
+                hypothesis.get("supporting_relation_ids") or [],
+                f"研究问题“{code}”假设“{hypothesis.get('title') or '未命名'}”的支持证据",
+            )
+            counter = validate_refs(
+                hypothesis.get("counter_document_ids") or [],
+                hypothesis.get("counter_fact_ids") or [],
+                hypothesis.get("counter_relation_ids") or [],
+                f"研究问题“{code}”假设“{hypothesis.get('title') or '未命名'}”的反证",
+            )
+            if hypothesis.get("status") in {"SUPPORTED", "MIXED"} and not any(supporting):
+                raise ValueError(f"研究问题“{code}”的已支持假设缺少支持证据")
+            if hypothesis.get("status") == "CONTRADICTED" and not any(counter):
+                raise ValueError(f"研究问题“{code}”的被反驳假设缺少反证")
+            if hypothesis.get("status") in {"SUPPORTED", "MIXED"} and not hypothesis.get("invalidation_conditions"):
+                raise ValueError(f"研究问题“{code}”的可用假设必须明确失效条件")
+        gaps = [row for row in research.get("missing_evidence") or [] if isinstance(row, dict)]
+        if status in {"PARTIAL", "INSUFFICIENT"} and not gaps:
+            raise ValueError(f"研究问题“{code}”尚未完成时必须列出证据缺口")
+        if gaps and not research.get("external_research_plan"):
+            raise ValueError(f"研究问题“{code}”存在证据缺口时必须给出补证计划")
+        if status == "COMPLETE" and not known_facts:
+            raise ValueError(f"研究问题“{code}”标为完成时必须列出已核验事实")
+        if status == "NOT_APPLICABLE" and (known_facts or question_hypotheses):
+            raise ValueError(f"研究问题“{code}”标为不适用时不得保留事件推断")
 
     if thesis.get("status") == "SUPPORTED":
         if len(primary_industries) != 1:
@@ -5159,6 +5263,12 @@ def _normalize_selection_model_row(raw: dict[str, Any]) -> dict[str, Any]:
 
     thesis = raw.get("investment_thesis")
     if isinstance(thesis, dict):
+        hypothesis_status_map = {
+            "UNVERIFIED": "INSUFFICIENT", "VERIFIED": "SUPPORTED", "REALIZED": "SUPPORTED",
+            "PARTIALLY_SUPPORTED": "MIXED", "PARTIAL_SUPPORTED": "MIXED", "PARTIALLY_VERIFIED": "MIXED",
+            "PARTIALLY_VALIDATED": "MIXED", "PARTIAL": "MIXED", "PARTIALLY_REALIZED": "MIXED",
+            "NOT_REALIZED": "CONTRADICTED",
+        }
         status_map = {
             "UNVERIFIED": "INSUFFICIENT",
             "VERIFIED": "SUPPORTED",
@@ -5280,6 +5390,21 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
                     raw[key] = [str(value) for value in raw[key]]
             thesis = raw.get("investment_thesis")
             if isinstance(thesis, dict):
+                def _normalize_fact_ids(container: dict[str, Any], *keys: str) -> None:
+                    for key in keys:
+                        if isinstance(container.get(key), list):
+                            container[key] = [str(value) for value in container[key]]
+
+                def _normalize_hypothesis(hypothesis: dict[str, Any]) -> None:
+                    status = str(hypothesis.get("status") or "INSUFFICIENT").upper()
+                    if status in hypothesis_status_map:
+                        hypothesis["status"] = hypothesis_status_map[status]
+                    hypothesis["horizon"] = horizon(hypothesis.get("horizon"))
+                    _normalize_fact_ids(hypothesis, "supporting_fact_ids", "counter_fact_ids")
+                    for evidence_item in hypothesis.get("evidence_items") or []:
+                        if isinstance(evidence_item, dict) and evidence_item.get("reference_id") is not None:
+                            evidence_item["reference_id"] = str(evidence_item["reference_id"])
+
                 for key in ("evidence_fact_ids",):
                     if isinstance(thesis.get(key), list):
                         thesis[key] = [str(value) for value in thesis[key]]
@@ -5292,12 +5417,17 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
                 for hypothesis in thesis.get("hypotheses") or []:
                     if not isinstance(hypothesis, dict):
                         continue
-                    for key in ("supporting_fact_ids", "counter_fact_ids"):
-                        if isinstance(hypothesis.get(key), list):
-                            hypothesis[key] = [str(value) for value in hypothesis[key]]
-                    for evidence_item in hypothesis.get("evidence_items") or []:
-                        if isinstance(evidence_item, dict) and evidence_item.get("reference_id") is not None:
-                            evidence_item["reference_id"] = str(evidence_item["reference_id"])
+                    _normalize_hypothesis(hypothesis)
+                for research in thesis.get("research_questions") or []:
+                    if not isinstance(research, dict):
+                        continue
+                    _normalize_fact_ids(research, "evidence_fact_ids")
+                    for known_fact in research.get("known_facts") or []:
+                        if isinstance(known_fact, dict) and known_fact.get("reference_id") is not None:
+                            known_fact["reference_id"] = str(known_fact["reference_id"])
+                    for hypothesis in research.get("hypotheses") or []:
+                        if isinstance(hypothesis, dict):
+                            _normalize_hypothesis(hypothesis)
             recommendation = SelectionModelRecommendation.model_validate(raw)
             parsed[symbol] = recommendation.model_dump()
         except Exception as exc:
@@ -5359,7 +5489,11 @@ def _apply_model_analysis(
     analysis_skill_codes = [
         "STOCK_SELECTION_ANALYST", "STOCK_EVENT_LINKAGE_ANALYST",
         "BUSINESS_MOAT_VALUE_ANALYST", "VALUE_CHAIN_TRANSMISSION_ANALYST",
-        "HOLISTIC_INVESTMENT_THESIS_ANALYST",
+        "HOLISTIC_INVESTMENT_THESIS_ANALYST", "RESEARCH_QUESTION_PLANNER",
+        "EVIDENCE_GAP_DETECTOR", "MANAGEMENT_CHANGE_DEEP_DIVE",
+        "ACQUISITION_IMPACT_ANALYST", "CAPITAL_ACTION_INTENT_ANALYST",
+        "PEER_BENCHMARK_ANALYST", "COUNTER_EVIDENCE_REVIEWER",
+        "CONCLUSION_QUALITY_GATE",
     ]
     analysis_skill_prompt_chars = 0
     if db is not None:
@@ -5373,7 +5507,7 @@ def _apply_model_analysis(
         )
     required = analysis_contract in {
         "MULTI_SOURCE_V2", "MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5",
-        "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7",
+        "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8",
     }
     real_model = getattr(run, "data_mode", "REAL") == "REAL"
 
@@ -5436,11 +5570,11 @@ def _apply_model_analysis(
         }
         from app.services.selection_evidence import validate_assessments
         contract = analysis_contract
-        validate_assessments(output, evidence, required=contract in {"MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"})
+        validate_assessments(output, evidence, required=contract in {"MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"})
         try:
             _validate_multi_source_output(
                 output, item, required=required,
-                enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"},
+                enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
             )
         except ValueError as validation_error:
             # Retry the core evidence validation without optional semantic
@@ -5453,7 +5587,7 @@ def _apply_model_analysis(
             try:
                 _validate_multi_source_output(
                     output, item, required=required,
-                    enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"},
+                    enforce_document_coverage=contract in {"MULTI_SOURCE_LINKAGE_V3", "MULTI_SOURCE_SCORED_V4", "MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
                 )
             except ValueError:
                 output.update(semantic_snapshot)
@@ -5463,11 +5597,12 @@ def _apply_model_analysis(
         # cited precision before applying the fail-closed validator.
         _normalize_business_composition_output(output, item)
         _validate_business_value_chain_output(
-            output, item, required=contract in {"MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"},
+            output, item, required=contract in {"MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
         )
         _validate_investment_thesis_output(
-            output, item, required=contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"},
-            require_deep_assessments=contract == "FUNDAMENTAL_THESIS_V7",
+            output, item, required=contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
+            require_deep_assessments=contract in {"FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
+            require_research_questions=contract == "FUNDAMENTAL_RESEARCH_V8",
         )
 
         if real_model and required and not any(
@@ -5604,7 +5739,7 @@ def _apply_model_analysis(
             "服务端会再用完整JSON Schema校验，不得增删或改名字段。" + output_contract_guide
         )
         contract_prompt = "必须逐股返回headline、七个dimensions（NEWS、NOTICE、FINANCIAL、PRICE_VOLUME、FUND_FLOW、COMPANY、GRAPH）、events、event_timeline、event_links、validation_findings、analyzed_document_ids、confidence_breakdown、positives、risks、watch_conditions。逐项阅读分析周期内载入的全部新闻公告正文，并把每个已阅读正文ID完整列入analyzed_document_ids；先按主题建立时间线，再判断前后信息是否属于FOLLOW_UP、VALIDATES、CONTRADICTS、REALIZES、FAILS_TO_REALIZE、SAME_TOPIC、EXECUTIVE_UNLOCKING_RISK、SHAREHOLDER_CONFIDENCE_SIGNAL或RELATED_SECURITY_IMPACT。历史利好是否兑现必须引用后续文档或结构化事实；没有后续证据时填UNVERIFIED/INSUFFICIENT。高管辞职与解禁、增持、定增等时间接近只能标为关联线索，不得直接断言动机或因果。逐项说明事实→影响机制→选股作用和时间边界；缺证据返回INSUFFICIENT，不得把缺失当利好。新闻/公告SUPPORTED须引用本次正文document id；METADATA_ONLY不是正文。事件quote和event_links.evidence_quotes必须逐字来自本次content/excerpt。图谱引用本次graph_paths中的关系ID，关系仅代表资料归属时不可推断因果。财务与量价保留具体数值和日期；FINANCIAL引用financial_fact_ids，PRICE_VOLUME引用market_fact_ids，FUND_FLOW引用fund_flow_fact_ids。收入和净利润不能充当量价走势证据；融资公告不能充当交易资金流。缺相应类型证据须标INSUFFICIENT。每只股票只能使用其 evidence_json.citation_allowlist 中的 ID，不得引用其他候选的证据ID。"
-        if analysis_contract in {"MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"}:
+        if analysis_contract in {"MULTI_SOURCE_VALUE_CHAIN_V5", "FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"}:
             contract_prompt += (
                 "还必须返回business_quality和value_chain_analysis。business_quality要先结合BUSINESS_PROFILE与最新"
                 "BUSINESS_COMPOSITION识别真实主营、产品服务、收入占比和毛利率，再评价技术含量、竞争壁垒、商业化能力、"
@@ -5618,7 +5753,7 @@ def _apply_model_analysis(
                 "失效条件。候选/未验证关系只能展示线索，direction=UNKNOWN且impact_score=null。所有impact_score范围-100到100，"
                 "它表示研究影响强弱，不是目标涨跌幅。"
             )
-        if analysis_contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7"}:
+        if analysis_contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"}:
             contract_prompt += (
                 "还必须返回investment_thesis，并严格按以下顺序完成整体研判：先识别公司靠什么业务赚钱，再核对各主营收入、"
                 "利润、占比、毛利率、现金流与成长质量；随后判断真正相关的核心行业、业务主题和产业链位置；再分析公司投资、"
@@ -5632,9 +5767,9 @@ def _apply_model_analysis(
                 "估值要根据盈利状态选择PE、PB、PS或其他已提供指标；机构预测是市场预期校验，不得当作已实现业绩。"
                 "overall_logic必须形成一条从主营→盈利→行业/产业链→公司行为→估值预期→交易状态的完整逻辑，并明确最大反证。"
             )
-        if analysis_contract == "FUNDAMENTAL_THESIS_V7":
+        if analysis_contract in {"FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"}:
             contract_prompt += (
-                "本轮为一年期FUNDAMENTAL_THESIS_V7深度分析。investment_thesis还必须返回primary_track_outlook、"
+                "本轮为一年期主营驱动深度分析。investment_thesis还必须返回primary_track_outlook、"
                 "company_position_summary、second_curve_summary和恰好九项deep_assessments，assessment_code分别为"
                 "BUSINESS_OUTLOOK、INDUSTRY_OUTLOOK、COMPETITIVE_POSITION、VALUE_CHAIN_RESILIENCE、VALUATION、"
                 "INSTITUTION_EXPECTATION、MARKET_AND_CAPITAL、GOVERNANCE_AND_SHAREHOLDER、SECOND_CURVE。"
@@ -5665,6 +5800,18 @@ def _apply_model_analysis(
                 "只能列入反证，MIXED要说明公司特定的正负两面。不得因文章标题或行业总体基调，把文中明确有利于本公司的事实"
                 "放入反证；必须先抽取原文对该公司的具体表述，再决定支持或反驳哪个假设。例如行业总体利润承压而本公司"
                 "毛利率逆势提升，是本公司相对竞争力的支持证据，同时可把行业压力作为风险，不能把整篇文章机械归为反证。"
+            )
+        if analysis_contract == "FUNDAMENTAL_RESEARCH_V8":
+            contract_prompt += (
+                "V8必须先建立研究问题图，再汇总八维和雷达结果。investment_thesis.research_questions恰好包含四项："
+                "BUSINESS_MODEL（公司靠什么赚钱、收入利润能否持续）、MANAGEMENT_CHANGE（重大管理层调整及经营连续性）、"
+                "ACQUISITION_SECOND_CURVE（并购、整合、并表与第二曲线兑现）、CAPITAL_ACTION_INTENT（回购、注销、延长锁定、"
+                "增减持等资本行为的可能动因）。不存在相关事件时返回NOT_APPLICABLE，不得虚构事件。"
+                "只要存在重大人事、并购或资本行为事件，就必须提出至少两条竞争性解释；市场开拓不利、意见分歧、战略转向、"
+                "低估判断或稳定股价意图都只能作为待验证假设，除非本次证据明确披露。每项known_facts必须引用本次白名单"
+                "文档、事实或关系；VERIFIED文档事实必须带连续原文引句。PARTIAL或INSUFFICIENT必须列出missing_evidence、"
+                "对结论的影响、优先官方来源、可执行检索词和external_research_plan，并说明后续tracking_metrics。"
+                "互联网或模型常识不能直接进入结论；外部补证必须先保存为可追溯证据文档，再重新分析。"
             )
         contract_prompt_prefix = contract_prompt
         batch_allowlists = {str(row["symbol"]): row["evidence_json"]["citation_allowlist"] for row in batch}
@@ -6045,6 +6192,7 @@ def _apply_model_analysis(
                 "model_failure_reason": None, "model_attempts": history})
             visible = next(row["evidence_json"] for row in selected if row["symbol"] == symbol)
             item["analysis_json"]["analysis_contract"] = (
+                "FUNDAMENTAL_RESEARCH_V8" if analysis_contract == "FUNDAMENTAL_RESEARCH_V8" else
                 "FUNDAMENTAL_THESIS_V7" if analysis_contract == "FUNDAMENTAL_THESIS_V7" else
                 "FUNDAMENTAL_THESIS_V6" if analysis_contract == "FUNDAMENTAL_THESIS_V6" else
                 "MULTI_SOURCE_VALUE_CHAIN_V5" if analysis_contract == "MULTI_SOURCE_VALUE_CHAIN_V5" else

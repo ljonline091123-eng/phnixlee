@@ -346,6 +346,8 @@ def _governance_event_timeline(
                               "任命董事", "任命高管", "董事調任", "董事调任", "人事任免",
                               "director resignation", "appointed as director", "appointed as ceo",
                               "re-designation of director", "redesignation of director", "re-designated"),
+        "CORPORATE_ACQUISITION": ("收购", "并购", "购买股权", "购买资产", "重大资产重组",
+                                  "acquisition", "acquire", "purchase of shares", "purchase of assets"),
         "EQUITY_INCENTIVE": ("股权激励", "share incentive", "option scheme"),
     }
     events: list[dict[str, Any]] = []

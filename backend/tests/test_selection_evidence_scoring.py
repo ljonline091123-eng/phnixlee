@@ -232,6 +232,82 @@ def v7_output():
     return output
 
 
+def v8_research_questions():
+    return [
+        {
+            "research_code": "BUSINESS_MODEL", "question": "公司靠什么赚钱，收入利润能否持续？",
+            "status": "COMPLETE", "conclusion": "主营收入事实已核验，持续性仍需跟踪订单和现金流。", "confidence": .7,
+            "known_facts": [{"reference_type": "FACT", "reference_id": "business-1", "verification_status": "VERIFIED",
+                             "fact": "公司主营测试设备研发与销售。", "significance": "用于识别收入发动机。"}],
+            "hypotheses": [], "missing_evidence": [], "external_research_plan": [], "tracking_metrics": ["主营收入和经营现金流"],
+            "evidence_document_ids": [], "evidence_fact_ids": ["business-1"], "evidence_relation_ids": [],
+        },
+        {"research_code": "MANAGEMENT_CHANGE", "question": "重大管理层调整如何影响经营连续性？", "status": "NOT_APPLICABLE",
+         "conclusion": "本轮证据包未识别相关管理层调整。", "confidence": .2, "known_facts": [], "hypotheses": [],
+         "missing_evidence": [], "external_research_plan": [], "tracking_metrics": [], "evidence_document_ids": [],
+         "evidence_fact_ids": [], "evidence_relation_ids": []},
+        {"research_code": "ACQUISITION_SECOND_CURVE", "question": "并购是否形成可兑现的第二曲线？", "status": "NOT_APPLICABLE",
+         "conclusion": "本轮证据包未识别并购事件。", "confidence": .2, "known_facts": [], "hypotheses": [],
+         "missing_evidence": [], "external_research_plan": [], "tracking_metrics": [], "evidence_document_ids": [],
+         "evidence_fact_ids": [], "evidence_relation_ids": []},
+        {"research_code": "CAPITAL_ACTION_INTENT", "question": "回购、注销或锁定行为的可能动因是什么？", "status": "NOT_APPLICABLE",
+         "conclusion": "本轮证据包未识别相关资本行为。", "confidence": .2, "known_facts": [], "hypotheses": [],
+         "missing_evidence": [], "external_research_plan": [], "tracking_metrics": [], "evidence_document_ids": [],
+         "evidence_fact_ids": [], "evidence_relation_ids": []},
+    ]
+
+
+def v8_output():
+    output = v7_output()
+    output["investment_thesis"]["research_questions"] = v8_research_questions()
+    return output
+
+
+def test_v8_requires_all_four_research_questions():
+    _validate_investment_thesis_output(v8_output(), v5_item(), required=True,
+                                       require_deep_assessments=True, require_research_questions=True)
+    missing = v8_output()
+    missing["investment_thesis"]["research_questions"].pop()
+    with pytest.raises(ValueError, match="V8分析缺少研究问题"):
+        _validate_investment_thesis_output(missing, v5_item(), required=True,
+                                           require_deep_assessments=True, require_research_questions=True)
+
+
+def test_v8_partial_question_requires_gap_and_plan():
+    changed = v8_output()
+    question = changed["investment_thesis"]["research_questions"][0]
+    question.update(status="PARTIAL", missing_evidence=[], external_research_plan=[])
+    with pytest.raises(ValueError, match="证据缺口"):
+        _validate_investment_thesis_output(changed, v5_item(), required=True,
+                                           require_deep_assessments=True, require_research_questions=True)
+
+
+def test_v8_research_question_not_applicable_cannot_hide_identified_event():
+    changed = v8_output()
+    # The validator reads the evidence snapshot from the item, so add an event
+    # to a copied item rather than mutating the shared fixture.
+    item = deepcopy(v5_item())
+    item["evidence_json"]["governance_event_timeline"] = [{"event_types": ["CORPORATE_ACQUISITION"]}]
+    with pytest.raises(ValueError, match="不能标为不适用"):
+        _validate_investment_thesis_output(changed, item, required=True,
+                                           require_deep_assessments=True, require_research_questions=True)
+
+
+def test_v8_publication_distinguishes_research_incomplete_from_model_failure():
+    complete = {**analysis(), "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+                "model": {"reasoning": "基于证据完成研究", "confidence": .7,
+                          "investment_thesis": {"research_questions": v8_research_questions()}},}
+    assert conclusion_publication(complete)["status"] == "READY_REVIEW"
+    incomplete_questions = deepcopy(v8_research_questions())
+    incomplete_questions[0]["status"] = "PARTIAL"
+    incomplete_questions[0]["missing_evidence"] = [{"gap_code": "CASH_FLOW", "description": "缺现金流", "impact_on_conclusion": "影响持续性", "resolution_status": "LOCAL_SOURCE_PENDING"}]
+    incomplete_questions[0]["external_research_plan"] = ["补取最新财报"]
+    incomplete = {**complete, "model": {**complete["model"], "investment_thesis": {"research_questions": incomplete_questions}}}
+    result = conclusion_publication(incomplete)
+    assert result["status"] == "RESEARCH_INCOMPLETE"
+    assert result["provisional_conclusion_available"] is True and result["conclusion_available"] is False
+
+
 def test_v7_requires_complete_deep_assessments_and_auditable_document_stance():
     _validate_investment_thesis_output(
         v7_output(), v5_item(), required=True, require_deep_assessments=True,

@@ -74,6 +74,8 @@ V7 保留并复用两个可审计的语义模块：
 
 这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，`HOLISTIC_INVESTMENT_THESIS_ANALYST` 负责将其与财务、治理、估值、机构预期和交易状态编排成整体投资逻辑，三者均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
 
+选股研究从 V7 起进一步采用问题驱动的 V8 契约，详见 `docs/research-question-driven-analysis-v8.md`。整体编排先回答主营赚钱逻辑、重大管理层变化、并购与第二曲线、资本行为动因四个问题，再汇总八维评分；八维不再替代研究问题。研究问题中的事实、假设、缺口和补证计划均绑定本次证据白名单，外部资料需先形成证据文档。`RESEARCH_INCOMPLETE` 只代表阶段性研究结果，不能确认跟踪。
+
 一年期资料超过单次上下文预算时，系统按文档/事实记录边界分段读取，再将每段的证据 ID、逐字引句、方向、冲突和限制汇总进入最终研判。原文不被摘要覆盖。最终生成与契约重试只使用分段摘要、结构化数值、证据白名单和精简输出契约，单次模型输入硬限制为 60,000 字符；完整 JSON Schema 留在服务端做严格校验。
 
 对应数据表为 `selection_dimension_definition`、`selection_strategy_profile`、`selection_strategy_profile_item`、`selection_dimension_result` 和 `selection_evaluation_metric`。管理入口为 `AI能力中心 -> 评价体系`，候选雷达图和证据下钻位于 `投研工作台 -> 选股与复选`。

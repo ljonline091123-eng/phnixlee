@@ -8,6 +8,9 @@ const technologyNames: Record<string, string> = {UNKNOWN: "证据不足", LOW: "
 const thesisStatusNames: Record<string, string> = {SUPPORTED: "逻辑成立", PARTIAL: "部分成立", INSUFFICIENT: "证据不足", CONTRADICTED: "存在反证"};
 const classificationRoleNames: Record<string, string> = {PRIMARY_INDUSTRY: "核心行业", SECONDARY_INDUSTRY: "次要行业", CORE_THEME: "核心主题", OPTIONAL_THEME: "观察主题", NOISE_TAG: "弱相关标签"};
 const assessmentNames: Record<string, string> = {BUSINESS_OUTLOOK: "主营赛道与盈利前景", INDUSTRY_OUTLOOK: "行业与赛道趋势", COMPETITIVE_POSITION: "公司竞争位置", VALUE_CHAIN_RESILIENCE: "产业链与外部韧性", VALUATION: "估值匹配度", INSTITUTION_EXPECTATION: "机构预期", MARKET_AND_CAPITAL: "一年量价与资金状态", GOVERNANCE_AND_SHAREHOLDER: "股东回报与治理信号", SECOND_CURVE: "第二曲线"};
+const researchNames: Record<string, string> = {BUSINESS_MODEL: "公司赚钱逻辑", MANAGEMENT_CHANGE: "重大管理层变化", ACQUISITION_SECOND_CURVE: "并购与第二曲线", CAPITAL_ACTION_INTENT: "回购、注销与锁定行为"};
+const researchStatusNames: Record<string, string> = {COMPLETE: "已完成", PARTIAL: "部分完成", INSUFFICIENT: "证据不足", NOT_APPLICABLE: "不适用"};
+const researchResolutionNames: Record<string, string> = {LOCAL_SOURCE_PENDING: "等待本地数据补齐", EXTERNAL_RESEARCH_REQUIRED: "需要外部补证", USER_INPUT_REQUIRED: "需要用户补充", UNAVAILABLE: "当前不可得"};
 const array = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
 export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH";
@@ -115,6 +118,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const thesis = (model.investment_thesis || null) as SelectionRecord | null;
   const classifications = array(thesis?.classifications);
   const hypotheses = array(thesis?.hypotheses);
+  const researchQuestions = array(thesis?.research_questions);
   const deepAssessments = array(thesis?.deep_assessments);
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
@@ -140,7 +144,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。失败原因、模型调用和处理建议请查看“数据事实”页签。</p></div>
   </section>;
   return <section className="selection-analysis">
-    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{!publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
+    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，先补证后再生成可跟踪评分。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
     {thesis ? <section className={`analysis-thesis ${String(thesis.status || "INSUFFICIENT").toLowerCase()}`}>
       <div className="analysis-thesis-heading"><div><span>基本面主线</span><h3>整体投资逻辑</h3><p>先判断公司如何赚钱，再用行业、公司行为、产业链、估值预期和交易状态交叉验证。</p></div><div><strong>{thesisStatusNames[String(thesis.status)] || "待核验"}</strong><small>置信度 {Math.round(Number(thesis.confidence || 0) * 100)}%</small></div></div>
       <div className="analysis-thesis-core"><article><small>公司靠什么赚钱</small><strong>{String(thesis.primary_business || "主营证据不足")}</strong><p>{String(thesis.earning_engine_summary || "尚未识别收入和利润发动机")}</p></article><article><small>盈利质量</small><strong>收入与利润是否可持续</strong><p>{String(thesis.profit_quality_summary || "盈利质量证据不足")}</p></article></div>
@@ -156,6 +160,27 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
         <article><small>机构预期</small><p>{String(thesis.institution_view_summary || "证据不足")}</p></article>
         <article><small>量价与资金状态</small><p>{String(thesis.market_timing_summary || "证据不足")}</p></article>
       </div>
+      {researchQuestions.length > 0 && <section className="analysis-research-questions" aria-label="研究问题闭环">
+        <div className="analysis-research-heading"><div><span>研究问题驱动</span><h4>四项专项研究</h4></div><small>事实、假设、缺口与结论分开保存；阶段性结果不能直接确认跟踪</small></div>
+        <div className="analysis-research-grid">{researchQuestions.map((question, index) => {
+          const code = String(question.research_code || "");
+          const facts = array(question.known_facts);
+          const questionHypotheses = array(question.hypotheses);
+          const gaps = array(question.missing_evidence);
+          const plan = strings(question.external_research_plan);
+          return <article key={`${code}-${index}`} className={`analysis-research-card research-status-${String(question.status || "INSUFFICIENT").toLowerCase()}`}>
+            <header><div><small>{index + 1} · 专项研究</small><strong>{researchNames[code] || code}</strong></div><span>{researchStatusNames[String(question.status)] || "待核验"}</span></header>
+            <p className="research-question-text">{String(question.question || "未定义研究问题")}</p>
+            <p className="research-conclusion">{String(question.conclusion || "尚未形成结论")}</p>
+            <div className="research-meta"><span>置信度 {Math.round(Number(question.confidence || 0) * 100)}%</span><span>已核验事实 {facts.filter(item => item.verification_status === "VERIFIED").length}/{facts.length}</span><span>竞争性假设 {questionHypotheses.length}</span></div>
+            {facts.length > 0 && <details><summary>已确认事实（{facts.length}）</summary><ul>{facts.map((fact, factIndex) => <li key={factIndex}><b>{fact.verification_status === "VERIFIED" ? "已核验" : "待核验"}</b> {String(fact.fact || "")}<small>{String(fact.significance || "")}</small>{fact.quote && <blockquote>{String(fact.quote)}</blockquote>}</li>)}</ul></details>}
+            {questionHypotheses.length > 0 && <details><summary>竞争性解释（{questionHypotheses.length}）</summary><ul>{questionHypotheses.map((hypothesis, hypothesisIndex) => <li key={hypothesisIndex}><b>{String(hypothesis.title || "未命名假设")}</b> · {thesisStatusNames[String(hypothesis.status)] || "待核验"}<br />{String(hypothesis.thesis || "")}<small>失效条件：{strings(hypothesis.invalidation_conditions).join("；") || "尚未明确"}</small></li>)}</ul></details>}
+            {gaps.length > 0 && <details open><summary>待补证（{gaps.length}）</summary><ul>{gaps.map((gap, gapIndex) => <li key={gapIndex}><b>{String(gap.description || "证据缺口")}</b><small>影响：{String(gap.impact_on_conclusion || "未说明")}</small><em>{researchResolutionNames[String(gap.resolution_status)] || String(gap.resolution_status || "待处理")}</em></li>)}</ul>{plan.length > 0 && <p className="research-plan">补证计划：{plan.join("；")}</p>}</details>}
+            {strings(question.tracking_metrics).length > 0 && <div className="research-tracking"><small>后续跟踪</small><p>{strings(question.tracking_metrics).join("；")}</p></div>}
+            {array(question.evidence_document_ids).length > 0 && <div className="analysis-references">{array(question.evidence_document_ids).map(id => reference(Number(id)))}</div>}
+          </article>;
+        })}</div>
+      </section>}
       {deepAssessments.length > 0 && <div className="analysis-deep-assessments"><h4>一年期深度判断</h4><div>{deepAssessments.map((item, index) => <article key={`${String(item.assessment_code)}-${index}`}>
         <header><strong>{assessmentNames[String(item.assessment_code)] || String(item.assessment_code || "分析维度")}</strong><span className={`analysis-direction ${String(item.direction || "UNKNOWN").toLowerCase()}`}>{names[String(item.direction)] || "待判断"}</span></header>
         <p>{String(item.conclusion || "证据不足")}</p>

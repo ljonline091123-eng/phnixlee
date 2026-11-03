@@ -100,7 +100,7 @@ export type SelectionCandidate = {
   entry_price: number | null; entry_date: string | null; hard_score: number;
   hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence;
   analysis_json: Record<string, unknown> & { publication?: {
-    status: "READY_REVIEW" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "NOT_ANALYZED";
+    status: "READY_REVIEW" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "RESEARCH_INCOMPLETE" | "NOT_ANALYZED";
     reason: string; conclusion_available: boolean; scoring_available: boolean; retryable: boolean;
   }};
   decision: string; review_notes: string | null; target_price: number | null; stop_price: number | null;

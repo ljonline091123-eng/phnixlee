@@ -289,7 +289,26 @@ def conclusion_publication(analysis: dict) -> dict:
         if (analysis.get("analysis_validation_status") == "PARTIAL" or not str(model.get("reasoning") or "").strip()
                 or not _finite_number(model.get("confidence")) or not 0 <= model["confidence"] <= 1):
             state, reason = "CONCLUSION_FAILED", "模型虽已返回，但引用或结论完整性校验未通过，未发布有效结论"
-        elif (not _finite_number(scoring.get("trusted_score"))
+        else:
+            contract = str(analysis.get("analysis_contract") or "")
+            thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
+            research = [row for row in thesis.get("research_questions") or [] if isinstance(row, dict)]
+            required_codes = {"BUSINESS_MODEL", "MANAGEMENT_CHANGE", "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT"}
+            research_codes = {str(row.get("research_code") or "") for row in research}
+            research_statuses = {str(row.get("status") or "INSUFFICIENT") for row in research}
+            is_v8 = contract == "FUNDAMENTAL_RESEARCH_V8" or bool(research)
+            incomplete_research = (
+                is_v8
+                and (
+                    research_codes != required_codes
+                    or str(next((row.get("status") for row in research if row.get("research_code") == "BUSINESS_MODEL"), "INSUFFICIENT")) == "INSUFFICIENT"
+                    or any(status in {"PARTIAL", "INSUFFICIENT"} for status in research_statuses)
+                )
+            )
+            if incomplete_research:
+                state = "RESEARCH_INCOMPLETE"
+                reason = "研究问题尚未闭环：请补齐主营、重大事件或资本行为证据后再发布完整结论"
+        if state == "NOT_ANALYZED" and (not _finite_number(scoring.get("trusted_score"))
               or not 0 <= scoring["trusted_score"] <= 100
               or len(scoring.get("dimensions") or []) != 8
               or {row.get("dimension_code") for row in scoring.get("dimensions") or []} != SCORE_DIMENSIONS
@@ -299,7 +318,8 @@ def conclusion_publication(analysis: dict) -> dict:
                      for row in scoring.get("dimensions") or [])
               or abs(sum(row["weight"] for row in scoring.get("dimensions") or []) - 100) > .01):
             state, reason = "SCORE_FAILED", "结论已有返回，但综合评分或雷达数据未生成，请重算评分或重新分析"
-        else:
+        elif state == "NOT_ANALYZED":
             state, reason = "READY_REVIEW", "结论与评分已生成，等待人工复核"
     return {"status": state, "reason": reason, "conclusion_available": state == "READY_REVIEW",
-            "scoring_available": state == "READY_REVIEW", "retryable": state in {"MODEL_FAILED", "CONCLUSION_FAILED", "SCORE_FAILED"}}
+            "provisional_conclusion_available": state == "RESEARCH_INCOMPLETE",
+            "scoring_available": state == "READY_REVIEW", "retryable": state in {"MODEL_FAILED", "CONCLUSION_FAILED", "SCORE_FAILED", "RESEARCH_INCOMPLETE"}}
