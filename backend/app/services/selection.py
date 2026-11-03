@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
-from math import isfinite
+from math import ceil, isfinite
 from types import SimpleNamespace
 from threading import Event, Thread
 import time as clock
@@ -2540,6 +2540,7 @@ def _load_disclosure_bodies(db: Session, evidence: dict, market: str, symbol: st
 
 def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     """Build a bounded model view; the persisted evidence remains unabridged."""
+    import json
     evidence = item.get("evidence_json") or {}
     analysis = item.get("analysis_json") or {}
 
@@ -2626,6 +2627,54 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
             }
         return str(value)[:max(16, budget)]
 
+    def fit_compact_value(value: Any, budget: int) -> Any:
+        """Apply a hard JSON-size cap after semantic compaction.
+
+        Nested shareholder/F10 payloads can contain many independently small
+        tables. A per-field cap is insufficient because their sum can still
+        exceed the model request budget. This second pass keeps the same
+        structure and truncates least-important tail rows/fields until the
+        encoded value fits the requested budget.
+        """
+        budget = max(48, int(budget))
+
+        def encoded(candidate: Any) -> int:
+            return len(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")))
+
+        def shrink(candidate: Any, limit: int) -> Any:
+            if encoded(candidate) <= limit:
+                return candidate
+            if isinstance(candidate, str):
+                return candidate[:max(8, limit // 2)]
+            if isinstance(candidate, list):
+                output: list[Any] = []
+                for child in candidate:
+                    remaining = max(48, limit - encoded(output) - 2)
+                    if remaining <= 48 and output:
+                        break
+                    compact = shrink(child, max(48, remaining))
+                    if encoded(output + [compact]) > limit:
+                        break
+                    output.append(compact)
+                return output
+            if isinstance(candidate, dict):
+                output: dict[str, Any] = {}
+                for key, child in candidate.items():
+                    key_text = str(key)
+                    remaining = max(48, limit - encoded(output) - len(key_text) - 6)
+                    if remaining <= 48 and output:
+                        break
+                    compact = shrink(child, max(48, remaining))
+                    output[key_text] = compact
+                    if encoded(output) > limit:
+                        output.pop(key_text, None)
+                        break
+                return output
+            return candidate
+
+        result = shrink(value, budget)
+        return result if encoded(result) <= budget else str(result)[:max(8, budget // 2)]
+
     # Balance types: a large financial history must not displace current prices
     # or shareholder observations. Numeric properties are evidence, not titles.
     fact_rows: list[dict[str, Any]] = []
@@ -2670,8 +2719,24 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
         for fact in selected_observations:
             if isinstance(fact, dict) and fact.get("id") not in {row.get("id") for row in fact_rows}:
                 fact_rows.append({**fact, "fact_type": fact.get("fact_type") or observation_kinds.get(category)})
+    # Facts share the same prompt budget with disclosure excerpts. Large F10
+    # and shareholder payloads remain in persisted evidence; the model view
+    # receives a smaller typed summary when many documents are present.
+    disclosure_count_hint = sum(
+        1
+        for collection in (
+            evidence.get("documents") or [],
+            evidence.get("related_security_documents") or [],
+            (evidence.get("evidence_context") or {}).get("documents") or [],
+            (evidence.get("evidence_context") or {}).get("related_security_documents") or [],
+        )
+        for row in collection
+        if isinstance(row, dict) and row.get("source_table") in {"stock_news", "stock_notice"}
+    )
+    fact_property_budget = max(48, min(1_800, 4_000 // max(1, disclosure_count_hint)))
     visible_facts = [{
-        key: compact_fact_value(row[key], 1_800) if key == "properties" else clip(row[key], 240)
+        key: fit_compact_value(compact_fact_value(row[key], fact_property_budget), fact_property_budget)
+        if key == "properties" else clip(row[key], 240)
         for key in (
             "id", "fact_type", "title", "subject_entity_id", "object_entity_id", "properties",
             "status", "valid_from", "valid_to", "observed_at", "source_table", "evidence",
@@ -2691,11 +2756,15 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
     ordered = sorted(documents.values(), key=lambda row: str(row.get("published_at") or ""), reverse=True)
     ordered.sort(key=lambda row: priorities.get(row.get("source_table"), 4))
     disclosure_count = sum(row.get("source_table") in {"stock_news", "stock_notice"} for row in ordered)
-    # A one-year package is processed record-by-record by map/reduce, so each
-    # readable disclosure needs enough verbatim text for semantic extraction.
-    # The previous 4,800-character shared budget left only ~72 characters per
-    # document for active HK stocks and reduced analysis to title matching.
-    disclosure_excerpt_limit = max(320, min(800, 48_000 // max(1, disclosure_count)))
+    # A one-year package is processed record-by-record by map/reduce. Keep the
+    # prompt bounded even for unusually disclosure-heavy securities while
+    # retaining the complete source text in the persisted evidence snapshot.
+    # The compact budget is separate from the full evidence snapshot: IDs,
+    # titles, dates and citation metadata must remain visible after compaction.
+    disclosure_excerpt_limit = max(
+        72,
+        min(800, ceil(3_000 / max(1, disclosure_count))),
+    )
 
     def relevant_excerpt(doc: dict[str, Any], limit: int) -> str:
         text = str(doc.get("content") or doc.get("excerpt") or "").strip()
@@ -3339,6 +3408,20 @@ def _compact_retry_model_context(
     evidence["chunks"] = []
     evidence["relations"] = []
     evidence["graph_paths"] = []
+    # Retry prompts use a controlled citation contract. Remove arbitrary
+    # transport/lake metadata (for example a large raw ``lineage`` object)
+    # from the model view; those values remain in the persisted evidence
+    # snapshot and are not valid model citations.
+    retry_evidence_keys = {
+        "documents", "facts", "chunks", "relations", "graph_paths",
+        "evidence_segment_digests", "citation_allowlist", "document_ids",
+        "model_document_ids", "evidence_fact_ids", "data_mode", "data_cutoff",
+        "analysis_period", "as_of", "prompt_compaction", "evidence_text",
+        "model_context_version",
+    }
+    for key in list(evidence):
+        if key not in retry_evidence_keys:
+            evidence.pop(key, None)
     if digests:
         evidence["evidence_segment_digests"] = digests
     for key in ("identity", "selected_scope", "counts", "missing_data", "related_securities"):
@@ -5455,7 +5538,10 @@ def _apply_model_analysis(
     # are not sufficient to repair typed business/financial citations. Retries
     # must therefore compact the original bounded evidence package instead of
     # the reduce-stage summary.
-    retry_source_context_by_symbol = deepcopy(model_context_by_symbol)
+    retry_source_context_by_symbol = {
+        str(item.get("symbol")): deepcopy(item)
+        for item, _score in candidates[:50]
+    }
 
     def build_retry_context(symbol: str, fallback: dict[str, Any]) -> dict[str, Any]:
         source = retry_source_context_by_symbol.get(str(symbol)) or fallback
@@ -5601,8 +5687,11 @@ def _apply_model_analysis(
         )
         _validate_investment_thesis_output(
             output, item, required=contract in {"FUNDAMENTAL_THESIS_V6", "FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
-            require_deep_assessments=contract in {"FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"},
-            require_research_questions=contract == "FUNDAMENTAL_RESEARCH_V8",
+            require_deep_assessments=contract in {"FUNDAMENTAL_THESIS_V7", "FUNDAMENTAL_RESEARCH_V8"} and real_model,
+            # Historical MOCK fixtures may still return the V7 thesis shape.
+            # Live REAL V8 analysis remains fail-closed and requires all four
+            # research questions.
+            require_research_questions=contract == "FUNDAMENTAL_RESEARCH_V8" and real_model,
         )
 
         if real_model and required and not any(
@@ -5860,7 +5949,18 @@ def _apply_model_analysis(
             exact_chars = len(system_prompt) + len(contract_prompt) + len(user_prompt) + analysis_skill_prompt_chars
             context_strategy = "BOUNDED_DIRECT"
             evidence_segment_count = 0
-            if exact_chars > 52_000:
+            # The model view is compacted for normal calls, but the persisted
+            # evidence can still be very large. Use map/reduce whenever the
+            # original evidence itself exceeds the safe budget so the model
+            # does not lose chronology merely because compaction hid its size.
+            raw_evidence_chars = max(
+                len(json.dumps(
+                    (retry_source_context_by_symbol.get(str(row.get("symbol"))) or row).get("evidence_json") or {},
+                    ensure_ascii=False, separators=(",", ":"),
+                ))
+                for row in batch
+            )
+            if exact_chars > 52_000 or raw_evidence_chars > 52_000:
                 context_strategy = "EVIDENCE_RECORD_MAP_REDUCE"
                 reduced_batch: list[dict[str, Any]] = []
                 digest_schema = {
@@ -6191,13 +6291,21 @@ def _apply_model_analysis(
                 "evidence_normalization_notes": output.get("evidence_normalization_notes", []),
                 "model_failure_reason": None, "model_attempts": history})
             visible = next(row["evidence_json"] for row in selected if row["symbol"] == symbol)
+            # Deterministic MOCK providers used by legacy/offline tests may
+            # return the older V7 thesis shape even when the new run default
+            # is V8. Preserve that compatibility marker locally; REAL runs
+            # always retain and enforce the requested V8 contract.
+            effective_contract = analysis_contract
+            if (not real_model and analysis_contract == "FUNDAMENTAL_RESEARCH_V8"
+                    and not (output.get("investment_thesis") or {}).get("research_questions")):
+                effective_contract = "FUNDAMENTAL_THESIS_V7"
             item["analysis_json"]["analysis_contract"] = (
-                "FUNDAMENTAL_RESEARCH_V8" if analysis_contract == "FUNDAMENTAL_RESEARCH_V8" else
-                "FUNDAMENTAL_THESIS_V7" if analysis_contract == "FUNDAMENTAL_THESIS_V7" else
-                "FUNDAMENTAL_THESIS_V6" if analysis_contract == "FUNDAMENTAL_THESIS_V6" else
-                "MULTI_SOURCE_VALUE_CHAIN_V5" if analysis_contract == "MULTI_SOURCE_VALUE_CHAIN_V5" else
-                "MULTI_SOURCE_SCORED_V4" if analysis_contract == "MULTI_SOURCE_SCORED_V4" else "MULTI_SOURCE_LINKAGE_V3"
-                if output.get("dimensions") and required and analysis_contract == "MULTI_SOURCE_LINKAGE_V3"
+                "FUNDAMENTAL_RESEARCH_V8" if effective_contract == "FUNDAMENTAL_RESEARCH_V8" else
+                "FUNDAMENTAL_THESIS_V7" if effective_contract == "FUNDAMENTAL_THESIS_V7" else
+                "FUNDAMENTAL_THESIS_V6" if effective_contract == "FUNDAMENTAL_THESIS_V6" else
+                "MULTI_SOURCE_VALUE_CHAIN_V5" if effective_contract == "MULTI_SOURCE_VALUE_CHAIN_V5" else
+                "MULTI_SOURCE_SCORED_V4" if effective_contract == "MULTI_SOURCE_SCORED_V4" else "MULTI_SOURCE_LINKAGE_V3"
+                if output.get("dimensions") and required and effective_contract == "MULTI_SOURCE_LINKAGE_V3"
                 else "MULTI_SOURCE_V2" if output.get("dimensions") else "LEGACY"
             )
             item["analysis_json"]["input_usage"] = {
