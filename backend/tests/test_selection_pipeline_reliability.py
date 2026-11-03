@@ -1065,7 +1065,7 @@ def test_failed_retry_enforces_data_model_analysis_order(isolated, has_evidence,
     db.expire_all()
     actual = db.get(SelectionCandidate, candidate.id)
     actual_run = db.get(SelectionRun, run.id)
-    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_THESIS_V7"
+    assert actual_run.criteria_json["analysis_contract"] == "FUNDAMENTAL_RESEARCH_V8"
     assert stages == (["DATA", "MODEL_PREFLIGHT", "ANALYSIS"] if has_evidence else ["DATA"])
     # The retry decision uses the candidate's persisted evidence before the
     # new local read. Both parameterizations start with usable evidence, so a

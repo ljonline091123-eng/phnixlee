@@ -16,7 +16,7 @@ const marketNames: Record<string, string> = {
 };
 const statusNames: Record<string, string> = {
   READY_REVIEW: "有效结论", CONCLUSION_FAILED: "结论校验失败", SCORE_FAILED: "评分失败",
-  MODEL_FAILED: "模型失败", DATA_INSUFFICIENT: "数据不足", NOT_ANALYZED: "未分析",
+  MODEL_FAILED: "模型失败", DATA_INSUFFICIENT: "数据不足", RESEARCH_INCOMPLETE: "研究未闭环", NOT_ANALYZED: "未分析",
   WATCH: "建议关注", PASS: "建议等待", APPROVED: "已确认", REJECTED: "已排除", PENDING: "待复核",
   COMPLETED: "已完成", PARTIAL: "部分完成", FAILED: "失败", RUNNING: "进行中", QUEUED: "排队中",
 };

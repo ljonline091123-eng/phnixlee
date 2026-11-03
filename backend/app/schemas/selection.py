@@ -309,6 +309,56 @@ class SelectionInvestmentHypothesis(BaseModel):
     watch_conditions: list[str] = Field(default_factory=list, max_length=4)
 
 
+class SelectionResearchFact(BaseModel):
+    """One verified or explicitly unverified fact used by a research question."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    reference_type: Literal["DOCUMENT", "FACT", "RELATION"]
+    reference_id: str = Field(min_length=1, max_length=128)
+    verification_status: Literal["VERIFIED", "UNVERIFIED"]
+    fact: str = Field(min_length=1, max_length=600)
+    significance: str = Field(min_length=1, max_length=600)
+    quote: str | None = Field(default=None, max_length=500)
+
+
+class SelectionEvidenceGap(BaseModel):
+    """Auditable evidence gap and the bounded plan for resolving it."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    gap_code: str = Field(min_length=1, max_length=80)
+    description: str = Field(min_length=1, max_length=600)
+    impact_on_conclusion: str = Field(min_length=1, max_length=600)
+    required_evidence: list[str] = Field(default_factory=list, max_length=8)
+    preferred_sources: list[str] = Field(default_factory=list, max_length=8)
+    search_queries: list[str] = Field(default_factory=list, max_length=6)
+    resolution_status: Literal[
+        "LOCAL_SOURCE_PENDING", "EXTERNAL_RESEARCH_REQUIRED",
+        "USER_INPUT_REQUIRED", "UNAVAILABLE",
+    ]
+
+
+class SelectionResearchQuestion(BaseModel):
+    """Research question -> competing hypotheses -> evidence gaps -> conclusion."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    research_code: Literal[
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    ]
+    question: str = Field(min_length=1, max_length=500)
+    status: Literal["COMPLETE", "PARTIAL", "INSUFFICIENT", "NOT_APPLICABLE"]
+    conclusion: str = Field(min_length=1, max_length=1200)
+    confidence: float = Field(ge=0, le=1)
+    known_facts: list[SelectionResearchFact] = Field(default_factory=list, max_length=20)
+    hypotheses: list[SelectionInvestmentHypothesis] = Field(default_factory=list, max_length=4)
+    missing_evidence: list[SelectionEvidenceGap] = Field(default_factory=list, max_length=8)
+    external_research_plan: list[str] = Field(default_factory=list, max_length=8)
+    tracking_metrics: list[str] = Field(default_factory=list, max_length=8)
+    evidence_document_ids: list[int] = Field(default_factory=list, max_length=40)
+    evidence_fact_ids: list[str] = Field(default_factory=list, max_length=40)
+    evidence_relation_ids: list[int] = Field(default_factory=list, max_length=24)
+
+
 class SelectionInvestmentThesis(BaseModel):
     """Human-facing investment logic assembled before dimension scoring."""
 
@@ -327,6 +377,7 @@ class SelectionInvestmentThesis(BaseModel):
     overall_logic: str = Field(min_length=1, max_length=1600)
     classifications: list[SelectionBusinessClassification] = Field(default_factory=list, max_length=10)
     hypotheses: list[SelectionInvestmentHypothesis] = Field(default_factory=list, max_length=3)
+    research_questions: list[SelectionResearchQuestion] = Field(default_factory=list, max_length=4)
     deep_assessments: list[SelectionThesisAssessment] = Field(default_factory=list, max_length=9)
     confidence: float = Field(ge=0, le=1)
     evidence_document_ids: list[int] = Field(default_factory=list, max_length=24)

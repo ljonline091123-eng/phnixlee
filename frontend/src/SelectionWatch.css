@@ -578,6 +578,37 @@
 .analysis-thesis-chain p { margin-top: 6px; font-size: 12px; }
 .analysis-thesis-conclusion { padding: 15px 17px; border-left: 5px solid #245f41; background: #eaf3ed; }
 .analysis-thesis-conclusion p { margin: 5px 0 0; color: #203c2c; font-size: 14px; line-height: 1.85; }
+.analysis-research-questions { display: grid; gap: 11px; padding: 15px 0; border-block: 1px solid #dce5df; }
+.analysis-research-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.analysis-research-heading span, .analysis-research-heading small { color: #6d7f74; font-size: 11px; }
+.analysis-research-heading h4 { margin: 3px 0 0; color: #244533; font-size: 16px; }
+.analysis-research-heading > small { max-width: 52%; text-align: right; line-height: 1.5; }
+.analysis-research-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.analysis-research-card { min-width: 0; padding: 13px 14px; border: 1px solid #d9e3dc; border-left: 4px solid #79998a; background: #fbfdfc; }
+.analysis-research-card.research-status-complete { border-left-color: #2f7b52; }
+.analysis-research-card.research-status-partial { border-left-color: #bd8120; }
+.analysis-research-card.research-status-insufficient { border-left-color: #b6574b; }
+.analysis-research-card.research-status-not_applicable { border-left-color: #97a39d; }
+.analysis-research-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
+.analysis-research-card header div { display: grid; gap: 3px; min-width: 0; }
+.analysis-research-card header small { color: #74837b; font-size: 10px; }
+.analysis-research-card header strong { color: #244533; font-size: 14px; }
+.analysis-research-card header > span { flex: 0 0 auto; padding: 3px 6px; color: #446052; background: #edf4ef; font-size: 10px; font-weight: 700; }
+.research-status-partial header > span { color: #875d19; background: #fff5df; }
+.research-status-insufficient header > span { color: #994b43; background: #fff0ed; }
+.research-question-text { margin: 9px 0 5px; color: #6a786f; font-size: 11px; line-height: 1.55; }
+.research-conclusion { margin: 0; color: #31473a; font-size: 12px; line-height: 1.75; }
+.research-meta { display: flex; flex-wrap: wrap; gap: 7px 11px; margin: 9px 0; color: #6d7b73; font-size: 10px; }
+.analysis-research-card details { margin-top: 7px; color: #50645a; font-size: 11px; }
+.analysis-research-card details ul { margin: 6px 0 0; padding-left: 17px; line-height: 1.65; }
+.analysis-research-card details li { margin: 4px 0; }
+.analysis-research-card details li small { display: block; color: #718078; line-height: 1.55; }
+.analysis-research-card details li em { display: inline-block; margin-top: 3px; color: #8a6b2b; font-style: normal; }
+.analysis-research-card blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid #cad8cf; color: #6b786f; font-size: 10px; }
+.research-plan { margin: 7px 0 0; color: #765a23; font-size: 10px; line-height: 1.6; }
+.research-tracking { margin-top: 9px; padding: 8px 9px; background: #f2f7f3; }
+.research-tracking small { color: #708077; font-size: 10px; }
+.research-tracking p { margin: 3px 0 0; color: #4b6154; font-size: 11px; line-height: 1.6; }
 .analysis-hypotheses { display: grid; gap: 10px; }
 .analysis-hypotheses > h4 { margin: 2px 0; color: #233e30; }
 .analysis-hypotheses > article { padding: 14px 0; border-top: 1px solid #dce4df; }
@@ -611,6 +642,7 @@
   .selection-history-result { grid-column: 1 / -1; border-top: 1px solid #dce5df; }
   .analysis-thesis-chain { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .analysis-thesis-narrative, .analysis-deep-assessments > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analysis-research-grid { grid-template-columns: 1fr; }
   .analysis-thesis-chain article:nth-child(2) { border-right: 0; }
   .analysis-thesis-chain article:nth-child(-n+2) { border-bottom: 1px solid #dce5df; }
 }
@@ -630,6 +662,8 @@
   .selection-history-result { min-height: 520px; overflow: visible; padding: 14px; }
   .selection-history-result-head { top: 0; margin: -14px -14px 14px; padding: 10px 14px; }
   .analysis-thesis-heading, .analysis-thesis-core, .analysis-thesis-chain, .analysis-thesis-narrative, .analysis-deep-assessments > div, .analysis-hypothesis-evidence, .analysis-hypotheses footer { grid-template-columns: 1fr; }
+  .analysis-research-heading { display: grid; align-items: start; }
+  .analysis-research-heading > small { max-width: none; text-align: left; }
   .analysis-thesis-heading { display: grid; }
   .analysis-thesis-heading > div:last-child { padding: 8px 0 0; border-top: 1px solid #dbe4de; border-left: 0; text-align: left; }
   .analysis-thesis-chain article { border-right: 0; border-bottom: 1px solid #dce5df; }

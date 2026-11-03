@@ -560,7 +560,60 @@ def seed_default_models(db: Session) -> None:
     db.commit()
 
 
+def _research_question_skill(code: str, name: str, purpose: str, contract: str) -> dict[str, Any]:
+    """Build a bounded, read-only research skill with an explicit contract."""
+    return {
+        "skill_code": code,
+        "skill_name": name,
+        "description": purpose,
+        "instructions": (
+            f"你是{name}。只读取本次白名单中的事实、关系和文档，不访问任意数据库或互联网。"
+            f"围绕{purpose}建立事实、竞争性假设、证据缺口、结论和跟踪指标。"
+            "事实、推断、假设和未知必须分开；所有结论引用证据ID，文档事实附连续原文引句。"
+            "证据不足返回INSUFFICIENT或PARTIAL，并给出优先官方来源、检索词和补证影响；不得编造客户、动机、财务数字或因果。"
+        ),
+        "enabled": True,
+        "lifecycle_status": "ENABLED",
+        "skill_type": "PROMPT_SOP",
+        "input_contract_json": {
+            "type": "object",
+            "required": ["symbol", "as_of", "evidence"],
+            "properties": {"symbol": {"type": "string"}, "as_of": {"type": "string"}, "evidence": {"type": "object"}},
+            "additionalProperties": False,
+        },
+        "output_contract_json": {
+            "type": "object",
+            "required": ["research_code", "status", "conclusion", "known_facts", "hypotheses", "missing_evidence", "tracking_metrics"],
+            "properties": {"research_code": {"const": code}, "status": {"enum": ["COMPLETE", "PARTIAL", "INSUFFICIENT", "NOT_APPLICABLE"]}, "conclusion": {"type": "string"}, "known_facts": {"type": "array"}, "hypotheses": {"type": "array"}, "missing_evidence": {"type": "array"}, "tracking_metrics": {"type": "array"}},
+            "additionalProperties": True,
+        },
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": False, "unrestricted_database_write": False,
+            "allowed_operations": ["READ_GOVERNED_EVIDENCE", "RETURN_EVIDENCE_LINKED_RESEARCH", "PROPOSE_EVIDENCE_GAP"],
+            "allowed_services": ["selection_evidence", "graph_rag"],
+        },
+        "side_effect_level": "READ_ONLY",
+        "idempotency_policy": "REQUIRED",
+        "retry_policy_json": {"max_attempts": 2, "retry_on": ["TimeoutError", "RuntimeError"], "backoff": "EXPONENTIAL"},
+        "error_policy_json": {"on_error": "RETURN_INSUFFICIENT", "retain_audit": True, "fabricate_fallback": False},
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT", "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": contract},
+    }
+
+
+RESEARCH_QUESTION_SKILLS = (
+    _research_question_skill("RESEARCH_QUESTION_PLANNER", "研究问题规划", "将主营、管理层、并购和资本行为转化为可验证研究问题", "RESEARCH_QUESTION_V1"),
+    _research_question_skill("EVIDENCE_GAP_DETECTOR", "证据缺口检测", "识别结论所需证据、缺口影响和优先补证路径", "EVIDENCE_GAP_V1"),
+    _research_question_skill("MANAGEMENT_CHANGE_DEEP_DIVE", "管理层变化深度分析", "分析董事、总裁和核心管理层调整的事实、交接、连续性与竞争性解释", "MANAGEMENT_CHANGE_V1"),
+    _research_question_skill("ACQUISITION_IMPACT_ANALYST", "并购与第二曲线分析", "分析并购标的、对价、并表、协同、整合风险和第二曲线兑现", "ACQUISITION_IMPACT_V1"),
+    _research_question_skill("CAPITAL_ACTION_INTENT_ANALYST", "资本行为动因分析", "分析回购、注销、锁定、增减持等资本行为的可验证动因与后续观察", "CAPITAL_ACTION_INTENT_V1"),
+    _research_question_skill("PEER_BENCHMARK_ANALYST", "同业对照分析", "在已提供同业证据范围内比较主营、估值、治理和行业位置", "PEER_BENCHMARK_V1"),
+    _research_question_skill("COUNTER_EVIDENCE_REVIEWER", "反证审查", "检查支持与反证是否针对公司具体影响，纠正标题或行业基调造成的误分类", "COUNTER_EVIDENCE_V1"),
+    _research_question_skill("CONCLUSION_QUALITY_GATE", "结论质量门禁", "检查研究问题、证据白名单、缺口、假设和跟踪指标是否完整", "CONCLUSION_GATE_V1"),
+)
+
+
 DEFAULT_MODEL_SKILLS_V2 = (
+    *RESEARCH_QUESTION_SKILLS,
     {
         "skill_code": "STOCK_TREND_ADVISOR",
         "skill_name": "股票趋势综合研判",
@@ -707,7 +760,7 @@ DEFAULT_MODEL_SKILLS_V2 = (
         ),
         "enabled": True,
         "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT",
-                        "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "HOLISTIC_THESIS_V3"},
+                        "execution_mode": "EVIDENCE_GROUNDED_LLM", "managed_contract_version": "RESEARCH_QUESTION_V1"},
     },
     {
         "skill_code": "FINANCIAL_QUALITY_SCORER",
