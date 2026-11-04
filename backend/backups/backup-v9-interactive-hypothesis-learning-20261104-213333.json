@@ -1,0 +1,17 @@
+{
+  "backup_branch": "backup/v9-interactive-hypothesis-learning-20261104-213333",
+  "backup_commit": "1daa02fa1ea45f9f2aa45ec461253040c3e8f6a7",
+  "remote_push": "SUCCESS",
+  "database_backup": "backend/backups/quant-v9-interactive-hypothesis-learning-20261104-213333-consistent.db",
+  "database_quick_check": "ok",
+  "database_bytes": 2379968512,
+  "statistics": {
+    "stock_symbol": 19566,
+    "selection_run": 61,
+    "selection_candidate": 315,
+    "knowledge_document": 24095,
+    "knowledge_entity": 31434,
+    "knowledge_relation": 60686,
+    "model_skill": 55
+  }
+}

@@ -613,6 +613,72 @@ class SelectionBackfillRequest(BaseModel):
         return self
 
 
+class SelectionHypothesisResearchRequest(BaseModel):
+    candidate_ids: list[int] = Field(default_factory=list, max_length=500)
+    max_rounds: int = Field(default=3, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def unique_research_scope(self) -> "SelectionHypothesisResearchRequest":
+        self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
+        return self
+
+
+class SelectionHypothesisDirectionItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    research_code: Literal[
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    ]
+    hypothesis_key: str = Field(min_length=8, max_length=96)
+    decision: Literal["PRIORITY", "NORMAL", "PAUSED"]
+    revised_thesis: str | None = Field(default=None, min_length=2, max_length=800)
+    comment: str | None = Field(default=None, max_length=1000)
+
+
+class SelectionNewResearchHypothesis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    research_code: Literal[
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    ]
+    title: str = Field(min_length=2, max_length=120)
+    thesis: str = Field(min_length=2, max_length=800)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"] = "UNKNOWN"
+    horizon: Literal["SHORT", "MEDIUM", "LONG", "MULTI_PERIOD", "UNKNOWN"] = "UNKNOWN"
+
+
+class SelectionHypothesisDirectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["CONFIRM_AND_RESEARCH", "SAVE_DRAFT", "DELEGATE_TO_SYSTEM", "SKIP_RESEARCH"]
+    directions: list[SelectionHypothesisDirectionItem] = Field(default_factory=list, max_length=32)
+    new_hypotheses: list[SelectionNewResearchHypothesis] = Field(default_factory=list, max_length=8)
+    reviewer: str = Field(default="USER", min_length=1, max_length=128)
+    overall_comment: str | None = Field(default=None, max_length=2000)
+    max_rounds: int = Field(default=3, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def unique_hypothesis_directions(self) -> "SelectionHypothesisDirectionRequest":
+        keys = [(row.research_code, row.hypothesis_key) for row in self.directions]
+        if len(keys) != len(set(keys)):
+            raise ValueError("同一研究假设只能提交一次方向判断")
+        return self
+
+
+class SelectionResearchReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    phase: Literal["EVIDENCE", "CONCLUSION"]
+    action: Literal["ACCEPT", "REQUEST_MORE_RESEARCH", "CORRECT", "STOP_TRACKING"]
+    research_code: Literal[
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    ] | None = None
+    hypothesis_key: str | None = Field(default=None, min_length=8, max_length=96)
+    comment: str = Field(min_length=2, max_length=2000)
+    correction: str | None = Field(default=None, min_length=2, max_length=1200)
+    reviewer: str = Field(default="USER", min_length=1, max_length=128)
+    max_rounds: int = Field(default=3, ge=1, le=5)
+
+
 class SelectionModelSwitchRequest(BaseModel):
     """Explicitly select another model for unresolved candidates.
 

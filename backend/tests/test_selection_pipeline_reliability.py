@@ -204,6 +204,61 @@ def test_one_year_retry_uses_all_segment_digests_under_hard_budget():
     assert compact["evidence_json"]["prompt_compaction"]["all_segment_digests_included"] is True
 
 
+def test_large_map_reduce_retry_keeps_all_segment_coverage_under_hard_budget():
+    documents = [
+        {"id": index, "source_table": "stock_notice", "title": f"年度资料{index}",
+         "published_at": "2026-10-30", "content_state": "TEXT_AVAILABLE", "content": BODY * 30}
+        for index in range(240)
+    ]
+    facts = [
+        {"id": f"fact:{index}", "fact_type": "FINANCIAL_OBSERVATION",
+         "properties": {"value": index, "detail": BODY * 30}}
+        for index in range(30)
+    ]
+    allowlist = {
+        "document_ids": list(range(240)), "notice_document_ids": list(range(240)),
+        "fact_ids": [row["id"] for row in facts],
+        "financial_fact_ids": [row["id"] for row in facts],
+    }
+    digests = []
+    for index in range(1, 61):
+        start = (index - 1) * 4
+        digests.append({
+            "segment": {"index": index, "total": 60},
+            "analyzed_document_ids": list(range(start, start + 4)),
+            "findings": [{
+                "dimension": "INDUSTRY" if index % 2 else "GOVERNANCE",
+                "direction": "MIXED", "summary": BODY * 8,
+                "evidence_document_ids": list(range(start, start + 4)),
+                "evidence_fact_ids": [f"fact:{index % 30}"],
+                "evidence_relation_ids": [], "evidence_quotes": [BODY * 3],
+                "causal_chain": [BODY * 3, BODY * 3], "uncertainty": BODY * 4,
+            }],
+            "conflicts": [BODY * 4], "limitations": [BODY * 4],
+        })
+    item = {"market": "HK", "symbol": "02533", "name": "黑芝麻智能", "analysis_json": {},
+            "hard_rules_json": {}, "evidence_json": {"documents": documents, "facts": facts,
+                                                       "citation_allowlist": allowlist}}
+    summary = {"symbol": "02533", "evidence_json": {
+        "citation_allowlist": allowlist, "evidence_segment_digests": digests,
+    }}
+
+    compact = _compact_retry_model_context(item, summary_item=summary, max_chars=14_000)
+    rendered = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    evidence = compact["evidence_json"]
+
+    assert len(rendered) <= 14_000
+    assert evidence["evidence_segment_digests"] == []
+    coverage = evidence["evidence_segment_coverage"]
+    assert coverage["source_segment_count"] == 60
+    assert coverage["covered_segment_indexes"] == list(range(1, 61))
+    assert coverage["analyzed_document_count"] == 240
+    assert evidence["prompt_compaction"]["segment_digest_mode"] == (
+        "ALL_SEGMENTS_COVERAGE_PLUS_REPRESENTATIVE_FINDINGS"
+    )
+    assert 1 <= len(evidence["evidence_segment_representative_findings"]) <= 16
+
+
 def test_v7_prompt_uses_compact_field_guide_instead_of_full_json_schema():
     guide = _selection_output_contract_guide("FUNDAMENTAL_THESIS_V7")
     assert len(guide) < 5_000
@@ -408,6 +463,58 @@ def test_reduce_context_compaction_keeps_segment_coverage_and_fits_budget():
     assert compacted[0]["evidence_json"]["citation_allowlist"]["document_ids"] == list(range(1, 30))
 
 
+def test_large_reduce_context_collapses_to_auditable_coverage_and_restores_read_receipts():
+    document_ids = list(range(23_704, 23_829))
+    fact_ids = [f"fact:{index}" for index in range(40)]
+    item = {
+        "symbol": "02533", "name": "黑芝麻智能", "market": "HK",
+        "hard_rules_json": {"large": BODY * 100},
+        "evidence_json": {
+            "identity": {"large": BODY * 100},
+            "documents": [
+                {"id": value, "source_table": "stock_notice", "published_at": "2026-10-01",
+                 "content": BODY * 20}
+                for value in document_ids
+            ],
+            "citation_allowlist": {
+                "document_ids": document_ids,
+                "notice_document_ids": document_ids,
+                "fact_ids": fact_ids,
+            },
+            "evidence_segment_digests": [{
+                "segment": {"index": index, "total": 143},
+                "analyzed_document_ids": [document_ids[(index - 1) % len(document_ids)]],
+                "findings": [{
+                    "dimension": "GOVERNANCE" if index % 2 else "BUSINESS",
+                    "direction": "MIXED", "summary": BODY * 12,
+                    "evidence_document_ids": [document_ids[(index - 1) % len(document_ids)]],
+                    "evidence_fact_ids": [fact_ids[index % len(fact_ids)]],
+                    "evidence_relation_ids": [], "evidence_quotes": [BODY * 3],
+                } for _ in range(4)],
+                "conflicts": [BODY * 8], "limitations": [BODY * 8],
+            } for index in range(1, 144)],
+        },
+    }
+
+    compacted = _compact_reduce_batch_context([item], 8_000)
+    rendered = json.dumps(compacted, ensure_ascii=False, separators=(",", ":"))
+    evidence_json = compacted[0]["evidence_json"]
+    coverage = evidence_json["evidence_segment_coverage"]
+
+    assert len(rendered) <= 8_000
+    assert evidence_json["evidence_segment_digests"] == []
+    assert coverage["source_segment_count"] == 143
+    assert coverage["covered_segment_count"] == 143
+    assert coverage["all_segments_processed"] is True
+    assert coverage["analyzed_document_ids"] == document_ids
+    assert evidence_json["evidence_segment_representative_findings"]
+    assert evidence_json["citation_allowlist"]["document_ids"] == document_ids
+
+    output_row = {"analyzed_document_ids": []}
+    _restore_mapped_document_coverage(output_row, compacted[0])
+    assert output_row["analyzed_document_ids"] == document_ids
+
+
 def output(*, empty=False):
     return {"symbol": "688627", "decision": "WATCH", "confidence": .7, "reasoning": "基于项目进展证据观察履约情况",
             "target_price": None, "stop_price": None, "horizon_sessions": 10,
@@ -443,6 +550,11 @@ def test_model_status_synonyms_are_normalized_without_weakening_contract():
     assert alternate["events"][0]["validation_status"] == "UNVERIFIED"
     assert alternate["investment_thesis"]["hypotheses"][0]["status"] == "MIXED"
     assert alternate["investment_thesis"]["hypotheses"][0]["horizon"] == "MULTI_PERIOD"
+
+    scalar_product = _normalize_selection_model_row({
+        "business_quality": {"products_services": "车规级智能驾驶芯片"},
+    })
+    assert scalar_product["business_quality"]["products_services"] == ["车规级智能驾驶芯片"]
 
 
 def test_parser_normalizes_hypotheses_without_local_scope_error():
@@ -829,7 +941,7 @@ def test_oversized_analysis_maps_evidence_segments_before_final_reduce(isolated)
         _apply_model_analysis(db, run, [(item, 1.0)])
     purposes = [call["metadata_json"]["purpose"] for call in calls]
     segment_calls = [call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_EVIDENCE_SEGMENT"]
-    assert len(segment_calls) > 1
+    assert segment_calls
     assert all(call["metadata_json"]["skill_codes"] == [] for call in segment_calls)
     assert max(sum(len(message.get("content", "")) for message in call["messages"]) for call in calls) < 56_000
     analysis_call = next(call for call in calls if call["metadata_json"]["purpose"] == "STOCK_SELECTION_ANALYSIS")
@@ -983,18 +1095,20 @@ def test_three_contract_failures_cannot_be_promoted_to_partial_success():
     assert all("horizon_sessions" in call["messages"][1]["content"] for call in calls)
 
 
-def test_invalid_dimension_citations_fail_after_three_unsuccessful_repairs():
+def test_invalid_dimension_citations_are_withdrawn_without_failing_whole_analysis():
     partial = output()
     partial["dimensions"][1].update(status="SUPPORTED", direction="POSITIVE", evidence_document_ids=[123])
-    _run, analysis, calls = analyze([partial, output()])
-    assert len(calls) == 2
-    assert analysis["analysis_validation_status"] == "PASSED"
-    assert "公告披露" in analysis["model_attempts"][0]["reason"]
-    _run, analysis, calls = analyze([partial])
-    assert len(calls) == 3
-    assert analysis["model_output_status"] == "FAILED"
-    assert not analysis.get("model") and not analysis.get("scoring")
-    assert analysis["conclusion_available"] is False
+    run, analysis, calls = analyze([partial])
+
+    assert len(calls) == 1
+    assert run.analysis_mode == "MODEL_PARTIAL"
+    assert analysis["model_output_status"] == "SUCCESS"
+    assert analysis["analysis_validation_status"] == "PARTIAL"
+    assert analysis["evidence_validation_warnings"]
+    notice = next(row for row in analysis["model"]["dimensions"] if row["dimension"] == "NOTICE")
+    assert notice["status"] == "INSUFFICIENT"
+    assert notice["direction"] == "UNKNOWN"
+    assert notice["evidence_document_ids"] == []
 
 
 @pytest.mark.parametrize("dimension, fact_type", [

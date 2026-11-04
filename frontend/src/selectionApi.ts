@@ -100,7 +100,7 @@ export type SelectionCandidate = {
   entry_price: number | null; entry_date: string | null; hard_score: number;
   hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence;
   analysis_json: Record<string, unknown> & { publication?: {
-    status: "READY_REVIEW" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "RESEARCH_INCOMPLETE" | "NOT_ANALYZED";
+    status: "READY_REVIEW" | "READY_REVIEW_WITH_UNCERTAINTY" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "RESEARCH_RUNNING" | "RESEARCH_INCOMPLETE" | "NOT_ANALYZED";
     reason: string; conclusion_available: boolean; scoring_available: boolean; retryable: boolean;
   }};
   decision: string; review_notes: string | null; target_price: number | null; stop_price: number | null;
@@ -189,6 +189,48 @@ export type SelectionBackfillRequest = {
   force_refresh?: boolean;
   rerun_analysis?: boolean;
 };
+export type SelectionHypothesisResearchRequest = {
+  candidate_ids?: number[];
+  max_rounds?: number;
+};
+export type SelectionHypothesisDirectionRequest = {
+  action: "CONFIRM_AND_RESEARCH" | "SAVE_DRAFT" | "DELEGATE_TO_SYSTEM" | "SKIP_RESEARCH";
+  directions: Array<{
+    research_code: "BUSINESS_MODEL" | "MANAGEMENT_CHANGE" | "ACQUISITION_SECOND_CURVE" | "CAPITAL_ACTION_INTENT";
+    hypothesis_key: string;
+    decision: "PRIORITY" | "NORMAL" | "PAUSED";
+    revised_thesis?: string | null;
+    comment?: string | null;
+  }>;
+  new_hypotheses?: Array<{
+    research_code: "BUSINESS_MODEL" | "MANAGEMENT_CHANGE" | "ACQUISITION_SECOND_CURVE" | "CAPITAL_ACTION_INTENT";
+    title: string;
+    thesis: string;
+    direction?: "POSITIVE" | "NEGATIVE" | "MIXED" | "NEUTRAL" | "UNKNOWN";
+    horizon?: "SHORT" | "MEDIUM" | "LONG" | "MULTI_PERIOD" | "UNKNOWN";
+  }>;
+  reviewer?: string;
+  overall_comment?: string | null;
+  max_rounds?: number;
+};
+export type SelectionResearchReviewRequest = {
+  phase: "EVIDENCE" | "CONCLUSION";
+  action: "ACCEPT" | "REQUEST_MORE_RESEARCH" | "CORRECT" | "STOP_TRACKING";
+  research_code?: "BUSINESS_MODEL" | "MANAGEMENT_CHANGE" | "ACQUISITION_SECOND_CURVE" | "CAPITAL_ACTION_INTENT" | null;
+  hypothesis_key?: string | null;
+  comment: string;
+  correction?: string | null;
+  reviewer?: string;
+  max_rounds?: number;
+};
+export type SelectionResearchLearning = SelectionRecord & {
+  candidate_id: number;
+  feedback_count: number;
+  outcomes: Record<string, number>;
+  source_metrics: Record<string, {success: number; empty: number; failed: number}>;
+  skill: {code: string; version: string; draft_id?: number | null; draft_status?: string | null; production_skill_changed: boolean};
+  feedback: SelectionRecord[];
+};
 export type SelectionModelSwitchRequest = {
   model_instance_code?: string | null;
   model_instance_codes: string[];
@@ -237,6 +279,12 @@ export const selectionApi = {
   ),
   backfill: (id: number, payload: SelectionBackfillRequest) => request<SelectionRun>(`/selection/runs/${id}/backfill`, { method: "POST", body: JSON.stringify(payload) }),
   backfillStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/backfill-status`),
+  hypothesisResearch: (id: number, payload: SelectionHypothesisResearchRequest) => request<SelectionRun>(`/selection/runs/${id}/hypothesis-research`, { method: "POST", body: JSON.stringify(payload) }),
+  hypothesisResearchStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/hypothesis-research-status`),
+  prepareHypothesisDirection: (candidateId: number) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/hypothesis-direction/prepare`, {method: "POST"}),
+  confirmHypothesisDirection: (candidateId: number, payload: SelectionHypothesisDirectionRequest) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/hypothesis-direction`, {method: "POST", body: JSON.stringify(payload)}),
+  reviewHypothesisResearch: (candidateId: number, payload: SelectionResearchReviewRequest) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/research-review`, {method: "POST", body: JSON.stringify(payload)}),
+  researchLearning: (candidateId: number) => request<SelectionResearchLearning>(`/selection/candidates/${candidateId}/research-learning`),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
   history: (params: {query?: string; market?: string; page?: number; page_size?: number} = {}) => {

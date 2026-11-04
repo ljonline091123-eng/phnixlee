@@ -1,4 +1,10 @@
-import type { SelectionCandidate, SelectionRecord, SelectionScorecard, SelectionScoreDimensionResult } from "./selectionApi";
+import { useEffect, useState } from "react";
+import { selectionApi } from "./selectionApi";
+import type {
+  SelectionCandidate, SelectionHypothesisDirectionRequest, SelectionRecord,
+  SelectionResearchLearning, SelectionResearchReviewRequest,
+  SelectionScorecard, SelectionScoreDimensionResult,
+} from "./selectionApi";
 import { SelectionEvidenceCards } from "./SelectionEvidenceCards";
 
 const names: Record<string, string> = {NEWS: "新闻事件", NOTICE: "公告披露", FINANCIAL: "财务业绩", PRICE_VOLUME: "量价趋势", FUND_FLOW: "资金进出", COMPANY: "主营经营、行业分类与股东", GRAPH: "公司关联与图谱", POSITIVE: "偏利好", NEGATIVE: "偏利空", MIXED: "影响交织", NEUTRAL: "中性", UNKNOWN: "待判断", WATCH: "值得关注", PASS: "暂不关注", FOLLOW_UP: "后续进展", VALIDATES: "相互验证", CONTRADICTS: "信息冲突", REALIZES: "已兑现", FAILS_TO_REALIZE: "未兑现", SAME_TOPIC: "同一事项", EXECUTIVE_UNLOCKING_RISK: "高管与解禁线索", SHAREHOLDER_CONFIDENCE_SIGNAL: "股东信心信号", RELATED_SECURITY_IMPACT: "关联证券影响", UNVERIFIED: "待验证", PARTIALLY_REALIZED: "部分兑现", REALIZED: "已兑现", NOT_REALIZED: "未兑现", CONFLICTED: "存在冲突", INSUFFICIENT: "证据不足"};
@@ -11,9 +17,89 @@ const assessmentNames: Record<string, string> = {BUSINESS_OUTLOOK: "主营赛道
 const researchNames: Record<string, string> = {BUSINESS_MODEL: "公司赚钱逻辑", MANAGEMENT_CHANGE: "重大管理层变化", ACQUISITION_SECOND_CURVE: "并购与第二曲线", CAPITAL_ACTION_INTENT: "回购、注销与锁定行为"};
 const researchStatusNames: Record<string, string> = {COMPLETE: "已完成", PARTIAL: "部分完成", INSUFFICIENT: "证据不足", NOT_APPLICABLE: "不适用"};
 const researchResolutionNames: Record<string, string> = {LOCAL_SOURCE_PENDING: "等待本地数据补齐", EXTERNAL_RESEARCH_REQUIRED: "需要外部补证", USER_INPUT_REQUIRED: "需要用户补充", UNAVAILABLE: "当前不可得"};
+const researchLoopNames: Record<string, string> = {WAITING_USER_DIRECTION: "等待确认研究方向", READY_FOR_RESEARCH: "方向已确认，等待执行", WAITING_EVIDENCE_REVIEW: "证据冲突待复核", WAITING_CONCLUSION_REVIEW: "阶段结论待确认", USER_CONFIRMED: "用户已确认", STOPPED_BY_USER: "用户已停止", QUEUED: "等待执行", RUNNING: "正在补数验证", COMPLETED: "已完成", SOURCE_EXHAUSTED: "现有来源已查无新增证据", MAX_ROUNDS: "达到本轮验证上限", SOURCE_FAILED: "数据源调用失败，可重试", MODEL_FAILED: "模型重验失败，可重试"};
+const researchRoundNames: Record<string, string> = {VERIFIED_WITH_INCREMENT: "发现新增证据并完成重验", NO_NEW_EVIDENCE: "来源查询成功，但未发现新增证据", SOURCE_FAILED: "数据源调用失败，本轮不降权", MODEL_FAILED: "模型重验失败，本轮不降权"};
 const array = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
 export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH";
+
+function HypothesisDirectionReview({review, busy, onSubmit}: {
+  review: SelectionRecord;
+  busy?: boolean;
+  onSubmit: (payload: SelectionHypothesisDirectionRequest) => void;
+}) {
+  const rows: Array<SelectionRecord & {research_code: SelectionHypothesisDirectionRequest["directions"][number]["research_code"]; research_name: string}> = array(review.questions).flatMap(question => array(question.hypotheses).map(hypothesis => ({
+    ...hypothesis,
+    research_code: String(question.research_code || "") as SelectionHypothesisDirectionRequest["directions"][number]["research_code"],
+    research_name: researchNames[String(question.research_code)] || String(question.research_code || "专项研究"),
+  })));
+  const revision = `${String(review.revision || 1)}:${rows.map(row => String(row.hypothesis_key)).join("|")}`;
+  const [decisions, setDecisions] = useState<Record<string, "PRIORITY" | "NORMAL" | "PAUSED">>({});
+  const [theses, setTheses] = useState<Record<string, string>>({});
+  const [comment, setComment] = useState("");
+  const [newHypothesis, setNewHypothesis] = useState({research_code: "MANAGEMENT_CHANGE", title: "", thesis: ""});
+  useEffect(() => {
+    setDecisions(Object.fromEntries(rows.map(row => [String(row.hypothesis_key), (String(row.decision || row.system_recommendation || "NORMAL") as "PRIORITY" | "NORMAL" | "PAUSED")])));
+    setTheses(Object.fromEntries(rows.map(row => [String(row.hypothesis_key), String(row.thesis || "")])));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision]);
+  function submit(action: SelectionHypothesisDirectionRequest["action"]) {
+    const additions = newHypothesis.title.trim() && newHypothesis.thesis.trim() ? [{
+      research_code: newHypothesis.research_code as "BUSINESS_MODEL" | "MANAGEMENT_CHANGE" | "ACQUISITION_SECOND_CURVE" | "CAPITAL_ACTION_INTENT",
+      title: newHypothesis.title.trim(), thesis: newHypothesis.thesis.trim(), direction: "UNKNOWN" as const, horizon: "UNKNOWN" as const,
+    }] : [];
+    onSubmit({
+      action,
+      directions: rows.map(row => ({
+        research_code: row.research_code,
+        hypothesis_key: String(row.hypothesis_key),
+        decision: decisions[String(row.hypothesis_key)] || "NORMAL",
+        revised_thesis: theses[String(row.hypothesis_key)] !== String(row.thesis || "") ? theses[String(row.hypothesis_key)] : null,
+      })),
+      new_hypotheses: additions,
+      overall_comment: comment.trim() || null,
+      max_rounds: Number(review.max_rounds || 3),
+    });
+  }
+  return <section className="analysis-human-review" aria-label="研究方向确认">
+    <header><div><span>需要你的判断</span><h4>确认优先研究方向</h4></div><strong>{rows.length} 条竞争性假设</strong></header>
+    <p>请选择优先验证、正常验证或暂缓。选择只调整研究顺序，不代表结论成立；系统会自动保留至少一个竞争性反向解释。</p>
+    <div className="human-hypothesis-list">{rows.map(row => <article key={String(row.hypothesis_key)}>
+      <div><small>{row.research_name}</small><strong>{String(row.title || "未命名假设")}</strong><em>模型初始置信度 {Math.round(Number(row.confidence || 0) * 100)}%</em></div>
+      <textarea aria-label={`${String(row.title)}假设内容`} rows={3} value={theses[String(row.hypothesis_key)] ?? String(row.thesis || "")} onChange={event => setTheses(current => ({...current, [String(row.hypothesis_key)]: event.target.value}))} />
+      <div className="human-direction-actions">{(["PRIORITY", "NORMAL", "PAUSED"] as const).map(value => <button type="button" key={value} className={decisions[String(row.hypothesis_key)] === value ? "active" : ""} onClick={() => setDecisions(current => ({...current, [String(row.hypothesis_key)]: value}))}>{value === "PRIORITY" ? "优先验证" : value === "NORMAL" ? "正常验证" : "暂缓"}</button>)}</div>
+      <small>{String(row.recommendation_reason || "等待用户设置研究优先级")}</small>
+    </article>)}</div>
+    <details className="human-new-hypothesis"><summary>增加一个模型没有考虑的方向</summary><label>所属问题<select value={newHypothesis.research_code} onChange={event => setNewHypothesis(current => ({...current, research_code: event.target.value}))}>{Object.entries(researchNames).map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label><label>假设标题<input value={newHypothesis.title} maxLength={120} onChange={event => setNewHypothesis(current => ({...current, title: event.target.value}))} /></label><label>为什么值得验证<textarea rows={3} maxLength={800} value={newHypothesis.thesis} onChange={event => setNewHypothesis(current => ({...current, thesis: event.target.value}))} /></label></details>
+    <label>整体意见（选填）<textarea rows={2} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} /></label>
+    <footer><button type="button" disabled={busy} onClick={() => submit("SAVE_DRAFT")}>保存稍后处理</button><button type="button" disabled={busy} onClick={() => submit("DELEGATE_TO_SYSTEM")}>全部交给系统</button><button type="button" className="primary-button" disabled={busy || !rows.length} onClick={() => submit("CONFIRM_AND_RESEARCH")}>{busy ? "正在提交…" : "确认并开始补证"}</button></footer>
+  </section>;
+}
+
+function ResearchHumanReview({phase, busy, onSubmit}: {phase: "EVIDENCE" | "CONCLUSION"; busy?: boolean; onSubmit: (payload: SelectionResearchReviewRequest) => void}) {
+  const [comment, setComment] = useState("");
+  const [correction, setCorrection] = useState("");
+  const evidencePhase = phase === "EVIDENCE";
+  function submit(action: SelectionResearchReviewRequest["action"]) {
+    const defaultComment = evidencePhase ? "已核对本轮支持证据与反证" : "已核对阶段结论与证据引用";
+    onSubmit({phase, action, comment: comment.trim() || defaultComment, correction: correction.trim() || null, max_rounds: 5});
+  }
+  return <section className="analysis-human-review evidence-review">
+    <header><div><span>关键复核节点</span><h4>{evidencePhase ? "支持证据与反证并存" : "确认阶段研究结论"}</h4></div></header>
+    <p>{evidencePhase ? "请确认当前解释是否合理。接受后系统继续下一轮；若解释不准确，可填写修正意见重新补证。" : "你可以确认当前阶段结论、要求追加研究或指出解释错误。确认意见不会被当作事实，后续公告和财报仍会持续验证。"}</p>
+    <label>复核意见<textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} /></label>
+    <label>纠正后的解释（仅需纠正时填写）<textarea rows={3} maxLength={1200} value={correction} onChange={event => setCorrection(event.target.value)} /></label>
+    <footer><button type="button" disabled={busy} onClick={() => submit("STOP_TRACKING")}>停止该方向</button><button type="button" disabled={busy} onClick={() => submit("REQUEST_MORE_RESEARCH")}>继续补证</button><button type="button" disabled={busy || !correction.trim()} onClick={() => submit("CORRECT")}>按修正意见重验</button><button type="button" className="primary-button" disabled={busy} onClick={() => submit("ACCEPT")}>{evidencePhase ? "接受解释并继续" : "确认阶段结论"}</button></footer>
+  </section>;
+}
+
+function ResearchLearningSummary({candidateId, version}: {candidateId: number; version: string}) {
+  const [summary, setSummary] = useState<SelectionResearchLearning | null>(null);
+  useEffect(() => { let valid = true; void selectionApi.researchLearning(candidateId).then(value => {if (valid) setSummary(value);}).catch(() => {if (valid) setSummary(null);}); return () => {valid = false;}; }, [candidateId, version]);
+  if (!summary?.feedback_count) return null;
+  const sourceRows = Object.entries(summary.source_metrics || {});
+  return <details className="analysis-learning-summary"><summary>系统如何从本次协作中学习 · {summary.feedback_count} 条反馈</summary><p>用户选择先作为研究优先级；只有后续证据验证过的纠错才进入 Skill 优化样本。生产 Skill 当前未被自动修改。</p><div>{Object.entries(summary.outcomes || {}).map(([key, value]) => <span key={key}>{key} {value}</span>)}</div>{sourceRows.length > 0 && <table><thead><tr><th>数据环节</th><th>成功</th><th>无数据</th><th>失败</th></tr></thead><tbody>{sourceRows.map(([code, value]) => <tr key={code}><td>{names[code] || code}</td><td>{value.success}</td><td>{value.empty}</td><td>{value.failed}</td></tr>)}</tbody></table>}<small>Skill {summary.skill.code} v{summary.skill.version}{summary.skill.draft_id ? ` · 已生成待审核草案 #${summary.skill.draft_id}` : " · 尚未达到生成优化草案的验证阈值"}</small></details>;
+}
 
 function ScoreRadar({ rows }: { rows: SelectionScoreDimensionResult[] }) {
   const size = 280, center = size / 2, radius = 84;
@@ -101,7 +187,7 @@ export function SelectionDiagnostics({ candidate }: { candidate: SelectionCandid
   </section>;
 }
 
-export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; backfillDisabled?: boolean; onRescore?: () => void}) {
+export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, onResearch, onPrepareDirection, onConfirmDirection, onReviewResearch, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; onResearch?: () => void; onPrepareDirection?: () => void; onConfirmDirection?: (payload: SelectionHypothesisDirectionRequest) => void; onReviewResearch?: (payload: SelectionResearchReviewRequest) => void; backfillDisabled?: boolean; onRescore?: () => void}) {
   const analysis = candidate.analysis_json;
   const model = (analysis.model || {}) as SelectionRecord;
   const modelFailed = analysis.model_output_status === "FAILED";
@@ -120,6 +206,9 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const hypotheses = array(thesis?.hypotheses);
   const researchQuestions = array(thesis?.research_questions);
   const deepAssessments = array(thesis?.deep_assessments);
+  const researchLoop = (analysis.hypothesis_research || {}) as SelectionRecord;
+  const researchHistory = array(researchLoop.history);
+  const directionReview = (researchLoop.direction_review || {}) as SelectionRecord;
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
   const documents = [...new Map([
@@ -144,7 +233,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。失败原因、模型调用和处理建议请查看“数据事实”页签。</p></div>
   </section>;
   return <section className="selection-analysis">
-    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，先补证后再生成可跟踪评分。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
+    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_RUNNING" ? "正在主动研究" : publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : publication.status === "READY_REVIEW_WITH_UNCERTAINTY" ? "可复核 · 含低置信保留项" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_RUNNING" ? "系统正在补数并重新验证假设，研究结束后再生成可跟踪评分。" : publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，系统会继续补数验证。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
     {thesis ? <section className={`analysis-thesis ${String(thesis.status || "INSUFFICIENT").toLowerCase()}`}>
       <div className="analysis-thesis-heading"><div><span>基本面主线</span><h3>整体投资逻辑</h3><p>先判断公司如何赚钱，再用行业、公司行为、产业链、估值预期和交易状态交叉验证。</p></div><div><strong>{thesisStatusNames[String(thesis.status)] || "待核验"}</strong><small>置信度 {Math.round(Number(thesis.confidence || 0) * 100)}%</small></div></div>
       <div className="analysis-thesis-core"><article><small>公司靠什么赚钱</small><strong>{String(thesis.primary_business || "主营证据不足")}</strong><p>{String(thesis.earning_engine_summary || "尚未识别收入和利润发动机")}</p></article><article><small>盈利质量</small><strong>收入与利润是否可持续</strong><p>{String(thesis.profit_quality_summary || "盈利质量证据不足")}</p></article></div>
@@ -160,6 +249,11 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
         <article><small>机构预期</small><p>{String(thesis.institution_view_summary || "证据不足")}</p></article>
         <article><small>量价与资金状态</small><p>{String(thesis.market_timing_summary || "证据不足")}</p></article>
       </div>
+      {researchLoop.status === "WAITING_USER_DIRECTION" && directionReview.questions && onConfirmDirection && <HypothesisDirectionReview review={directionReview} busy={backfillDisabled} onSubmit={onConfirmDirection} />}
+      {!researchLoop.status && researchQuestions.some(item => ["PARTIAL", "INSUFFICIENT"].includes(String(item.status))) && onPrepareDirection && <section className="analysis-human-review"><header><div><span>协同研究</span><h4>先确认研究方向，再自动补数</h4></div></header><p>系统已经识别尚未闭环的重大事件。请先生成竞争性假设，确认哪些方向值得优先验证。</p><button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button></section>}
+      {researchLoop.status === "WAITING_EVIDENCE_REVIEW" && onReviewResearch && <ResearchHumanReview phase="EVIDENCE" busy={backfillDisabled} onSubmit={onReviewResearch} />}
+      {researchLoop.status === "WAITING_CONCLUSION_REVIEW" && onReviewResearch && <ResearchHumanReview phase="CONCLUSION" busy={backfillDisabled} onSubmit={onReviewResearch} />}
+      <ResearchLearningSummary candidateId={candidate.id} version={`${String(researchLoop.updated_at || "")}:${researchHistory.length}`} />
       {researchQuestions.length > 0 && <section className="analysis-research-questions" aria-label="研究问题闭环">
         <div className="analysis-research-heading"><div><span>研究问题驱动</span><h4>四项专项研究</h4></div><small>事实、假设、缺口与结论分开保存；阶段性结果不能直接确认跟踪</small></div>
         <div className="analysis-research-grid">{researchQuestions.map((question, index) => {
@@ -180,6 +274,25 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
             {array(question.evidence_document_ids).length > 0 && <div className="analysis-references">{array(question.evidence_document_ids).map(id => reference(Number(id)))}</div>}
           </article>;
         })}</div>
+      </section>}
+      {(researchLoop.status || researchHistory.length > 0) && <section className="analysis-research-loop" aria-label="重大事件假设研究历程">
+        <div className="analysis-research-heading"><div><span>事件驱动研究闭环</span><h4>重大事件 → 竞争性假设 → 补数 → 重验</h4></div><small>第 {Number(researchLoop.round || 0)} / {Number(researchLoop.max_rounds || 3)} 轮 · {researchLoopNames[String(researchLoop.status)] || researchLoopNames[String(researchLoop.terminal_reason)] || "待执行"}</small></div>
+        <p className="research-loop-explain">系统只对可能改变结论的重大事件假设主动补数。只有来源查询成功且连续两轮没有新增证据，才会降低次级假设置信度；数据源或模型失败不会被当作“查无证据”。</p>
+        {["SOURCE_FAILED", "MODEL_FAILED"].includes(String(researchLoop.status)) && <p className="batch-alert error"><strong>{researchLoopNames[String(researchLoop.status)]}</strong><br />{String(researchLoop.last_error || "上一轮假设、已采集证据和结论均已保留，可继续重试。")}</p>}
+        {researchHistory.length > 0 ? <ol className="research-rounds">{researchHistory.map((round, index) => {
+          const questions = array(round.questions);
+          const newDocuments = strings(round.new_document_ids);
+          const newFacts = strings(round.new_fact_ids);
+          const newRelations = strings(round.new_relation_ids);
+          return <li key={`${Number(round.round || index + 1)}-${String(round.completed_at || "")}`}>
+            <header><strong>第 {Number(round.round || index + 1)} 轮</strong><span className={String(round.status) === "VERIFIED_WITH_INCREMENT" ? "success" : "warning"}>{researchRoundNames[String(round.status)] || "研究状态待核"}</span></header>
+            <p>研究事项：{questions.map(item => researchNames[String(item.research_code)] || String(item.question || item.research_code)).join("；") || "重大事件假设"}</p>
+            <p>调用板块：{strings(round.dimensions).map(code => names[code] || code).join("、") || "按研究问题动态确定"}</p>
+            <div><span>新增原文 {newDocuments.length}</span><span>新增事实 {newFacts.length}</span><span>新增关系 {newRelations.length}</span><span>结构化增量 {Number(round.structured_count_delta || 0)}</span></div>
+            {["SOURCE_FAILED", "MODEL_FAILED"].includes(String(round.status)) ? <small>失败轮次不计入无新增证据次数，也不会触发假设置信度衰减。</small> : Number(round.consecutive_no_increment || 0) > 0 && <small>连续 {Number(round.consecutive_no_increment)} 轮无新增证据，相关假设已按确定性规则衰减置信度。</small>}
+          </li>;
+        })}</ol> : <p className="batch-missing">研究任务已识别，等待后台执行第一轮数据补全与验证。</p>}
+        {["SOURCE_FAILED", "MODEL_FAILED", "READY_FOR_RESEARCH"].includes(String(researchLoop.status)) && publication.status === "RESEARCH_INCOMPLETE" && onResearch && <button type="button" disabled={backfillDisabled} onClick={onResearch}>继续执行假设研究</button>}
       </section>}
       {deepAssessments.length > 0 && <div className="analysis-deep-assessments"><h4>一年期深度判断</h4><div>{deepAssessments.map((item, index) => <article key={`${String(item.assessment_code)}-${index}`}>
         <header><strong>{assessmentNames[String(item.assessment_code)] || String(item.assessment_code || "分析维度")}</strong><span className={`analysis-direction ${String(item.direction || "UNKNOWN").toLowerCase()}`}>{names[String(item.direction)] || "待判断"}</span></header>

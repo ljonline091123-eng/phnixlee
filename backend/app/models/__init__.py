@@ -41,7 +41,7 @@ from app.models.change_event import StockChangeEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 from app.models.selection import (
     SelectionCandidate, SelectionDimensionDefinition, SelectionDimensionResult,
-    SelectionEvaluationMetric, SelectionRun, SelectionSnapshot,
+    SelectionEvaluationMetric, SelectionResearchFeedback, SelectionRun, SelectionSnapshot,
     SelectionStrategyProfile, SelectionStrategyProfileItem, SelectionTracking,
 )
 from app.models.decision_review import (
@@ -126,6 +126,7 @@ __all__ = [
     "ScheduledJob",
     "SelectionRun",
     "SelectionCandidate",
+    "SelectionResearchFeedback",
     "SelectionTracking",
     "SelectionSnapshot",
     "SelectionDimensionDefinition",

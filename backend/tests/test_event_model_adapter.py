@@ -16,6 +16,7 @@ from app.models.ai_hub import ModelInstance
     ("deepseek-v4-pro", "STOCK_SELECTION_ANALYSIS", True, True, True),
     ("deepseek-v4-pro", "STOCK_SELECTION_SINGLE_STOCK_RECOVERY", True, True, True),
     ("deepseek-v4-pro", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", True, True, True),
+    ("deepseek-v4-flash", "SELECTION_MODEL_SWITCH_PREFLIGHT", True, False, True),
     ("deepseek-v4-pro", "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY", False, False, False),
     ("deepseek-v4-pro", "STOCK_SELECTION_ANALYSIS", False, False, False),
     ("deepseek-v4-flash", "ADVISORY_QUALITY_REVIEW", True, False, False),

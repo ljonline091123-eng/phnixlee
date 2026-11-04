@@ -14,6 +14,8 @@ from app.models.selection import (
 from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
     SelectionBackfillRequest,
+    SelectionHypothesisDirectionRequest,
+    SelectionHypothesisResearchRequest,
     SelectionCandidateRead,
     SelectionRefreshRequest,
     SelectionReviewRequest,
@@ -25,6 +27,7 @@ from app.schemas.selection import (
     SelectionProfileCloneRequest,
     SelectionProfileCreate,
     SelectionProfileUpdate,
+    SelectionResearchReviewRequest,
     SelectionHistoryItem,
     SelectionHistoryPage,
     SelectionHistoryVersion,
@@ -35,6 +38,9 @@ from app.schemas.selection import (
 from app.services.selection import (
     create_selection_run, queue_failed_selection_reanalysis, queue_selection_run,
     queue_failed_selection_reanalysis_with_model, queue_selection_data_backfill,
+    queue_selection_hypothesis_research,
+    prepare_selection_hypothesis_review, record_selection_hypothesis_direction,
+    record_selection_research_review, selection_research_learning_summary,
     refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
     probe_selection_model, _selection_model_instance,
     _evidence_data_gate, _elapsed_between, _selection_result_counts,
@@ -1046,6 +1052,16 @@ def backfill_status(run_id: int, db: Session = Depends(get_db)) -> dict:
             "progress": (run.criteria_json or {}).get("backfill_progress", {})}
 
 
+@router.get("/runs/{run_id}/hypothesis-research-status")
+def hypothesis_research_status(run_id: int, db: Session = Depends(get_db)) -> dict:
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="选股任务不存在")
+    progress = (run.criteria_json or {}).get("hypothesis_research_progress", {})
+    return {"selection_run_id": run.id, "status": progress.get("status", "NOT_RUN"),
+            "progress": progress}
+
+
 @router.post("/runs/{run_id}/retry-failed", response_model=SelectionRunRead, status_code=202)
 def retry_failed(run_id: int, db: Session = Depends(get_db)) -> SelectionRunRead:
     try:
@@ -1118,6 +1134,88 @@ def backfill_run(run_id: int, payload: SelectionBackfillRequest, db: Session = D
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/runs/{run_id}/hypothesis-research", response_model=SelectionRunRead, status_code=202)
+def research_run_hypotheses(
+    run_id: int,
+    payload: SelectionHypothesisResearchRequest,
+    db: Session = Depends(get_db),
+) -> SelectionRunRead:
+    try:
+        return _run_read(db, queue_selection_hypothesis_research(db, run_id, payload))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/candidates/{candidate_id}/hypothesis-direction/prepare", response_model=SelectionCandidateRead)
+def prepare_hypothesis_direction(
+    candidate_id: int,
+    db: Session = Depends(get_db),
+) -> SelectionCandidateRead:
+    try:
+        return _candidate_read(db, prepare_selection_hypothesis_review(db, candidate_id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/candidates/{candidate_id}/hypothesis-direction", response_model=SelectionCandidateRead, status_code=202)
+def confirm_hypothesis_direction(
+    candidate_id: int,
+    payload: SelectionHypothesisDirectionRequest,
+    db: Session = Depends(get_db),
+) -> SelectionCandidateRead:
+    try:
+        candidate = record_selection_hypothesis_direction(db, candidate_id, payload)
+        if payload.action in {"CONFIRM_AND_RESEARCH", "DELEGATE_TO_SYSTEM"}:
+            queue_selection_hypothesis_research(
+                db, candidate.run_id,
+                SelectionHypothesisResearchRequest(
+                    candidate_ids=[candidate.id], max_rounds=payload.max_rounds,
+                ),
+            )
+            candidate = db.get(SelectionCandidate, candidate.id)
+        return _candidate_read(db, candidate)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/candidates/{candidate_id}/research-review", response_model=SelectionCandidateRead, status_code=202)
+def review_hypothesis_research(
+    candidate_id: int,
+    payload: SelectionResearchReviewRequest,
+    db: Session = Depends(get_db),
+) -> SelectionCandidateRead:
+    try:
+        candidate = record_selection_research_review(db, candidate_id, payload)
+        if (payload.action in {"REQUEST_MORE_RESEARCH", "CORRECT"}
+                or (payload.phase == "EVIDENCE" and payload.action == "ACCEPT")):
+            queue_selection_hypothesis_research(
+                db, candidate.run_id,
+                SelectionHypothesisResearchRequest(
+                    candidate_ids=[candidate.id], max_rounds=payload.max_rounds,
+                ),
+            )
+            candidate = db.get(SelectionCandidate, candidate.id)
+        return _candidate_read(db, candidate)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/candidates/{candidate_id}/research-learning")
+def research_learning(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    try:
+        return selection_research_learning_summary(db, candidate_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/candidates/{candidate_id}/review", response_model=SelectionCandidateRead)

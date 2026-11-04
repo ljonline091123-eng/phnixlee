@@ -79,6 +79,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "watchlist_item": TableDescription("自选股", "股票数据", "保存用户关注的市场与股票代码及备注。"),
     "selection_run": TableDescription("选股监盘运行", "选股监盘", "保存硬规则筛选运行、模型与知识库选择、候选数量和缺失数据。"),
     "selection_candidate": TableDescription("选股候选", "选股监盘", "保存硬过滤候选、量价规则、本地知识证据及人工接受或拒绝结果。"),
+    "selection_research_feedback": TableDescription("研究协同反馈", "选股监盘", "保存重大事件假设的用户研究优先级、证据复核、结论确认及后续验证结果；用户意见不直接写入事实表。"),
     "selection_tracking": TableDescription("选股跟踪", "选股监盘", "保存人工确认后的预测目标、实际交易日进度、收益、回撤和复盘状态。"),
     "selection_snapshot": TableDescription("选股跟踪快照", "选股监盘", "按实际交易日保存收盘价、累计收益和回撤，至少满十个交易日后完成复盘。"),
     "selection_dimension_definition": TableDescription("选股评价维度", "选股监盘", "保存八个评价维度的稳定编码、中文释义、分数方向和默认计算方式。"),
@@ -581,6 +582,15 @@ TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
     },
     "selection_run": {"criteria_json": "本次硬过滤阈值与候选范围。", "missing_data_json": "未能获取或不足以判断的数据项。", "analysis_mode": "综合评价模式及是否请求模型。"},
     "selection_candidate": {"hard_rules_json": "可复核的量价硬规则结果。", "evidence_json": "知识库、图谱及行情证据引用。", "decision": "人工复选结果。"},
+    "selection_research_feedback": {
+        "run_id": "反馈所属的选股分析批次 ID。", "candidate_id": "反馈对应的股票候选 ID。",
+        "phase": "人机协同阶段：研究方向、证据复核或结论复核。", "research_code": "主营、管理层、并购或资本行为等研究问题编码。",
+        "hypothesis_key": "同一研究问题下竞争性假设的稳定键。", "action": "用户选择的优先级、复核或纠正动作。",
+        "payload_json": "用户提交的原始选择、说明和纠正内容；仅作为研究指令，不等于事实。",
+        "outcome_status": "后续补证对该反馈的验证状态。", "validation_json": "验证轮次、新增证据及假设状态等可审计结果。",
+        "skill_code": "处理该反馈的受控 Skill 编码。", "skill_version": "反馈发生时冻结的生产 Skill 版本。",
+        "reviewer": "提交反馈的用户或审核角色标识。", "created_at": "反馈创建时间。", "resolved_at": "反馈完成后续证据验证的时间。",
+    },
     "selection_tracking": {"required_sessions": "要求的真实交易日数量，默认十个。", "observed_sessions": "已获取的去重交易日数量。", "review_json": "完成跟踪后的复盘依据。"},
     "selection_snapshot": {"trade_date": "真实交易日行情日期。", "return_pct": "相对人工确认入场价的累计收益率。", "drawdown_pct": "相对历史峰值的回撤。"},
     "selection_dimension_definition": {

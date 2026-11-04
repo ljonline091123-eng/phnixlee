@@ -12,17 +12,37 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelSkill, SkillOptimizationDraft
+from app.models.foundation import FoundationFact
 from app.models.pipeline import ScheduledJob
-from app.models.selection import SelectionCandidate, SelectionRun
-from app.schemas.selection import SelectionBackfillRequest, SelectionReviewRequest
+from app.models.selection import SelectionCandidate, SelectionResearchFeedback, SelectionRun
+from app.schemas.selection import (
+    SelectionBackfillRequest,
+    SelectionHypothesisDirectionRequest,
+    SelectionHypothesisResearchRequest,
+    SelectionResearchReviewRequest,
+    SelectionReviewRequest,
+)
 from app.services.selection import (
     _normalize_business_composition_output,
     _sanitize_investment_thesis_evidence,
     _validate_business_value_chain_output,
     _validate_investment_thesis_output,
     execute_selection_data_backfill,
+    _apply_research_confidence_policy,
+    _build_hypothesis_research_plan,
+    _hypothesis_research_model_context,
+    _research_source_outcome,
+    _research_questions,
+    _resolve_research_feedback,
+    execute_selection_hypothesis_research,
+    prepare_selection_hypothesis_review,
+    queue_selection_hypothesis_research,
     queue_selection_data_backfill,
+    record_selection_hypothesis_direction,
+    record_selection_research_review,
     review_candidate,
+    selection_research_learning_summary,
 )
 from app.services.selection_evidence import (
     build_evidence_sections, conclusion_publication, evidence_coverage_summary, section_weights, typed_references,
@@ -306,6 +326,555 @@ def test_v8_publication_distinguishes_research_incomplete_from_model_failure():
     result = conclusion_publication(incomplete)
     assert result["status"] == "RESEARCH_INCOMPLETE"
     assert result["provisional_conclusion_available"] is True and result["conclusion_available"] is False
+
+
+def test_hypothesis_research_plan_maps_event_questions_to_existing_sources():
+    questions = v8_research_questions()
+    questions[1].update(status="PARTIAL", confidence=.6, hypotheses=[{
+        "title": "市场开拓不力", "thesis": "管理层变化可能与市场开拓结果有关。",
+        "status": "INSUFFICIENT", "direction": "UNKNOWN", "horizon": "MEDIUM", "confidence": .45,
+        "supporting_document_ids": [], "supporting_fact_ids": [], "supporting_relation_ids": [],
+        "counter_document_ids": [], "counter_fact_ids": [], "counter_relation_ids": [],
+        "evidence_items": [], "invalidation_conditions": ["收入和订单持续增长"], "watch_conditions": ["客户进展"],
+    }], missing_evidence=[{
+        "gap_code": "MANAGEMENT_REASON", "description": "缺少管理层调整原因",
+        "impact_on_conclusion": "影响对经营连续性的判断", "required_evidence": ["去年营收和客户进展"],
+        "preferred_sources": ["公告", "新闻", "财报"], "search_queries": ["总裁 市场开拓 营收"],
+        "resolution_status": "LOCAL_SOURCE_PENDING",
+    }], external_research_plan=["补取公告、新闻和财务数据"])
+    candidate = SelectionCandidate(id=99, run_id=1, market="HK", symbol="02533",
+        analysis_json={"model": {"investment_thesis": {"research_questions": questions}}}, evidence_json={})
+    plan = _build_hypothesis_research_plan(candidate, round_no=1)
+    management = next(row for row in plan["questions"] if row["research_code"] == "MANAGEMENT_CHANGE")
+    assert {"NOTICE", "NEWS", "FINANCIAL", "COMPANY", "RESEARCH"}.issubset(set(management["dimensions"]))
+    assert plan["baseline_evidence"]["fingerprint"]
+
+
+def test_hypothesis_research_no_increment_decays_and_closes_secondary_hypothesis():
+    questions = v8_research_questions()
+    questions[1].update(status="PARTIAL", confidence=.55, hypotheses=[{
+        "title": "市场开拓不力", "thesis": "管理层变化可能与市场开拓结果有关。",
+        "status": "INSUFFICIENT", "direction": "UNKNOWN", "horizon": "MEDIUM", "confidence": .60,
+        "supporting_document_ids": [], "supporting_fact_ids": [], "supporting_relation_ids": [],
+        "counter_document_ids": [], "counter_fact_ids": [], "counter_relation_ids": [],
+        "evidence_items": [], "invalidation_conditions": ["订单增长"], "watch_conditions": ["管理层说明"],
+    }], missing_evidence=[{
+        "gap_code": "MANAGEMENT_REASON", "description": "缺少直接说明",
+        "impact_on_conclusion": "影响动因判断", "required_evidence": [], "preferred_sources": [],
+        "search_queries": [], "resolution_status": "LOCAL_SOURCE_PENDING",
+    }], external_research_plan=["补取已接来源"])
+    candidate = SelectionCandidate(id=100, run_id=1, market="HK", symbol="02533",
+        analysis_json={"model": {"investment_thesis": {"research_questions": questions}}}, evidence_json={})
+    policy = _apply_research_confidence_policy(candidate, evidence_added=False,
+                                               consecutive_no_increment=2, terminal=True)
+    hypothesis = _research_questions(candidate)[1]["hypotheses"][0]
+    assert hypothesis["confidence"] <= .20
+    assert policy["low_confidence_closed_count"] == 1
+
+
+def test_hypothesis_research_context_inherits_prior_questions_and_round_receipts():
+    questions = v8_research_questions()
+    questions[1].update(status="PARTIAL", confidence=.55, hypotheses=[{
+        "title": "市场开拓不力", "thesis": "管理层调整可能与市场开拓有关。",
+        "status": "INSUFFICIENT", "direction": "UNKNOWN", "confidence": .42,
+        "supporting_document_ids": [11], "supporting_fact_ids": ["f-1"],
+        "counter_document_ids": [], "counter_fact_ids": [],
+        "invalidation_conditions": ["收入与订单持续增长"], "watch_conditions": ["管理层说明"],
+    }])
+    context = _hypothesis_research_model_context({
+        "model": {"investment_thesis": {"research_questions": questions}},
+        "hypothesis_research": {
+            "status": "RUNNING", "round": 1, "max_rounds": 3,
+            "history": [{"round": 1, "status": "VERIFIED_WITH_INCREMENT",
+                         "new_document_ids": [12], "new_fact_ids": ["f-2"],
+                         "source_outcome": {"status": "SOURCE_QUERIED"}}],
+        },
+    })
+    management = next(row for row in context["questions"] if row["research_code"] == "MANAGEMENT_CHANGE")
+    assert management["hypotheses"][0]["title"] == "市场开拓不力"
+    assert management["hypotheses"][0]["confidence"] == .42
+    assert context["completed_rounds"][0]["new_document_ids"] == [12]
+
+
+def collaborative_research_questions(hypothesis_count=3):
+    questions = v8_research_questions()
+    hypotheses = [
+        {
+            "title": title,
+            "thesis": thesis,
+            "status": "INSUFFICIENT",
+            "direction": direction,
+            "horizon": "MEDIUM",
+            "confidence": confidence,
+            "supporting_document_ids": [],
+            "supporting_fact_ids": [],
+            "supporting_relation_ids": [],
+            "counter_document_ids": [],
+            "counter_fact_ids": [],
+            "counter_relation_ids": [],
+            "evidence_items": [],
+            "invalidation_conditions": ["后续经营数据与该解释不一致"],
+            "watch_conditions": ["管理层说明与经营指标"],
+        }
+        for title, thesis, direction, confidence in [
+            ("市场开拓不力", "管理层调整可能与市场开拓结果有关。", "NEGATIVE", .62),
+            ("战略转型需要", "管理层调整可能服务于新业务转型。", "POSITIVE", .55),
+            ("正常治理安排", "管理层调整也可能只是职责分工变化。", "NEUTRAL", .35),
+        ][:hypothesis_count]
+    ]
+    questions[1].update(
+        status="PARTIAL",
+        confidence=.55,
+        hypotheses=hypotheses,
+        missing_evidence=[{
+            "gap_code": "MANAGEMENT_REASON",
+            "description": "缺少管理层调整动因的直接和间接证据",
+            "impact_on_conclusion": "影响经营连续性和战略转型判断",
+            "required_evidence": ["去年营收", "客户进展", "管理层说明"],
+            "preferred_sources": ["公告", "新闻", "财报"],
+            "search_queries": ["总裁 调整 营收 客户 战略"],
+            "resolution_status": "LOCAL_SOURCE_PENDING",
+        }],
+        external_research_plan=["补取公告、新闻、财务和公司资料"],
+    )
+    return questions
+
+
+def add_collaborative_candidate(db, *, hypothesis_count=3, symbol="02533"):
+    run = SelectionRun(market="HK", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL")
+    db.add(run)
+    db.flush()
+    candidate = SelectionCandidate(
+        run_id=run.id,
+        market="HK",
+        symbol=symbol,
+        name="黑芝麻智能",
+        analysis_json={
+            "model_output_status": "SUCCESS",
+            "model": {"investment_thesis": {"research_questions": collaborative_research_questions(hypothesis_count)}},
+        },
+        evidence_json={"documents": [], "facts": [], "graph_paths": [], "structured_observations": {}},
+    )
+    db.add(candidate)
+    db.commit()
+    return run, candidate
+
+
+def test_first_analysis_waits_for_user_and_confirming_direction_queues_research(isolated):
+    db = isolated
+    run, candidate = add_collaborative_candidate(db, hypothesis_count=2)
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        client = TestClient(app)
+        prepared = client.post(f"/api/v1/selection/candidates/{candidate.id}/hypothesis-direction/prepare")
+        assert prepared.status_code == 200
+        prepared_state = prepared.json()["analysis_json"]["hypothesis_research"]
+        assert prepared_state["status"] == "WAITING_USER_DIRECTION"
+        hypotheses = prepared_state["direction_review"]["questions"][0]["hypotheses"]
+
+        response = client.post(
+            f"/api/v1/selection/candidates/{candidate.id}/hypothesis-direction",
+            json={
+                "action": "CONFIRM_AND_RESEARCH",
+                "directions": [
+                    {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[0]["hypothesis_key"], "decision": "PRIORITY"},
+                    {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[1]["hypothesis_key"], "decision": "PAUSED"},
+                ],
+                "max_rounds": 3,
+            },
+        )
+        assert response.status_code == 202
+        queued_state = response.json()["analysis_json"]["hypothesis_research"]
+        assert queued_state["status"] == "QUEUED"
+        # With only two explanations, pausing one would create confirmation
+        # bias.  The service automatically retains it as a normal challenger.
+        retained = queued_state["direction_review"]["questions"][0]["hypotheses"]
+        assert [row["decision"] for row in retained] == ["PRIORITY", "NORMAL"]
+        assert retained[1]["guardrail_retained"] is True
+        job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_hypothesis_research"))
+        assert job is not None and job.payload_json["candidate_ids"] == [candidate.id]
+        assert db.scalars(select(FoundationFact)).all() == []
+        assert db.scalars(select(SelectionResearchFeedback)).all()
+        db.refresh(run)
+        assert run.criteria_json["hypothesis_research_progress"]["status"] == "QUEUED"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+def test_fresh_successful_analysis_drops_stale_failed_research_runtime(isolated):
+    db = isolated
+    _run, candidate = add_collaborative_candidate(db, hypothesis_count=2, symbol="02539")
+    candidate.analysis_json = {
+        **candidate.analysis_json,
+        "hypothesis_research": {
+            "status": "MODEL_FAILED",
+            "round": 2,
+            "last_error": "旧模型失败",
+            "current_plan": {"status": "FAILED"},
+        },
+    }
+    db.commit()
+
+    prepare_selection_hypothesis_review(db, candidate.id)
+
+    state = candidate.analysis_json["hypothesis_research"]
+    assert state["status"] == "WAITING_USER_DIRECTION"
+    assert state["review_phase"] == "DIRECTION"
+    assert "last_error" not in state and "current_plan" not in state and "round" not in state
+
+
+def test_paused_hypothesis_is_excluded_from_research_plan_when_other_challenger_remains(isolated):
+    db = isolated
+    _run, candidate = add_collaborative_candidate(db, hypothesis_count=3, symbol="02534")
+    prepare_selection_hypothesis_review(db, candidate.id)
+    review = candidate.analysis_json["hypothesis_research"]["direction_review"]
+    hypotheses = review["questions"][0]["hypotheses"]
+    record_selection_hypothesis_direction(
+        db,
+        candidate.id,
+        SelectionHypothesisDirectionRequest(
+            action="CONFIRM_AND_RESEARCH",
+            directions=[
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[0]["hypothesis_key"], "decision": "PRIORITY"},
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[1]["hypothesis_key"], "decision": "PAUSED"},
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[2]["hypothesis_key"], "decision": "NORMAL"},
+            ],
+        ),
+    )
+    plan = _build_hypothesis_research_plan(candidate, round_no=1)
+    planned = plan["questions"][0]["hypotheses"]
+    assert [row["title"] for row in planned] == ["市场开拓不力", "正常治理安排"]
+    assert [row["research_priority"] for row in planned] == ["PRIORITY", "NORMAL"]
+
+
+def test_model_failed_research_restores_delegated_plan_and_can_queue_next_attempt(isolated):
+    db = isolated
+    run, candidate = add_collaborative_candidate(db, hypothesis_count=3, symbol="02538")
+    prepare_selection_hypothesis_review(db, candidate.id)
+    record_selection_hypothesis_direction(
+        db,
+        candidate.id,
+        SelectionHypothesisDirectionRequest(action="DELEGATE_TO_SYSTEM", max_rounds=3),
+    )
+    original_plan = _build_hypothesis_research_plan(candidate, round_no=1)
+    analysis = deepcopy(candidate.analysis_json)
+    analysis.pop("model", None)
+    state = analysis["hypothesis_research"]
+    # Simulate a failed model revalidation removing the current response. The
+    # confirmed direction and bounded plan must remain retryable.
+    state.update({
+        "status": "MODEL_FAILED",
+        "round": 1,
+        "terminal_reason": "MODEL_FAILED",
+        "current_plan": original_plan,
+        "history": [{"round": 1, "status": "MODEL_FAILED", "questions": original_plan["questions"]}],
+    })
+    candidate.analysis_json = analysis
+    db.commit()
+
+    restored = _build_hypothesis_research_plan(candidate, round_no=2)
+    assert restored["questions"]
+    assert restored["questions"][0]["research_code"] == "MANAGEMENT_CHANGE"
+    assert restored["questions"][0]["hypotheses"][0]["research_priority"] == "PRIORITY"
+    assert candidate.analysis_json["hypothesis_research"]["direction_review"]["status"] == "DELEGATED"
+
+    with patch("app.jobs.governance_runner.wake_governance_runner"):
+        queued = queue_selection_hypothesis_research(
+            db, run.id, SelectionHypothesisResearchRequest(candidate_ids=[candidate.id], max_rounds=3),
+        )
+    db.refresh(candidate)
+    assert queued.id == run.id
+    assert candidate.analysis_json["hypothesis_research"]["status"] == "QUEUED"
+    job = db.scalar(select(ScheduledJob).where(
+        ScheduledJob.task_type == "selection_hypothesis_research",
+        ScheduledJob.payload_json["selection_run_id"].as_integer() == run.id,
+    ))
+    assert job is not None and job.payload_json["candidate_ids"] == [candidate.id]
+
+
+def test_conflicting_evidence_pauses_for_human_review_and_run_reports_waiting_user(isolated):
+    db = isolated
+    run, candidate = add_collaborative_candidate(db, hypothesis_count=2, symbol="02535")
+    prepare_selection_hypothesis_review(db, candidate.id)
+    review = candidate.analysis_json["hypothesis_research"]["direction_review"]
+    hypotheses = review["questions"][0]["hypotheses"]
+    record_selection_hypothesis_direction(
+        db,
+        candidate.id,
+        SelectionHypothesisDirectionRequest(
+            action="CONFIRM_AND_RESEARCH",
+            directions=[
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[0]["hypothesis_key"], "decision": "PRIORITY"},
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[1]["hypothesis_key"], "decision": "NORMAL"},
+            ],
+        ),
+    )
+    backfill = {
+        "status": "SUCCESS",
+        "results": [{"candidate_id": candidate.id, "status": "SUCCESS", "operations": {"NOTICE": {"status": "SUCCESS"}}}],
+    }
+
+    def reanalyse(_payload):
+        changed = deepcopy(candidate.analysis_json)
+        question = changed["model"]["investment_thesis"]["research_questions"][1]
+        hypothesis = question["hypotheses"][0]
+        hypothesis.update(
+            status="MIXED",
+            confidence=.55,
+            supporting_document_ids=[101],
+            counter_document_ids=[102],
+        )
+        candidate.analysis_json = changed
+        candidate.evidence_json = {
+            "documents": [
+                {"id": 101, "content": "经营数据显示客户拓展取得进展，支持市场能力改善的解释。"},
+                {"id": 102, "content": "管理层公告同时披露职责调整，仍存在战略转型的竞争性解释。"},
+            ],
+            "facts": [], "graph_paths": [], "structured_observations": {},
+        }
+        db.commit()
+        return {"selection_run_id": run.id, "candidate_count": 1, "research_failed_count": 0, "status": "COMPLETED"}
+
+    with patch("app.services.selection.execute_selection_data_backfill", return_value=backfill), \
+            patch("app.services.selection.execute_failed_selection_reanalysis", side_effect=reanalyse), \
+            patch("app.services.selection_audit.capture_decision_snapshot"):
+        result = execute_selection_hypothesis_research({
+            "selection_run_id": run.id, "candidate_ids": [candidate.id], "max_rounds": 3,
+        })
+
+    db.refresh(candidate)
+    db.refresh(run)
+    assert result["status"] == "WAITING_USER"
+    assert candidate.analysis_json["hypothesis_research"]["status"] == "WAITING_EVIDENCE_REVIEW"
+    assert run.criteria_json["hypothesis_research_progress"]["status"] == "WAITING_USER"
+
+    # Accepting an unchanged conflict must not trap the user in the same
+    # evidence-review screen.  Only a changed support/counter set may ask
+    # for another evidence review.
+    record_selection_research_review(
+        db,
+        candidate.id,
+        SelectionResearchReviewRequest(
+            phase="EVIDENCE",
+            action="ACCEPT",
+            comment="已确认该组支持与反证，继续完成下一轮验证。",
+            max_rounds=2,
+        ),
+    )
+    with patch("app.services.selection.execute_selection_data_backfill", return_value=backfill), \
+            patch("app.services.selection.execute_failed_selection_reanalysis", side_effect=reanalyse), \
+            patch("app.services.selection_audit.capture_decision_snapshot"):
+        resumed = execute_selection_hypothesis_research({
+            "selection_run_id": run.id, "candidate_ids": [candidate.id], "max_rounds": 2,
+        })
+    db.refresh(candidate)
+    assert resumed["status"] == "WAITING_USER"
+    assert candidate.analysis_json["hypothesis_research"]["status"] == "WAITING_CONCLUSION_REVIEW"
+
+
+def test_terminal_collaborative_round_waits_for_conclusion_review(isolated):
+    db = isolated
+    run, candidate = add_collaborative_candidate(db, hypothesis_count=2, symbol="02536")
+    prepare_selection_hypothesis_review(db, candidate.id, max_rounds=1)
+    review = candidate.analysis_json["hypothesis_research"]["direction_review"]
+    hypotheses = review["questions"][0]["hypotheses"]
+    record_selection_hypothesis_direction(
+        db,
+        candidate.id,
+        SelectionHypothesisDirectionRequest(
+            action="CONFIRM_AND_RESEARCH",
+            directions=[
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[0]["hypothesis_key"], "decision": "PRIORITY"},
+                {"research_code": "MANAGEMENT_CHANGE", "hypothesis_key": hypotheses[1]["hypothesis_key"], "decision": "NORMAL"},
+            ],
+            max_rounds=1,
+        ),
+    )
+    analysis = deepcopy(candidate.analysis_json)
+    analysis["hypothesis_research"]["last_error"] = "上一轮模型重验失败"
+    analysis["hypothesis_research"]["terminal_reason"] = "MODEL_FAILED"
+    candidate.analysis_json = analysis
+    db.commit()
+    backfill = {
+        "status": "SUCCESS",
+        "results": [{"candidate_id": candidate.id, "status": "SUCCESS", "operations": {"NOTICE": {"status": "SUCCESS"}}}],
+    }
+    with patch("app.services.selection.execute_selection_data_backfill", return_value=backfill), \
+            patch("app.services.selection.execute_failed_selection_reanalysis", return_value={"research_failed_count": 0}), \
+            patch("app.services.selection_audit.capture_decision_snapshot"):
+        result = execute_selection_hypothesis_research({
+            "selection_run_id": run.id, "candidate_ids": [candidate.id], "max_rounds": 1,
+        })
+    db.refresh(candidate)
+    assert result["status"] == "WAITING_USER"
+    assert candidate.analysis_json["hypothesis_research"]["status"] == "WAITING_CONCLUSION_REVIEW"
+    assert "last_error" not in candidate.analysis_json["hypothesis_research"]
+
+
+def test_validated_user_corrections_create_review_draft_without_writing_facts_or_mutating_skill(isolated):
+    db = isolated
+    _run, candidate = add_collaborative_candidate(db, hypothesis_count=2, symbol="02537")
+    skill = ModelSkill(
+        skill_code="HYPOTHESIS_RESEARCH_ORCHESTRATOR",
+        skill_name="重大事件假设研究编排",
+        instructions="生产版受控研究指令。",
+        version="9.0.0",
+        lifecycle_status="ACTIVE",
+        enabled=True,
+    )
+    db.add(skill)
+    db.commit()
+    original_version = skill.version
+    original_instructions = skill.instructions
+    for index in range(3):
+        record_selection_research_review(
+            db,
+            candidate.id,
+            SelectionResearchReviewRequest(
+                phase="EVIDENCE",
+                action="CORRECT",
+                research_code="MANAGEMENT_CHANGE",
+                comment=f"第{index + 1}次纠正原解释",
+                correction="应同时验证市场开拓与战略转型两个方向。",
+            ),
+        )
+    assert db.scalars(select(FoundationFact)).all() == []
+
+    _resolve_research_feedback(db, candidate, round_no=2, evidence_added=True, terminal=False)
+    db.commit()
+    db.refresh(skill)
+    feedback = db.scalars(select(SelectionResearchFeedback).where(
+        SelectionResearchFeedback.action == "CORRECT",
+    )).all()
+    draft = db.scalar(select(SkillOptimizationDraft))
+    summary = selection_research_learning_summary(db, candidate.id)
+
+    assert len(feedback) == 3
+    assert {row.outcome_status for row in feedback} == {"VALIDATED_CORRECTION"}
+    assert db.scalars(select(FoundationFact)).all() == []
+    assert draft is not None and draft.status == "PENDING_REVIEW"
+    assert draft.base_skill_version == original_version
+    assert skill.version == original_version
+    assert skill.instructions == original_instructions
+    assert summary["skill"]["draft_status"] == "PENDING_REVIEW"
+    assert summary["skill"]["production_skill_changed"] is False
+
+
+def test_source_failure_is_not_treated_as_exhausted_evidence():
+    failed = _research_source_outcome({
+        "results": [{"candidate_id": 7, "status": "PARTIAL", "operations": {
+            "NEWS": {"status": "FAILED", "error": "provider timeout"},
+            "FINANCIAL": {"status": "SUCCESS"},
+        }}],
+    }, 7)
+    assert failed["status"] == "SOURCE_FAILED"
+    assert failed["failed_operations"][0]["operation"] == "NEWS"
+    exhausted = _research_source_outcome({
+        "results": [{"candidate_id": 7, "status": "PARTIAL", "operations": {
+            "NEWS": {"status": "MISSING"},
+            "FINANCIAL": {"status": "SUCCESS"},
+        }}],
+    }, 7)
+    assert exhausted["status"] == "SOURCE_QUERIED"
+    assert exhausted["exhausted_operations"][0]["operation"] == "NEWS"
+
+
+def test_hypothesis_research_model_exception_is_persisted_as_retryable_failure(isolated):
+    db = isolated
+    questions = v8_research_questions()
+    questions[1].update(
+        status="PARTIAL", confidence=.55,
+        hypotheses=[{
+            "title": "市场开拓不力", "thesis": "管理层变化可能与市场开拓结果有关",
+            "status": "INSUFFICIENT", "direction": "UNKNOWN", "confidence": .45,
+            "supporting_document_ids": [], "supporting_fact_ids": [],
+            "counter_document_ids": [], "counter_fact_ids": [],
+            "invalidation_conditions": ["收入和订单持续增长"], "watch_conditions": ["客户进展"],
+        }],
+        missing_evidence=[{
+            "gap_code": "MANAGEMENT_REASON", "description": "缺少管理层调整原因",
+            "impact_on_conclusion": "影响经营连续性判断", "required_evidence": ["去年营收"],
+            "preferred_sources": ["公告", "财报"], "search_queries": ["总裁 市场开拓 营收"],
+            "resolution_status": "LOCAL_SOURCE_PENDING",
+        }],
+        external_research_plan=["补取公告与财务数据"],
+    )
+    run = SelectionRun(market="HK", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL")
+    db.add(run)
+    db.flush()
+    candidate = SelectionCandidate(
+        run_id=run.id, market="HK", symbol="02533", name="黑芝麻智能",
+        analysis_json={"model": {"investment_thesis": {"research_questions": questions}}},
+        evidence_json={},
+    )
+    db.add(candidate)
+    db.commit()
+    backfill = {
+        "status": "PARTIAL",
+        "results": [{
+            "candidate_id": candidate.id, "status": "PARTIAL",
+            "operations": {"NOTICE": {"status": "SUCCESS"}, "FINANCIAL": {"status": "SUCCESS"}},
+        }],
+    }
+
+    with patch("app.services.selection.execute_selection_data_backfill", return_value=backfill), \
+            patch("app.services.selection.execute_failed_selection_reanalysis",
+                  side_effect=ValueError("最终汇总上下文超过安全预算")):
+        result = execute_selection_hypothesis_research({
+            "selection_run_id": run.id, "candidate_ids": [candidate.id], "max_rounds": 3,
+        })
+
+    db.refresh(candidate)
+    db.refresh(run)
+    state = candidate.analysis_json["hypothesis_research"]
+    assert result["status"] == "PARTIAL"
+    assert state["status"] == "MODEL_FAILED"
+    assert state["terminal_reason"] == "MODEL_FAILED"
+    assert state["history"][-1]["reanalysis"]["error_type"] == "ValueError"
+    assert state.get("consecutive_no_increment", 0) == 0
+    assert run.criteria_json["hypothesis_research_progress"]["status"] == "PARTIAL"
+
+
+def test_publication_reports_retryable_research_failures_without_closing_hypotheses():
+    questions = v8_research_questions()
+    questions[1].update(status="PARTIAL", confidence=.6)
+    base = {**analysis(), "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+        "model": {"reasoning": "主营证据具备，管理层动因仍在验证。", "confidence": .7,
+                  "investment_thesis": {"research_questions": questions}}}
+    source_failed = {**base, "hypothesis_research": {"status": "SOURCE_FAILED", "round": 1}}
+    result = conclusion_publication(source_failed)
+    assert result["status"] == "RESEARCH_INCOMPLETE"
+    assert "数据源" in result["reason"] and "重试" in result["reason"]
+    model_failed = {**base, "hypothesis_research": {"status": "MODEL_FAILED", "round": 1}}
+    result = conclusion_publication(model_failed)
+    assert result["status"] == "RESEARCH_INCOMPLETE"
+    assert "模型" in result["reason"] and "重试" in result["reason"]
+
+
+def test_publication_allows_low_confidence_secondary_hypothesis_after_bounded_loop():
+    questions = v8_research_questions()
+    questions[1].update(status="PARTIAL", confidence=.15, conclusion="多轮验证未发现直接证据。")
+    completed = {**analysis(), "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+        "hypothesis_research": {"status": "COMPLETED", "round": 3, "max_rounds": 3,
+                                "open_high_confidence_count": 0, "low_confidence_closed_count": 1},
+        "model": {"reasoning": "核心主营证据成立；管理层动因按低置信关闭。", "confidence": .7,
+                  "investment_thesis": {"research_questions": questions}}}
+    result = conclusion_publication(completed)
+    assert result["status"] == "READY_REVIEW_WITH_UNCERTAINTY"
+    assert result["conclusion_available"] is True
+
+
+def test_publication_keeps_business_model_as_hard_gate_after_research_loop():
+    questions = v8_research_questions()
+    questions[0].update(status="INSUFFICIENT", confidence=.1)
+    completed = {**analysis(), "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+        "hypothesis_research": {"status": "COMPLETED", "round": 3, "max_rounds": 3,
+                                "open_high_confidence_count": 0, "low_confidence_closed_count": 2},
+        "model": {"reasoning": "主营证据仍缺失。", "confidence": .5,
+                  "investment_thesis": {"research_questions": questions}}}
+    result = conclusion_publication(completed)
+    assert result["status"] == "RESEARCH_INCOMPLETE"
+    assert result["conclusion_available"] is False
 
 
 def test_v7_requires_complete_deep_assessments_and_auditable_document_stance():
@@ -744,3 +1313,59 @@ def test_backfill_acknowledges_then_reports_running_before_network_and_keeps_mis
     db.refresh(run)
     assert "仍有 1 只" in run.criteria_json["backfill_progress"]["message"]
     assert candidate.evidence_json == {}
+
+
+def test_hypothesis_backfill_uses_lightweight_projection_while_normal_backfill_keeps_lakehouse(isolated):
+    db = isolated
+    knowledge_base = KnowledgeBase(
+        kb_code="selection-projection-test", kb_name="选股投影测试",
+        status="ACTIVE", source_tables=["stock_news"],
+    )
+    db.add(knowledge_base)
+    db.flush()
+    graph = KnowledgeGraph(
+        knowledge_base_id=knowledge_base.id, graph_code="selection-projection-test",
+        graph_name="选股投影测试", source_tables=["stock_news"],
+    )
+    db.add(graph)
+    db.flush()
+    run = SelectionRun(
+        market="CN_A", status="PARTIAL", analysis_mode="MODEL_PARTIAL", data_mode="REAL",
+        knowledge_base_ids_json=[knowledge_base.id], graph_ids_json=[graph.id],
+    )
+    db.add(run)
+    db.flush()
+    candidate = SelectionCandidate(run_id=run.id, market="CN_A", symbol="000001", evidence_json={})
+    db.add(candidate)
+    db.commit()
+
+    pipeline_calls = []
+
+    def run_pipeline(_db, **kwargs):
+        pipeline_calls.append(kwargs)
+        return {
+            "graph_id": graph.id,
+            "graph": {"status": "BUILT", "counts": {"coverage": {"complete": True}}},
+        }
+
+    common = {
+        "selection_run_id": run.id, "candidate_ids": [candidate.id],
+        "dimensions_by_candidate": {str(candidate.id): ["NEWS"]},
+        "period_months": 12, "rerun_analysis": False,
+    }
+    with patch("app.services.stock_batch._fetch_one", return_value={"status": "SUCCESS"}), \
+            patch("app.services.knowledge_pipeline.run_stock_pipeline", side_effect=run_pipeline):
+        execute_selection_data_backfill({**common, "research_round": 1, "attempt": "research"})
+        execute_selection_data_backfill({**common, "research_round": 0, "attempt": "normal"})
+
+    assert len(pipeline_calls) == 2
+    assert pipeline_calls[0]["export_lakehouse"] is False
+    assert pipeline_calls[0]["archive_chunks"] is False
+    assert pipeline_calls[0]["run_graph"] is True
+    assert pipeline_calls[0]["idempotency_key"] == (
+        f"selection-hypothesis-projection-v2:{run.id}:{candidate.id}:1"
+    )
+    assert pipeline_calls[1]["export_lakehouse"] is True
+    assert pipeline_calls[1]["archive_chunks"] is True
+    assert pipeline_calls[1]["run_graph"] is True
+    assert pipeline_calls[1]["idempotency_key"] == f"selection-backfill-knowledge:{run.id}:normal"

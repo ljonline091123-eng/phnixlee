@@ -114,10 +114,20 @@ class OpenAICompatAdapter(ModelAdapter):
             }
             and metadata.get("require_real_model")
         )
+        selection_preflight = (
+            metadata.get("purpose") == "SELECTION_MODEL_SWITCH_PREFLIGHT"
+            and metadata.get("require_real_model")
+        )
         if controlled_json:
             payload["response_format"] = {"type": "json_object"}
-            if instance.model_code.lower().startswith("deepseek"):
-                payload["thinking"] = {"type": "disabled"}
+        # DeepSeek's reasoning stream consumes the same completion budget as
+        # the visible answer.  A tiny connectivity probe can therefore end
+        # with ``finish_reason=length`` and an empty ``content`` even though
+        # the account and endpoint are healthy.  Disable reasoning for both
+        # bounded JSON workflows and the explicit selection preflight, while
+        # leaving normal conversational calls unchanged.
+        if instance.model_code.lower().startswith("deepseek") and (controlled_json or selection_preflight):
+            payload["thinking"] = {"type": "disabled"}
         output_schema = metadata.get("json_schema_output")
         if output_schema and metadata.get("native_structured_output"):
             payload["response_format"] = {

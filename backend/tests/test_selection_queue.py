@@ -540,14 +540,24 @@ def test_model_switch_probe_failure_does_not_create_retry_job(isolated):
 def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
     with isolated() as db:
         run, candidate = _model_switch_fixture(db)
+        candidate.analysis_json = {
+            **candidate.analysis_json,
+            "hypothesis_research": {"status": "MODEL_FAILED", "last_error": "旧失败"},
+            "scoring": {"trusted_score": 50},
+            "publication": {"status": "RESEARCH_INCOMPLETE"},
+            "conclusion_available": False,
+        }
+        db.commit()
         app.dependency_overrides[get_db] = lambda: db
         client = TestClient(app)
         successful_probe = SimpleNamespace(status="SUCCESS", id=701, error_message=None)
         try:
-            with patch("app.services.model_hub.ModelHubService.chat", return_value=successful_probe):
+            with patch("app.services.model_hub.ModelHubService.chat", return_value=successful_probe) as chat:
                 response = client.post(f"/api/v1/selection/runs/{run.id}/retry-failed-with-model",
                     json={"model_instance_code": "BACKUP_MODEL", "candidate_ids": [candidate.id]})
             assert response.status_code == 202, response.text
+            assert chat.call_args.kwargs["max_tokens"] == 64
+            assert chat.call_args.kwargs["metadata_json"]["purpose"] == "SELECTION_MODEL_SWITCH_PREFLIGHT"
             switched = response.json()
             assert switched["id"] != run.id
             assert switched["model_instance_code"] == "BACKUP_MODEL"
@@ -559,6 +569,9 @@ def test_model_switch_probe_success_creates_isolated_retry_batch(isolated):
             clone = db.scalar(select(SelectionCandidate).where(SelectionCandidate.run_id == switched["id"]))
             assert clone is not None and clone.symbol == "DEMO001"
             assert clone.evidence_json == candidate.evidence_json
+            assert "hypothesis_research" not in clone.analysis_json
+            assert "scoring" not in clone.analysis_json
+            assert "publication" not in clone.analysis_json
             job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_retry_failed"))
             assert job.payload_json["selection_run_id"] == switched["id"]
             assert job.payload_json["model_instance_code"] == "BACKUP_MODEL"
@@ -619,14 +632,18 @@ def test_current_model_can_be_retried_after_context_repair(isolated):
             app.dependency_overrides.pop(get_db, None)
 
 
-def test_model_probe_rejects_truncated_connectivity_response(isolated):
+@pytest.mark.parametrize("response_json", [
+    {"candidates": [{"finishReason": "MAX_TOKENS"}]},
+    {"choices": [{"finish_reason": "length"}]},
+])
+def test_model_probe_rejects_truncated_connectivity_response(isolated, response_json):
     from app.services.selection import probe_selection_model
 
     with isolated() as db:
         _run, _candidate = _model_switch_fixture(db)
         truncated = SimpleNamespace(
             status="SUCCESS", id=703, error_message=None,
-            response_json={"candidates": [{"finishReason": "MAX_TOKENS"}]},
+            response_json=response_json,
         )
         with patch("app.services.model_hub.ModelHubService.chat", return_value=truncated), pytest.raises(
             ValueError, match="探测输出被截断"

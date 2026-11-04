@@ -69,6 +69,38 @@ class SelectionCandidate(TimestampMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SelectionResearchFeedback(Base):
+    """Human guidance and later validation for one hypothesis-research case.
+
+    User choices are research priorities, not verified facts.  Keeping them in
+    a dedicated audit table lets the system compare the early judgement with
+    later evidence without polluting ``FoundationFact`` or silently rewriting
+    a production Skill.
+    """
+
+    __tablename__ = "selection_research_feedback"
+    __table_args__ = (
+        Index("ix_selection_research_feedback_candidate", "candidate_id", "created_at"),
+        Index("ix_selection_research_feedback_learning", "skill_code", "research_code", "outcome_status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("selection_run.id", ondelete="CASCADE"), nullable=False, index=True)
+    candidate_id: Mapped[int] = mapped_column(ForeignKey("selection_candidate.id", ondelete="CASCADE"), nullable=False, index=True)
+    phase: Mapped[str] = mapped_column(String(24), nullable=False)
+    research_code: Mapped[str | None] = mapped_column(String(64), index=True)
+    hypothesis_key: Mapped[str | None] = mapped_column(String(96), index=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    outcome_status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING")
+    validation_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    skill_code: Mapped[str] = mapped_column(String(64), nullable=False, default="HYPOTHESIS_RESEARCH_ORCHESTRATOR")
+    skill_version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    reviewer: Mapped[str] = mapped_column(String(128), nullable=False, default="USER")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SelectionTracking(TimestampMixin, Base):
     __tablename__ = "selection_tracking"
     __table_args__ = (Index("ix_selection_tracking_status", "status"),)

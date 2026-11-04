@@ -5,6 +5,8 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 import json
 
+import pytest
+
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.models.market_data import StockSymbol, DataSource
@@ -423,6 +425,51 @@ def test_twenty_stock_batch_isolates_citations_and_withdraws_unverifiable_conclu
     assert all(item["analysis_json"]["model_output_status"] == "SUCCESS" for item, _ in pool[1:])
     assert all(item["analysis_json"]["model"]["evidence_document_ids"] == [index + 100]
                for index, (item, _) in enumerate(pool[1:], start=1))
+
+
+def test_real_model_keeps_sanitized_partial_result_for_human_research():
+    required = ["NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW", "COMPANY", "GRAPH"]
+    item = {"symbol": "DEMO001", "market": "CN_A", "analysis_json": {}, "evidence_json": {
+        "documents": [{"id": 200, "source_table": "stock_news", "content_state": "TEXT_AVAILABLE",
+                       "content": "公司披露新增订单，预计改善收入。"}],
+        "document_ids": [200], "facts": [], "evidence_fact_ids": [], "chunks": [], "graph_paths": [],
+    }}
+    run = SimpleNamespace(model_instance_code=None, analysis_mode="MODEL_REQUESTED", error_message=None,
+                          criteria_json={"analysis_contract": "MULTI_SOURCE_V2"}, data_mode="REAL")
+
+    def chat(**_kwargs):
+        dimensions = []
+        for dimension in required:
+            supported = dimension in {"NEWS", "NOTICE"}
+            dimensions.append({
+                "dimension": dimension,
+                "status": "SUPPORTED" if supported else "INSUFFICIENT",
+                "direction": "POSITIVE" if supported else "UNKNOWN",
+                "summary": "订单改善收入" if supported else "本轮证据不足",
+                "evidence_document_ids": [200] if supported else [],
+                "evidence_fact_ids": [], "evidence_relation_ids": [],
+            })
+        row = {
+            "symbol": "DEMO001", "decision": "WATCH", "confidence": .8,
+            "reasoning": "订单证据支持关注", "target_price": None, "stop_price": None,
+            "horizon_sessions": 10, "evidence_document_ids": [200],
+            "dimensions": dimensions, "events": [], "positives": ["订单增长"],
+            "risks": [], "watch_conditions": [],
+        }
+        return SimpleNamespace(id=1, status="SUCCESS", instance_code="TEST_MODEL",
+                               response_text=json.dumps({"candidates": [row]}, ensure_ascii=False))
+
+    with patch("app.services.model_hub.ModelHubService.chat", side_effect=chat) as model_call:
+        _apply_model_analysis(None, run, [(item, 1.0)])
+
+    analysis = item["analysis_json"]
+    notice = next(row for row in analysis["model"]["dimensions"] if row["dimension"] == "NOTICE")
+    assert model_call.call_count == 1
+    assert analysis["model_output_status"] == "SUCCESS"
+    assert analysis["analysis_validation_status"] == "PARTIAL"
+    assert analysis["model"]["confidence"] is None
+    assert notice["status"] == "INSUFFICIENT" and notice["evidence_document_ids"] == []
+    assert run.analysis_mode == "MODEL_PARTIAL"
 
 
 def test_valid_chunk_document_reference_is_not_lost_when_stored_as_string():

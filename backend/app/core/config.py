@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     lake_s3_secret_key: str = "minioadmin"
     lake_s3_bucket: str = "quant-lake"
     lake_s3_secure: bool = False
+    lake_s3_connect_timeout_seconds: float = 1.5
+    lake_s3_read_timeout_seconds: float = 5.0
 
     model_config = SettingsConfigDict(
         env_file=DEFAULT_ENV_FILE,

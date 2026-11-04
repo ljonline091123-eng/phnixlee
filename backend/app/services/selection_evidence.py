@@ -297,17 +297,49 @@ def conclusion_publication(analysis: dict) -> dict:
             research_codes = {str(row.get("research_code") or "") for row in research}
             research_statuses = {str(row.get("status") or "INSUFFICIENT") for row in research}
             is_v8 = contract == "FUNDAMENTAL_RESEARCH_V8" or bool(research)
+            research_loop = analysis.get("hypothesis_research") if isinstance(analysis.get("hypothesis_research"), dict) else {}
+            loop_status = str(research_loop.get("status") or "NOT_STARTED").upper()
+            business_status = str(next((row.get("status") for row in research
+                                        if row.get("research_code") == "BUSINESS_MODEL"), "INSUFFICIENT"))
             incomplete_research = (
                 is_v8
                 and (
                     research_codes != required_codes
-                    or str(next((row.get("status") for row in research if row.get("research_code") == "BUSINESS_MODEL"), "INSUFFICIENT")) == "INSUFFICIENT"
+                    or business_status == "INSUFFICIENT"
                     or any(status in {"PARTIAL", "INSUFFICIENT"} for status in research_statuses)
                 )
             )
-            if incomplete_research:
+            if incomplete_research and loop_status in {"QUEUED", "RUNNING"}:
+                state = "RESEARCH_RUNNING"
+                reason = "系统正在根据重大事件假设调用已接数据源补数、重验并更新置信度"
+            elif incomplete_research and loop_status == "WAITING_USER_DIRECTION":
                 state = "RESEARCH_INCOMPLETE"
-                reason = "研究问题尚未闭环：请补齐主营、重大事件或资本行为证据后再发布完整结论"
+                reason = "系统已提出竞争性假设，等待用户确认研究优先级；用户选择不等于事实成立"
+            elif incomplete_research and loop_status == "WAITING_EVIDENCE_REVIEW":
+                state = "RESEARCH_INCOMPLETE"
+                reason = "本轮出现高置信支持证据与反证并存，等待用户复核解释后继续验证"
+            elif incomplete_research and loop_status == "WAITING_CONCLUSION_REVIEW":
+                state = "RESEARCH_INCOMPLETE"
+                reason = "有界补数与验证已完成，等待用户确认阶段结论或提出追加研究"
+            elif incomplete_research and loop_status == "SOURCE_FAILED":
+                state = "RESEARCH_INCOMPLETE"
+                reason = "已接数据源本轮调用失败，系统已保留上一轮假设和结论；失败不计入无证据衰减，可继续重试"
+            elif incomplete_research and loop_status == "MODEL_FAILED":
+                state = "RESEARCH_INCOMPLETE"
+                reason = "补数成果已保存，但模型重验失败；系统保留上一轮假设状态，可更换模型或继续重试"
+            elif incomplete_research and business_status == "INSUFFICIENT":
+                state = "RESEARCH_INCOMPLETE"
+                reason = "主营收入、利润来源或持续性仍无可核验证据；主营问题属于投资结论硬门槛"
+            elif incomplete_research and loop_status in {"COMPLETED", "USER_CONFIRMED", "STOPPED_BY_USER", "SOURCE_EXHAUSTED", "MAX_ROUNDS", "NO_RESEARCH_REQUIRED"}:
+                if int(research_loop.get("open_high_confidence_count") or 0) <= 0:
+                    state = "READY_REVIEW_WITH_UNCERTAINTY"
+                    reason = "核心主营证据已具备；次级假设已完成有界补数验证，未获支持的方向已降为低置信并关闭"
+                else:
+                    state = "RESEARCH_INCOMPLETE"
+                    reason = "自动研究已达到当前轮次上限，但仍有可能改变结论的高置信假设需要继续验证"
+            elif incomplete_research:
+                state = "RESEARCH_INCOMPLETE"
+                reason = "研究问题尚未闭环，系统将基于重大事件假设自动补数并重新验证"
         if state == "NOT_ANALYZED" and (not _finite_number(scoring.get("trusted_score"))
               or not 0 <= scoring["trusted_score"] <= 100
               or len(scoring.get("dimensions") or []) != 8
@@ -320,6 +352,8 @@ def conclusion_publication(analysis: dict) -> dict:
             state, reason = "SCORE_FAILED", "结论已有返回，但综合评分或雷达数据未生成，请重算评分或重新分析"
         elif state == "NOT_ANALYZED":
             state, reason = "READY_REVIEW", "结论与评分已生成，等待人工复核"
-    return {"status": state, "reason": reason, "conclusion_available": state == "READY_REVIEW",
-            "provisional_conclusion_available": state == "RESEARCH_INCOMPLETE",
-            "scoring_available": state == "READY_REVIEW", "retryable": state in {"MODEL_FAILED", "CONCLUSION_FAILED", "SCORE_FAILED", "RESEARCH_INCOMPLETE"}}
+    reviewable = state in {"READY_REVIEW", "READY_REVIEW_WITH_UNCERTAINTY"}
+    return {"status": state, "reason": reason, "conclusion_available": reviewable,
+            "provisional_conclusion_available": state in {"RESEARCH_INCOMPLETE", "RESEARCH_RUNNING"},
+            "scoring_available": reviewable,
+            "retryable": state in {"MODEL_FAILED", "CONCLUSION_FAILED", "SCORE_FAILED", "RESEARCH_INCOMPLETE"}}

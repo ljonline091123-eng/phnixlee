@@ -609,6 +609,52 @@ RESEARCH_QUESTION_SKILLS = (
     _research_question_skill("PEER_BENCHMARK_ANALYST", "同业对照分析", "在已提供同业证据范围内比较主营、估值、治理和行业位置", "PEER_BENCHMARK_V1"),
     _research_question_skill("COUNTER_EVIDENCE_REVIEWER", "反证审查", "检查支持与反证是否针对公司具体影响，纠正标题或行业基调造成的误分类", "COUNTER_EVIDENCE_V1"),
     _research_question_skill("CONCLUSION_QUALITY_GATE", "结论质量门禁", "检查研究问题、证据白名单、缺口、假设和跟踪指标是否完整", "CONCLUSION_GATE_V1"),
+    {
+        "skill_code": "HYPOTHESIS_RESEARCH_ORCHESTRATOR",
+        "skill_name": "重大事件假设研究编排",
+        "description": "将未闭环重大事件假设转换为受控数据补全、证据增量比较、模型重验和置信度更新循环",
+        "instructions": (
+            "只接收已持久化的候选、研究问题和证据缺口。按照研究问题映射调用已登记的新闻、公告、财务、F10、"
+            "研究、公司治理和图谱投影服务；禁止执行任意SQL、禁止直接写业务表、禁止绕过受控采集服务。"
+            "初次识别重大事件后先生成竞争性假设并等待用户确认研究优先级；用户选择不是事实，至少保留一条反向解释"
+            "防止确认偏误。证据冲突或阶段结论形成时进入人工复核节点，普通采集、去重和事实计算自动执行。"
+            "每轮必须保存补数前后证据指纹、新增文档/事实/关系、模型重验结果和置信度变化。"
+            "默认最多三轮；连续两轮没有新增证据时降低假设置信度并关闭次级推理方向，主营证据不足仍保持硬门禁。"
+            "用户纠错和后续验证必须形成学习样本；只有累计多条经证据验证的纠错，才可创建待审核Skill草案，"
+            "不得自动修改、发布或启用生产Skill。"
+        ),
+        "enabled": True,
+        "lifecycle_status": "ENABLED",
+        "skill_type": "EXECUTABLE_TOOL",
+        "input_contract_json": {
+            "type": "object", "required": ["selection_run_id", "candidate_ids", "max_rounds"],
+            "properties": {"selection_run_id": {"type": "integer"}, "candidate_ids": {"type": "array"},
+                           "max_rounds": {"type": "integer", "minimum": 1, "maximum": 5}},
+            "additionalProperties": False,
+        },
+        "output_contract_json": {
+            "type": "object", "required": ["selection_run_id", "status", "results"],
+            "properties": {"selection_run_id": {"type": "integer"}, "status": {"type": "string"},
+                           "results": {"type": "array"}}, "additionalProperties": False,
+        },
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": True, "unrestricted_database_write": False,
+            "allowed_operations": ["QUEUE_CONTROLLED_COLLECTION", "READ_SELECTION_EVIDENCE",
+                                   "WRITE_RESEARCH_AUDIT", "QUEUE_SINGLE_SECURITY_REANALYSIS"],
+            "allowed_services": ["selection_data_backfill", "knowledge_pipeline", "selection_reanalysis",
+                                 "selection_audit"],
+        },
+        "side_effect_level": "CONTROLLED_WRITE",
+        "idempotency_policy": "REQUIRED",
+        "retry_policy_json": {"max_attempts": 3, "retry_on": ["TimeoutError", "ConnectionError", "RuntimeError"],
+                              "backoff": "EXPONENTIAL"},
+        "error_policy_json": {"on_error": "KEEP_LAST_VERIFIED_STATE", "retain_audit": True,
+                              "fabricate_fallback": False, "mark_source_exhausted": True},
+        "config_json": {"task_type": "selection_hypothesis_research", "max_rounds": 3,
+                        "no_increment_round_limit": 2, "human_review_mode": "COLLABORATIVE",
+                        "skill_draft_min_validated_corrections": 3,
+                        "managed_contract_version": "HYPOTHESIS_RESEARCH_LOOP_V2"},
+    },
 )
 
 

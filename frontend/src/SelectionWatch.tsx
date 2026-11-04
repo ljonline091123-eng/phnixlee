@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider, type StockSymbol } from "./api";
 import { SelectionAnalysis, SelectionDiagnostics, type AnalysisDimension } from "./SelectionAnalysis";
-import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionPreflight, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionRunCreate, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionHypothesisDirectionRequest, type SelectionPreflight, type SelectionRecord, type SelectionResearchReviewRequest, type SelectionRetrospective, type SelectionRun, type SelectionRunCreate, type SelectionScoringProfile, type SelectionTracking } from "./selectionApi";
 import { StockDetailDrawer } from "./StockDetailDrawer";
 import "./SelectionWatch.css";
 
@@ -382,7 +382,10 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   }, [createOpen, form.market, form.knowledge_base_ids, form.graph_ids, form.period_months, chosenStocks]);
   useEffect(() => {
     const backfillStatus = String(((run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status) || "");
-    if (!run || (!["QUEUED", "RUNNING"].includes(run.status) && !["QUEUED", "RUNNING"].includes(backfillStatus))) return;
+    const researchStatus = String(((run?.criteria_json.hypothesis_research_progress as SelectionRecord | undefined)?.status) || "");
+    if (!run || (!["QUEUED", "RUNNING"].includes(run.status)
+      && !["QUEUED", "RUNNING"].includes(backfillStatus)
+      && !["QUEUED", "RUNNING"].includes(researchStatus))) return;
     let valid = true;
     const timer = window.setInterval(() => {void selectionApi.getRun(run.id).then(async next => {
       if (!valid) return;
@@ -399,13 +402,18 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       if (!["QUEUED", "RUNNING"].includes(next.status)) void reload();
     }).catch(err => {if(valid) setError(errorOf(err));});}, 1000);
     return () => {valid = false; window.clearInterval(timer);};
-  }, [run?.id, run?.status, (run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status]);
+  }, [run?.id, run?.status,
+      (run?.criteria_json.backfill_progress as SelectionRecord | undefined)?.status,
+      (run?.criteria_json.hypothesis_research_progress as SelectionRecord | undefined)?.status]);
   useEffect(() => {
-    const active = !!run && (["QUEUED", "RUNNING"].includes(run.status) || ["QUEUED", "RUNNING"].includes(String((run.criteria_json.retry_progress as SelectionRecord | undefined)?.status || "")));
+    const active = !!run && (["QUEUED", "RUNNING"].includes(run.status)
+      || ["QUEUED", "RUNNING"].includes(String((run.criteria_json.retry_progress as SelectionRecord | undefined)?.status || ""))
+      || ["QUEUED", "RUNNING"].includes(String((run.criteria_json.hypothesis_research_progress as SelectionRecord | undefined)?.status || "")));
     if (!active) return;
     const timer = window.setInterval(() => setActivityTick(value => value + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [run?.id, run?.status, run?.criteria_json.progress, run?.criteria_json.retry_progress]);
+  }, [run?.id, run?.status, run?.criteria_json.progress, run?.criteria_json.retry_progress,
+      run?.criteria_json.hypothesis_research_progress]);
   async function selectRun(id: number) { setBusy(true); setError(""); try { setRun(await selectionApi.getRun(id)); } catch (err) { setError(errorOf(err)); } finally { setBusy(false); } }
   async function checkPendingSelection(payload = pendingSelection) {
     if (!payload) return;
@@ -490,11 +498,12 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const allMatchesSelected = stockMatches.length > 0 && selectableMatches.length === 0;
   const selectedMatchCount = stockMatches.length - selectableMatches.length;
   const researchIncompleteCandidates = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE") ?? [];
+  const researchRunningCandidates = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.publication?.status === "RESEARCH_RUNNING") ?? [];
   const failedModelCandidates = run?.candidates.filter(item => {
     const status = item.analysis_json.publication?.status;
     return item.decision === "PENDING" && (
       status === "DATA_INSUFFICIENT"
-      || (!!item.analysis_json.publication?.retryable && status !== "RESEARCH_INCOMPLETE")
+      || (!!item.analysis_json.publication?.retryable && !["RESEARCH_INCOMPLETE", "RESEARCH_RUNNING"].includes(String(status)))
     );
   }) ?? [];
   const retryProgress = (run?.criteria_json.retry_progress as SelectionRecord | undefined) ?? {};
@@ -575,6 +584,8 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   }
   const backfillProgress = (run?.criteria_json.backfill_progress || {}) as SelectionRecord;
   const backfillActive = ["QUEUED", "RUNNING"].includes(textOf(backfillProgress.status));
+  const researchProgress = (run?.criteria_json.hypothesis_research_progress || {}) as SelectionRecord;
+  const researchActive = ["QUEUED", "RUNNING"].includes(textOf(researchProgress.status));
   useEffect(() => {
     setCandidate(current => current && run ? run.candidates.find(row => row.id === current.id) || null : current);
   }, [run]);
@@ -586,6 +597,46 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       const next = await selectionApi.backfill(run.id, { candidate_ids: candidateIds, dimensions, period_months: Number(run.criteria_json.period_months || 12), rerun_analysis: true });
       setRun(next);
       setNotice(candidateIds.length ? "已提交该股票的数据补齐；完成后会创建新的分析批次，旧结论继续保留。" : "已提交本批次缺失数据补齐；完成后会创建新的分析批次，旧结论继续保留。");
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function researchHypotheses(candidateIds: number[] = []) {
+    if (!run) { setError("请先选择分析批次。"); return; }
+    if (busy || backfillActive || researchActive || ["QUEUED", "RUNNING"].includes(run.status)) {
+      setError("后台补数或研究任务正在执行，请查看进度后继续。"); return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.hypothesisResearch(run.id, { candidate_ids: candidateIds, max_rounds: 3 });
+      setRun(next);
+      setNotice("已启动重大事件假设研究：系统将调用已接数据源补数、重验，并在无新增证据时主动降权结束。 ");
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function prepareHypothesisDirection(item: SelectionCandidate) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await selectionApi.prepareHypothesisDirection(item.id);
+      if (run) setRun(await selectionApi.getRun(run.id));
+      setNotice("已生成竞争性假设确认方案。请选择优先验证、正常验证或暂缓后再开始补证。");
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function confirmHypothesisDirection(item: SelectionCandidate, payload: SelectionHypothesisDirectionRequest) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await selectionApi.confirmHypothesisDirection(item.id, payload);
+      if (run) setRun(await selectionApi.getRun(run.id));
+      setNotice(payload.action === "SAVE_DRAFT" ? "研究方向草稿已保存。" : payload.action === "SKIP_RESEARCH" ? "已停止该事件研究方向。" : "方向已确认，后台开始调用已接数据源补数和验证。");
+    } catch (err) { setError(errorOf(err)); }
+    finally { setBusy(false); }
+  }
+  async function reviewHypothesisResearch(item: SelectionCandidate, payload: SelectionResearchReviewRequest) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await selectionApi.reviewHypothesisResearch(item.id, payload);
+      if (run) setRun(await selectionApi.getRun(run.id));
+      setNotice(payload.action === "ACCEPT" && payload.phase === "CONCLUSION" ? "阶段结论已确认，后续新公告和财报仍会继续验证。" : payload.action === "STOP_TRACKING" ? "已停止该研究方向。" : "复核意见已保存，后台将按意见继续补证和重验。");
     } catch (err) { setError(errorOf(err)); }
     finally { setBusy(false); }
   }
@@ -649,13 +700,15 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
           <div className="selection-kpis"><div className="selection-kpi"><span>规则候选</span><strong>{run.candidate_count}</strong></div><div className="selection-kpi"><span>待人工复选</span><strong>{pending}</strong></div><div className="selection-kpi"><span>分析周期</span><strong>{Number(run.criteria_json.period_months || 12)} 个月</strong><small>{textOf(run.criteria_json.period_start)} 至 {textOf(run.criteria_json.period_end)}</small></div><div className="selection-kpi"><span>数据截止时间</span><strong style={{ fontSize: 14 }}>{dateOf(run.as_of)}</strong></div></div>
           {["QUEUED", "RUNNING"].includes(run.status) && (() => { const progress = (run.criteria_json.progress || {}) as SelectionRecord; const heartbeat = textOf(progress.heartbeat_at || progress.updated_at); const age = heartbeatAge(progress.heartbeat_at); const stale = age != null && age > 15; return <div className={`batch-progress${stale ? " stale" : ""}`} role="status"><div><strong>当前阶段：{textOf(progress.stage) || "准备中"}</strong><span>{Number(progress.percent || 0)}%</span></div><progress aria-label="分析进度" max="100" value={Number(progress.percent || 0)} /><div className="batch-progress-meta"><span className="batch-progress-activity">当前动作：{textOf(progress.activity || progress.message) || "等待工作线程启动"}</span><span>已运行：{elapsed(liveElapsed(progress, activityTick))}</span><span>实际模型：{textOf(progress.model_instance_code) || run.model_instance_code || "预检后确定"}</span><span>当前股票：{Array.isArray(progress.candidate_symbols) ? progress.candidate_symbols.join("、") : "--"}</span>{Number(progress.prompt_chars || 0) > 0 && <span>模型上下文：{Number(progress.prompt_chars).toLocaleString()} / {Number(progress.prompt_limit_chars || 60000).toLocaleString()} 字符</span>}{Number(progress.retained_document_count || 0) > 0 && <span>载入文档：{Number(progress.retained_document_count)} 篇{Number(progress.omitted_document_count || 0) > 0 ? ` · 预算外 ${Number(progress.omitted_document_count)} 篇` : ""}</span>}<span>最近心跳：{heartbeat ? `${age ?? 0} 秒前` : "尚未记录"}</span></div>{stale && <strong className="batch-progress-warning">最近 {age} 秒没有心跳更新，后台可能异常；请稍候刷新查看状态。</strong>}<small>进度百分比表示阶段；系统会持续写入后台活动和心跳。</small>{records(progress.process_steps).length > 0 && <div className="batch-process-steps"><strong>后台处理记录</strong><ol>{records(progress.process_steps).slice(-8).reverse().map((step, index) => <li key={`${textOf(step.at)}-${index}`}><span>{textOf(step.message) || "处理中"}</span><small>{textOf(step.stage)} · {Number(step.percent || 0)}% · {textOf(step.at) ? dateOf(textOf(step.at)) : "刚刚"}</small></li>)}</ol></div>}</div>; })()}
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
+          {["QUEUED", "RUNNING", "SOURCE_FAILED", "MODEL_FAILED"].includes(textOf((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.status)) && <div className={`batch-progress hypothesis-research-progress ${["SOURCE_FAILED", "MODEL_FAILED"].includes(textOf((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.status)) ? "stale" : ""}`}><strong>{textOf((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.message) || "正在根据重大事件假设补数并验证"}</strong><progress aria-label="假设研究进度" max="100" value={Number((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.percent || 0)} /><small>{["SOURCE_FAILED", "MODEL_FAILED"].includes(textOf((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.status)) ? "上一轮假设和证据已保留；失败不会被当作无证据降权，可在详情中继续研究。" : "系统会比较每轮新增文档、事实和关系；只有来源查询成功且连续无新证据，才会降低该假设置信度并结束该方向。"}</small></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
-          {(failedModelCandidates.length > 0 || researchIncompleteCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析结果处理">
-            <div className="selection-scope-heading"><strong>有效结论 {successfulModelCount} / {run.candidates.length} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败或数据不足 {failedModelCandidates.length} 只</strong>
+          {(failedModelCandidates.length > 0 || researchIncompleteCandidates.length > 0 || researchRunningCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析结果处理">
+            <div className="selection-scope-heading"><strong>有效结论 {successfulModelCount} / {run.candidates.length} 只 · 自动研究中 {researchRunningCandidates.length} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败或数据不足 {failedModelCandidates.length} 只</strong>
               {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只未通过股票`}</button>}
             </div>
-            {researchIncompleteCandidates.length > 0 && <details><summary>查看研究未闭环与待补证事项（{researchIncompleteCandidates.length}）</summary><div className="selection-failure-list">{researchIncompleteCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.publication?.reason) || "部分研究问题仍缺少可核验证据。"}</p><small>核心模型与证据校验已通过；该状态不计为模型失败。</small></article>)}</div></details>}
+            {researchRunningCandidates.length > 0 && <p role="status"><strong>系统正在主动补数验证：</strong>{textOf((run.criteria_json.hypothesis_research_progress as SelectionRecord)?.message) || "根据重大事件提出竞争性假设，并调用已接数据源逐轮验证"}</p>}
+            {researchIncompleteCandidates.length > 0 && <details><summary>查看尚未闭环的研究事项（{researchIncompleteCandidates.length}）</summary><div className="selection-failure-list">{researchIncompleteCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.publication?.reason) || "部分研究问题仍缺少可核验证据。"}</p><small>系统会优先自动补数；达到轮次上限仍无支持的次级推理将降为低置信，不再永久阻塞结论。</small></article>)}</div></details>}
             {failedModelCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试">
               <strong>重试模型</strong><span>{selectedModelCode ? `沿用分析模型：${selectedModelCode}` : "尚未选择可用分析模型"}</span>
               <button type="button" disabled={busy || retryActive || !selectedModelCode || !availableSwitchModels.length} onClick={() => void retryFailedWithModel()}>
@@ -671,7 +724,7 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
             </article>)}</div></details>}
           </section>}
           {run.missing_data_json.length > 0 && <details className="selection-evidence"><summary>数据与分析限制（{run.missing_data_json.length}）</summary><ul>{run.missing_data_json.map((item, i) => <li key={i}>{item}</li>)}</ul><button type="button" disabled={busy || ["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status))} onClick={() => void backfill()}>补齐全部缺失并重新分析</button></details>}
-          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>分析状态 / 结论</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><button type="button" className="batch-stock-link" title="打开股票详细信息" onClick={() => setDetailStock({ market: item.market, symbol: item.symbol, name: item.name || item.symbol })}><strong>{item.name || item.symbol}</strong><small>{item.symbol} · {nameOf(item.market)}</small></button></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}><span className={`selection-analysis-state ${!item.analysis_json.publication?.conclusion_available ? "warning" : ""}`}>{item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN" ? "数据不足 · 未进行模型分析" : item.analysis_json.publication?.status === "CONCLUSION_FAILED" ? "结论校验失败" : item.analysis_json.publication?.status === "SCORE_FAILED" ? "评分生成失败" : item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE" ? "研究未闭环 · 待补证" : item.analysis_json.publication?.conclusion_available ? "有效结论 · 待复核" : item.analysis_json.model_output_status === "FAILED" ? "模型分析失败 · 可重试" : "规则预选 · 未形成模型结论"}</span>{item.analysis_json.publication?.conclusion_available ? textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) : textOf(item.analysis_json.publication?.reason) || "尚无有效结论"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
+          <div className="table-wrap"><table><thead><tr><th>股票</th><th>行情基准</th><th>规则评分</th><th>分析状态 / 结论</th><th>人工复选</th><th>操作</th></tr></thead><tbody>{run.candidates.map(item => <tr key={item.id}><td><button type="button" className="batch-stock-link" title="打开股票详细信息" onClick={() => setDetailStock({ market: item.market, symbol: item.symbol, name: item.name || item.symbol })}><strong>{item.name || item.symbol}</strong><small>{item.symbol} · {nameOf(item.market)}</small></button></td><td>{numberOf(item.entry_price)}<br /><small>{item.entry_date || "缺行情"}</small></td><td>{numberOf(item.hard_score, 1)}</td><td style={{ maxWidth: 340 }}><span className={`selection-analysis-state ${!item.analysis_json.publication?.conclusion_available ? "warning" : ""}`}>{item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN" ? "数据不足 · 未进行模型分析" : item.analysis_json.publication?.status === "CONCLUSION_FAILED" ? "结论校验失败" : item.analysis_json.publication?.status === "SCORE_FAILED" ? "评分生成失败" : item.analysis_json.publication?.status === "RESEARCH_RUNNING" ? "假设研究中 · 自动补数验证" : item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE" ? "研究未闭环 · 可继续验证" : item.analysis_json.publication?.status === "READY_REVIEW_WITH_UNCERTAINTY" ? "有效结论 · 含低置信保留项" : item.analysis_json.publication?.conclusion_available ? "有效结论 · 待复核" : item.analysis_json.model_output_status === "FAILED" ? "模型分析失败 · 可重试" : "规则预选 · 未形成模型结论"}</span>{item.analysis_json.publication?.conclusion_available ? textOf(item.analysis_json.summary) || textOf(item.analysis_json.reasoning) : textOf(item.analysis_json.publication?.reason) || "尚无有效结论"}{strings(item.evidence_json.missing_data).length > 0 && <p className="selection-help">有 {strings(item.evidence_json.missing_data).length} 项数据待补充</p>}</td><td><Badge value={item.decision} /></td><td><button type="button" disabled={busy} onClick={() => openReview(item)}>{["APPROVED", "REJECTED"].includes(item.decision) ? "查看决策" : "证据与复选"}</button></td></tr>)}</tbody></table>{!run.candidates.length && <p className="selection-empty">当前条件没有候选。请检查本地行情覆盖、数据时效与筛选阈值。</p>}</div>
         </> : <p className="selection-empty">新建选股，从已有数据中筛出候选，再结合知识证据进行人工复选。</p>}
       </> : <>
         <p className="selection-help">仅计算人工确认后、同一复权口径的有效交易日行情。周末、节假日或缺行情不会充当跟踪天数。后台 Scheduler 与 Worker 运行时会定期更新，也可手动更新。</p>
@@ -738,8 +791,12 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
       </nav>
       {candidateTab === "CONCLUSION" && <SelectionAnalysis
         candidate={candidate}
-        backfillDisabled={busy || backfillActive || ["QUEUED", "RUNNING"].includes(run?.status || "")}
+        backfillDisabled={busy || backfillActive || researchActive || ["QUEUED", "RUNNING"].includes(run?.status || "")}
         onBackfillAll={() => void backfill([candidate.id])}
+        onResearch={() => void researchHypotheses([candidate.id])}
+        onPrepareDirection={() => void prepareHypothesisDirection(candidate)}
+        onConfirmDirection={payload => void confirmHypothesisDirection(candidate, payload)}
+        onReviewResearch={payload => void reviewHypothesisResearch(candidate, payload)}
         onRescore={() => void rescore(candidate)}
         onBackfillDimension={dimension => void backfill([candidate.id], [dimension])}
         onDocument={id => { setCandidateTab("EVIDENCE"); openCandidateDocument(id); }}

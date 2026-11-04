@@ -1,0 +1,17 @@
+{
+  "stamp": "20261104-145736",
+  "git_branch": "backup/v9-hypothesis-loop-20261104-145736",
+  "git_commit": "6eccba3",
+  "database_url": "sqlite:///C:/工作/AI开发/gemini-quant-agent/backend/quant.db",
+  "database_backup": "C:\\工作\\AI开发\\gemini-quant-agent\\backend\\backups\\quant-v9-hypothesis-loop-20261104-145736-consistent.db",
+  "quick_check": "ok",
+  "statistics": {
+    "stocks": 19566,
+    "news": 8969,
+    "notices": 77465,
+    "financial_reports": 16332,
+    "documents": 23840,
+    "selection_runs": 61,
+    "selection_candidates": 315
+  }
+}
