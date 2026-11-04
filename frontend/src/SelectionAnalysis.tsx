@@ -211,6 +211,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const directionReview = (researchLoop.direction_review || {}) as SelectionRecord;
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
+  const waitingDirection = researchLoop.status === "WAITING_USER_DIRECTION";
   const documents = [...new Map([
     ...array(candidate.evidence_json.documents),
     ...array(candidate.evidence_json.related_security_documents),
@@ -229,8 +230,12 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   if (dataBlocked) return <section className="selection-analysis">
     <div className="analysis-empty-conclusion"><strong>尚未形成可用投资结论</strong><p>本轮没有达到最低证据门槛。具体缺失项和补齐入口请查看“数据事实”页签。</p></div>
   </section>;
+  if (waitingDirection && directionReview.questions && onConfirmDirection) return <section className="selection-analysis">
+    <div className="analysis-empty-conclusion"><strong>已生成竞争性推理方向，等待你的确认</strong><p>系统从真实模型调用中恢复并独立校验了以下研究问题。它们只是待验证方向，不是事实或投资结论；确认后系统才会调用已接入数据源补数、重验并形成阶段结论。</p>{researchLoop.direction_seed_model_call_log_id ? <small>方向来源：模型调用 #{String(researchLoop.direction_seed_model_call_log_id)} · 未写入事实库</small> : null}</div>
+    <HypothesisDirectionReview review={directionReview} busy={backfillDisabled} onSubmit={onConfirmDirection} />
+  </section>;
   if (modelFailed) return <section className="selection-analysis">
-    <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。失败原因、模型调用和处理建议请查看“数据事实”页签。</p></div>
+    <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。可以先生成竞争性推理方向，由你确认后再让系统按方向补数验证；失败原因和模型调用请查看“数据事实”页签。</p>{onPrepareDirection && <button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button>}</div>
   </section>;
   return <section className="selection-analysis">
     <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_RUNNING" ? "正在主动研究" : publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : publication.status === "READY_REVIEW_WITH_UNCERTAINTY" ? "可复核 · 含低置信保留项" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_RUNNING" ? "系统正在补数并重新验证假设，研究结束后再生成可跟踪评分。" : publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，系统会继续补数验证。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
@@ -250,7 +255,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
         <article><small>量价与资金状态</small><p>{String(thesis.market_timing_summary || "证据不足")}</p></article>
       </div>
       {researchLoop.status === "WAITING_USER_DIRECTION" && directionReview.questions && onConfirmDirection && <HypothesisDirectionReview review={directionReview} busy={backfillDisabled} onSubmit={onConfirmDirection} />}
-      {!researchLoop.status && researchQuestions.some(item => ["PARTIAL", "INSUFFICIENT"].includes(String(item.status))) && onPrepareDirection && <section className="analysis-human-review"><header><div><span>协同研究</span><h4>先确认研究方向，再自动补数</h4></div></header><p>系统已经识别尚未闭环的重大事件。请先生成竞争性假设，确认哪些方向值得优先验证。</p><button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button></section>}
+      {!researchLoop.status && (modelFailed || researchQuestions.some(item => ["PARTIAL", "INSUFFICIENT"].includes(String(item.status)))) && onPrepareDirection && <section className="analysis-human-review"><header><div><span>协同研究</span><h4>先确认研究方向，再自动补数</h4></div></header><p>系统已经识别尚未闭环的重大事件。请先生成竞争性假设，确认哪些方向值得优先验证。</p><button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button></section>}
       {researchLoop.status === "WAITING_EVIDENCE_REVIEW" && onReviewResearch && <ResearchHumanReview phase="EVIDENCE" busy={backfillDisabled} onSubmit={onReviewResearch} />}
       {researchLoop.status === "WAITING_CONCLUSION_REVIEW" && onReviewResearch && <ResearchHumanReview phase="CONCLUSION" busy={backfillDisabled} onSubmit={onReviewResearch} />}
       <ResearchLearningSummary candidateId={candidate.id} version={`${String(researchLoop.updated_at || "")}:${researchHistory.length}`} />

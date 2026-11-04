@@ -1,6 +1,7 @@
 """Evidence provenance, signed item scores and conclusion publication regression."""
 from copy import deepcopy
 from datetime import datetime, timezone
+import json
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelSkill, SkillOptimizationDraft
+from app.models.ai_hub import KnowledgeBase, KnowledgeGraph, ModelCallLog, ModelSkill, SkillOptimizationDraft
 from app.models.foundation import FoundationFact
 from app.models.pipeline import ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionResearchFeedback, SelectionRun
@@ -499,6 +500,77 @@ def test_first_analysis_waits_for_user_and_confirming_direction_queues_research(
         assert run.criteria_json["hypothesis_research_progress"]["status"] == "QUEUED"
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+def test_failed_full_model_contract_recovers_only_valid_questions_for_user_direction(isolated):
+    db = isolated
+    run = SelectionRun(market="HK", status="PARTIAL", analysis_mode="MODEL_FAILED_FALLBACK_LOCAL", data_mode="REAL")
+    db.add(run)
+    db.flush()
+    questions = deepcopy(v8_research_questions())
+    base_hypotheses = collaborative_research_questions(2)[1]["hypotheses"]
+    for index, question in enumerate(questions):
+        question.update({
+            "status": "PARTIAL",
+            "conclusion": "模型提出竞争性解释，仍需按用户确认方向补数验证。",
+            "confidence": .45,
+            "hypotheses": [
+                {**deepcopy(row), "title": f"{question['research_code']}-{index + 1}-{row['title']}"}
+                for row in base_hypotheses
+            ],
+            "missing_evidence": [{
+                "gap_code": f"{question['research_code']}_EVIDENCE",
+                "description": "缺少能够区分竞争性解释的证据",
+                "impact_on_conclusion": "当前不能形成投资结论",
+                "required_evidence": ["已接数据源中的公告、新闻和结构化事实"],
+                "preferred_sources": ["公告", "新闻", "财报"],
+                "search_queries": [question["question"]],
+                "resolution_status": "LOCAL_SOURCE_PENDING",
+            }],
+            "external_research_plan": ["先查询已接数据源，再比较支持证据与反证"],
+        })
+    # Deliberately omit the complete recommendation fields. The full output is
+    # invalid, while each research question independently satisfies its closed
+    # schema and can therefore be shown only as a direction draft.
+    response_text = json.dumps({
+        "candidates": [{
+            "symbol": "02533",
+            "investment_thesis": {"research_questions": questions},
+        }],
+    }, ensure_ascii=False)
+    call = ModelCallLog(
+        task_type="stock_screening", status="SUCCESS", instance_code="TEST_MODEL",
+        response_text=response_text,
+    )
+    db.add(call)
+    db.flush()
+    candidate = SelectionCandidate(
+        run_id=run.id, market="HK", symbol="02533", name="黑芝麻智能",
+        evidence_json=evidence(),
+        analysis_json={
+            "model_output_status": "FAILED",
+            "model_failure_reason": "完整模型输出未通过评分契约",
+            "model_attempts": [{"model_call_log_id": call.id, "status": "SUCCESS"}],
+        },
+    )
+    db.add(candidate)
+    db.commit()
+
+    prepared = prepare_selection_hypothesis_review(db, candidate.id)
+
+    state = prepared.analysis_json["hypothesis_research"]
+    assert state["status"] == "WAITING_USER_DIRECTION"
+    assert state["direction_seed_origin"] == "RECOVERED_MODEL_CALL"
+    assert state["direction_seed_model_call_log_id"] == call.id
+    assert state["direction_seed_is_conclusion"] is False
+    assert len(state["research_question_snapshot"]) == 4
+    assert len(state["direction_review"]["questions"]) == 4
+    assert prepared.analysis_json["model_output_status"] == "FAILED"
+    assert db.scalars(select(FoundationFact)).all() == []
+    db.refresh(run)
+    assert run.analysis_mode == "RESEARCH_DIRECTION_REVIEW"
+    assert run.criteria_json["result_counts"]["research_pending_count"] == 1
+    assert run.criteria_json["result_counts"]["failed_count"] == 0
 
 
 def test_fresh_successful_analysis_drops_stale_failed_research_runtime(isolated):

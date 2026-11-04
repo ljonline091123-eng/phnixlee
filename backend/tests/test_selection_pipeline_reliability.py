@@ -557,6 +557,19 @@ def test_model_status_synonyms_are_normalized_without_weakening_contract():
     assert scalar_product["business_quality"]["products_services"] == ["车规级智能驾驶芯片"]
 
 
+@pytest.mark.parametrize("provider_status", ["PARTIAL", "PENDING", "UNKNOWN"])
+def test_provider_event_statuses_fail_closed_as_unverified(provider_status):
+    normalized = _normalize_selection_model_row({
+        "events": [{
+            "quote": "公司披露该事项仍在推进，最终影响以正式公告为准。",
+            "validation_status": provider_status,
+        }],
+    })
+
+    assert normalized["events"][0]["validation_status"] == "UNVERIFIED"
+    assert normalized["semantic_linkage_status"] == "PARTIAL"
+
+
 def test_parser_normalizes_hypotheses_without_local_scope_error():
     row = output()
     row["investment_thesis"] = {
@@ -1028,7 +1041,8 @@ def test_result_counts_are_exclusive_and_do_not_rewrite_empty_historical_success
     before = deepcopy([row.analysis_json for row in rows])
     counts = _selection_result_counts(rows)
     assert counts == {"passed_count": 1, "citation_partial_count": 0, "failed_count": 2,
-                      "data_blocked_count": 2, "evaluation_failed_count": 1}
+                      "data_blocked_count": 2, "research_pending_count": 0,
+                      "evaluation_failed_count": 1}
     assert sum(counts[key] for key in ("passed_count", "citation_partial_count", "failed_count", "data_blocked_count")) == len(rows)
     assert [row.analysis_json for row in rows] == before
 
@@ -1060,7 +1074,8 @@ def test_result_counts_treat_incomplete_v8_research_as_reviewable_partial_not_fa
 
     assert counts == {
         "passed_count": 0, "citation_partial_count": 1, "failed_count": 0,
-        "data_blocked_count": 0, "evaluation_failed_count": 0,
+        "data_blocked_count": 0, "research_pending_count": 0,
+        "evaluation_failed_count": 0,
     }
 
 
@@ -1333,7 +1348,8 @@ def test_optional_llm_evaluation_failure_does_not_downgrade_valid_core_analysis(
     assert run.error_message is None
     assert run.criteria_json["result_counts"] == {
         "passed_count": 1, "citation_partial_count": 0, "failed_count": 0,
-        "data_blocked_count": 0, "evaluation_failed_count": 1,
+        "data_blocked_count": 0, "research_pending_count": 0,
+        "evaluation_failed_count": 1,
     }
     assert "附加 LLM 文字评价生成失败" in run.criteria_json["review_warnings"][0]
 
@@ -1501,7 +1517,9 @@ def test_terminal_summary_agrees_with_data_gate_without_rewriting_history(isolat
     db.commit()
     result = _run_read(db, run)
     assert result.criteria_json["result_counts"] == {
-        "passed_count": 0, "citation_partial_count": 0, "failed_count": 1, "data_blocked_count": 1, "evaluation_failed_count": 0}
+        "passed_count": 0, "citation_partial_count": 0, "failed_count": 1,
+        "data_blocked_count": 1, "research_pending_count": 0,
+        "evaluation_failed_count": 0}
     assert "模型/结论/评分失败 1 只、数据不足 1 只" in result.error_message
     assert result.criteria_json["retry_progress"]["message"] == result.error_message
     assert result.criteria_json["progress"]["message"] == result.error_message

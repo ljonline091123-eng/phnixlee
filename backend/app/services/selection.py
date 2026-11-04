@@ -30,6 +30,7 @@ from app.models.ai_hub import (
     KnowledgeEntity,
     KnowledgeRelation,
     ModelInstance,
+    ModelCallLog,
     ModelProvider,
     ModelSkill,
     PredictionLedger,
@@ -55,7 +56,7 @@ from app.models.selection import (
 from app.schemas.selection import (
     SelectionBackfillRequest, SelectionHypothesisDirectionRequest,
     SelectionHypothesisResearchRequest, SelectionResearchReviewRequest,
-    SelectionModelOutput, SelectionModelRecommendation,
+    SelectionModelOutput, SelectionModelRecommendation, SelectionResearchQuestion,
     SelectionReviewRequest, SelectionRunCreate,
 )
 
@@ -1176,16 +1177,22 @@ def _selection_result_counts(candidates: list[SelectionCandidate], *, data_mode:
     are an additional diagnostic for stocks whose analysis did return.
     """
     counts = {key: 0 for key in ("passed_count", "citation_partial_count", "failed_count",
-                               "data_blocked_count", "evaluation_failed_count")}
+                               "data_blocked_count", "research_pending_count", "evaluation_failed_count")}
     for candidate in candidates:
         analysis = candidate.analysis_json or {}
         gate = analysis.get("data_gate")
         if not isinstance(gate, dict) and data_mode == "REAL":
             gate = _evidence_data_gate(candidate.evidence_json or {})
         status = analysis.get("model_output_status")
+        research_status = str(((analysis.get("hypothesis_research") or {}).get("status") or "")).upper()
         if (status == "NOT_RUN" or analysis.get("data_gate_status") == "MISSING_DATA"
                 or isinstance(gate, dict) and gate.get("status") == "MISSING_DATA"):
             counts["data_blocked_count"] += 1
+        elif status != "SUCCESS" and research_status in {
+            "WAITING_USER_DIRECTION", "READY_FOR_RESEARCH", "QUEUED", "RUNNING",
+            "WAITING_EVIDENCE_REVIEW", "WAITING_CONCLUSION_REVIEW",
+        }:
+            counts["research_pending_count"] += 1
         elif status == "FAILED":
             counts["failed_count"] += 1
         elif status == "SUCCESS":
@@ -1562,6 +1569,112 @@ def _persisted_research_plan_questions(candidate: SelectionCandidate) -> list[di
     return []
 
 
+def _extract_research_questions_from_raw_model_response(
+    response_text: str, symbol: str,
+) -> list[dict[str, Any]]:
+    """Extract only question objects when the complete recommendation is invalid.
+
+    This deliberately does not recover scores, conclusions, or facts. The
+    returned dictionaries still have to pass ``SelectionResearchQuestion``
+    before they can be shown as candidate research directions.
+    """
+    import json
+
+    raw_text = (response_text or "").strip()
+    candidate_texts = [raw_text]
+    if raw_text.startswith("```"):
+        candidate_texts.insert(0, raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip())
+    start, end = raw_text.find("{"), raw_text.rfind("}")
+    if start >= 0 and end > start:
+        candidate_texts.append(raw_text[start:end + 1])
+    payload: Any = None
+    for candidate_text in candidate_texts:
+        try:
+            payload = json.loads(candidate_text)
+            break
+        except (TypeError, ValueError):
+            try:
+                payload, _end_index = json.JSONDecoder().raw_decode(candidate_text.lstrip())
+                break
+            except (TypeError, ValueError):
+                continue
+    rows = payload if isinstance(payload, list) else payload.get("candidates") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    for raw in rows:
+        if not isinstance(raw, dict) or str(raw.get("symbol") or "").strip() != symbol:
+            continue
+        row = deepcopy(raw)
+        if isinstance(payload, dict):
+            for key in ("business_quality", "value_chain_analysis", "investment_thesis"):
+                if not isinstance(row.get(key), dict) and isinstance(payload.get(key), dict):
+                    row[key] = deepcopy(payload[key])
+        try:
+            row = _normalize_selection_model_row(row)
+        except (TypeError, ValueError, AttributeError):
+            pass
+        thesis = row.get("investment_thesis") if isinstance(row.get("investment_thesis"), dict) else {}
+        return [item for item in thesis.get("research_questions") or [] if isinstance(item, dict)]
+    return []
+
+
+def _recover_research_questions_from_model_logs(
+    db: Session, candidate: SelectionCandidate,
+) -> tuple[list[dict[str, Any]], int | None]:
+    """Recover only validated research questions from failed full analyses.
+
+    The full recommendation may fail a score, citation, or provider-enum
+    contract even though its four competing research questions are valid.
+    Those questions are safe to present as *candidate directions* because
+    they are not published as a conclusion or promoted to FoundationFact.
+    """
+    analysis = candidate.analysis_json or {}
+    call_ids = [
+        int(row.get("model_call_log_id"))
+        for row in reversed(analysis.get("model_attempts") or [])
+        if isinstance(row, dict) and row.get("model_call_log_id")
+    ]
+    if analysis.get("model_call_log_id"):
+        call_ids.insert(0, int(analysis["model_call_log_id"]))
+    call_ids = list(dict.fromkeys(call_ids))
+    if not call_ids:
+        return [], None
+    logs = {
+        row.id: row for row in db.scalars(select(ModelCallLog).where(ModelCallLog.id.in_(call_ids))).all()
+    }
+    for call_id in call_ids:
+        log = logs.get(call_id)
+        if log is None or log.status != "SUCCESS" or not log.response_text:
+            continue
+        raw_questions: list[dict[str, Any]] = []
+        try:
+            parsed, _errors = _parse_model_recommendations(log.response_text, {candidate.symbol})
+            output = parsed.get(candidate.symbol) or {}
+            raw_questions = [
+                row for row in ((output.get("investment_thesis") or {}).get("research_questions") or [])
+                if isinstance(row, dict)
+            ]
+        except (ValueError, TypeError, AttributeError):
+            pass
+        if not raw_questions:
+            # The parser can report a per-stock validation error without
+            # raising for the whole batch. Recovering a research direction is
+            # still safe when the question itself independently passes the
+            # closed SelectionResearchQuestion schema.
+            raw_questions = _extract_research_questions_from_raw_model_response(
+                log.response_text, candidate.symbol,
+            )
+        questions = []
+        for row in raw_questions:
+            try:
+                questions.append(SelectionResearchQuestion.model_validate(row).model_dump())
+            except ValueError:
+                continue
+        if questions:
+            return questions, log.id
+    return [], None
+
+
 def _hypothesis_key(research_code: str, hypothesis: dict[str, Any]) -> str:
     """Return a stable key that survives confidence/status updates."""
     title = str(hypothesis.get("title") or "").strip()
@@ -1640,32 +1753,69 @@ def prepare_selection_hypothesis_review(
     candidate = db.get(SelectionCandidate, candidate_id)
     if candidate is None:
         raise LookupError("选股候选不存在")
+    analysis = deepcopy(candidate.analysis_json or {})
+    recovered_questions: list[dict[str, Any]] = []
+    recovered_log_id: int | None = None
+    if not _research_questions(candidate):
+        recovered_questions, recovered_log_id = _recover_research_questions_from_model_logs(db, candidate)
+        if recovered_questions:
+            state = dict(analysis.get("hypothesis_research") or {})
+            state.update({
+                "status": "DIRECTION_DRAFT_READY",
+                "research_question_snapshot": deepcopy(recovered_questions),
+                "direction_seed_origin": "RECOVERED_MODEL_CALL",
+                "direction_seed_model_call_log_id": recovered_log_id,
+                "direction_seed_is_conclusion": False,
+                "updated_at": _now().isoformat(),
+            })
+            analysis["hypothesis_research"] = state
+            candidate.analysis_json = analysis
     review = _build_hypothesis_direction_review(candidate, max_rounds=max_rounds)
     if not review["questions"]:
-        raise ValueError("该股票没有需要用户确认的重大事件竞争性假设")
+        raise ValueError("当前模型调用没有形成可恢复的竞争性假设，请先重新分析该股票")
     analysis = deepcopy(candidate.analysis_json or {})
     state = dict(analysis.get("hypothesis_research") or {})
+    seed_metadata = {
+        key: state.get(key) for key in (
+            "direction_seed_origin", "direction_seed_model_call_log_id", "direction_seed_is_conclusion",
+        ) if state.get(key) is not None
+    }
     previous_review = state.get("direction_review") if isinstance(state.get("direction_review"), dict) else {}
     if not previous_review.get("questions"):
         # A fresh successful model result must not inherit runtime state from
         # an earlier failed research attempt. Only an actual saved direction
         # review is reusable across attempts.
-        state = {}
+        state = seed_metadata
     if previous_review.get("questions"):
         review["revision"] = int(previous_review.get("revision") or 1)
         review["questions"] = previous_review["questions"]
-    model_questions = _model_research_questions(analysis)
+    source_questions = _research_questions(candidate)
     state.update({
         "status": "WAITING_USER_DIRECTION",
         "interaction_mode": "COLLABORATIVE",
         "review_phase": "DIRECTION",
         "max_rounds": max_rounds,
         "direction_review": review,
-        "research_question_snapshot": deepcopy(model_questions),
+        "research_question_snapshot": deepcopy(source_questions),
         "updated_at": _now().isoformat(),
     })
     analysis["hypothesis_research"] = state
     candidate.analysis_json = analysis
+    run = db.get(SelectionRun, candidate.run_id)
+    if run is not None:
+        all_candidates = list(db.scalars(select(SelectionCandidate).where(
+            SelectionCandidate.run_id == run.id,
+        )).all())
+        counts = _selection_result_counts(all_candidates, data_mode=run.data_mode)
+        run.analysis_mode = "RESEARCH_DIRECTION_REVIEW"
+        run.status = "PARTIAL"
+        run.error_message = f"{counts['research_pending_count']} 只股票已生成竞争性推理方向，等待用户确认后再补数验证。"
+        run.criteria_json = {**(run.criteria_json or {}), "result_counts": counts}
+        _progress(
+            db, run, "RESEARCH_DIRECTION_REVIEW", 100,
+            run.error_message, phase="ANALYSIS",
+            research_candidate_count=counts["research_pending_count"],
+        )
     db.commit()
     db.refresh(candidate)
     return candidate
@@ -1674,12 +1824,16 @@ def prepare_selection_hypothesis_review(
 def _prepare_successful_hypothesis_reviews(
     db: Session, candidates: list[SelectionCandidate], *, max_rounds: int = 3,
 ) -> int:
-    """Move successful V8 analyses into the explicit user-direction gate."""
+    """Move valid or safely recoverable hypotheses into the user gate."""
     prepared = 0
     for candidate in candidates:
-        if (candidate.analysis_json or {}).get("model_output_status") != "SUCCESS":
+        state = (candidate.analysis_json or {}).get("hypothesis_research") or {}
+        if str(state.get("status") or "").upper() in {
+            "WAITING_USER_DIRECTION", "READY_FOR_RESEARCH", "QUEUED", "RUNNING",
+            "WAITING_EVIDENCE_REVIEW", "WAITING_CONCLUSION_REVIEW", "COMPLETED",
+        }:
             continue
-        if not _build_hypothesis_research_plan(candidate, round_no=1)["questions"]:
+        if _candidate_needs_data_refresh(candidate):
             continue
         try:
             prepare_selection_hypothesis_review(db, candidate.id, max_rounds=max_rounds)
@@ -3425,18 +3579,23 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             total = len(all_candidates)
             counts = _selection_result_counts(all_candidates, data_mode=run.data_mode)
             retry_counts = _selection_result_counts(candidates, data_mode=run.data_mode)
-            research_failed_count = sum(
-                str((row.analysis_json or {}).get("model_output_status") or "").upper() != "SUCCESS"
-                for row in candidates
-            )
+            research_failed_count = retry_counts["failed_count"]
             passed, citation_partial = counts["passed_count"], counts["citation_partial_count"]
             success = passed + citation_partial
             failed, blocked = counts["failed_count"], counts["data_blocked_count"]
+            research_pending = counts["research_pending_count"]
             # The saved LLM prose review is an optional, separately retryable
             # presentation artifact.  A transport failure here must not turn
             # an evidence-validated conclusion and scorecard into a failed
             # stock analysis.
-            if passed == total and total:
+            if research_pending:
+                run.analysis_mode = "RESEARCH_DIRECTION_REVIEW"
+                run.status = "PARTIAL"
+                run.error_message = (
+                    f"{research_pending} 只股票已生成竞争性推理方向，等待用户确认后再补数验证；"
+                    "方向草案不作为投资结论。"
+                )
+            elif passed == total and total:
                 run.analysis_mode = "MODEL_COMPLETED"
                 run.status = "REVIEW"
                 run.error_message = None
@@ -3454,7 +3613,12 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 run.error_message = f"模型分析仍有 {failed}/{total} 只股票失败，请检查逐股错误原因与模型调用记录。"
             run.completed_at = _now()
             retry_state = (run.criteria_json or {}).get("retry_progress", {})
-            message = f"重新分析结束：全批 {total} 只，有效结论 {passed} 只、模型/结论/评分失败 {failed} 只、数据不足 {blocked} 只"
+            message = (
+                f"重新分析已生成竞争性推理方向：全批 {total} 只，等待用户确认 {research_pending} 只；"
+                "确认后系统才会按方向补数并重新验证"
+                if research_pending else
+                f"重新分析结束：全批 {total} 只，有效结论 {passed} 只、模型/结论/评分失败 {failed} 只、数据不足 {blocked} 只"
+            )
             if counts["evaluation_failed_count"]:
                 message += f"；{counts['evaluation_failed_count']} 只 LLM 评价生成失败"
             if prepared_research_count:
@@ -3465,22 +3629,22 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 "completed_count": retry_counts["passed_count"] + retry_counts["citation_partial_count"],
                 "failed_count": retry_counts["failed_count"],
                 "passed_count": passed, "citation_partial_count": citation_partial,
-                "data_blocked_count": blocked,
-                "research_candidate_count": prepared_research_count,
+                "data_blocked_count": blocked, "research_pending_count": research_pending,
+                "research_candidate_count": prepared_research_count or research_pending,
                 "message": message,
                 "updated_at": _now().isoformat(),
             }}
             terminal = (
                 "MODEL_PREFLIGHT_FAILED" if preflight_error else
                 "DATA_GATE_BLOCKED" if not model_items else
-                "RESEARCH_DIRECTION_REVIEW" if prepared_research_count else
+                "RESEARCH_DIRECTION_REVIEW" if research_pending else
                 "COMPLETED" if run.status == "REVIEW" else "PARTIAL"
             )
             _progress(db, run, terminal, 100, message)
             return {"selection_run_id": run.id, "candidate_count": len(candidates),
                     "completed_count": success, "failed_count": failed,
                     "passed_count": passed, "citation_partial_count": citation_partial, "data_blocked_count": blocked,
-                    "research_failed_count": research_failed_count}
+                    "research_pending_count": research_pending, "research_failed_count": research_failed_count}
         except Exception as exc:
             db.rollback()
             run = db.get(SelectionRun, run_id)
@@ -3777,10 +3941,22 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
                 "review_warnings": list(dict.fromkeys(warnings)),
             }
     run.candidate_count = min(len(candidates), run.candidate_limit)
+    prepared = 0
+    if model_requested and run.data_mode == "REAL":
+        prepared = _prepare_successful_hypothesis_reviews(
+            db, persisted_candidates, max_rounds=3,
+        )
+    counts = _selection_result_counts(persisted_candidates, data_mode=run.data_mode)
     if model_requested:
-        counts = _selection_result_counts(persisted_candidates, data_mode=run.data_mode)
         run.criteria_json = {**(run.criteria_json or {}), "result_counts": counts}
-        if counts["failed_count"] or counts["data_blocked_count"]:
+        if prepared or counts["research_pending_count"]:
+            pending_count = counts["research_pending_count"] or prepared
+            run.analysis_mode = "RESEARCH_DIRECTION_REVIEW"
+            run.error_message = (
+                f"{pending_count} 只股票已生成竞争性推理方向，等待用户确认后再按方向补全数据并重新验证；"
+                "当前内容不是投资结论。"
+            )
+        elif counts["failed_count"] or counts["data_blocked_count"]:
             run.analysis_mode = "MODEL_PARTIAL" if counts["passed_count"] else "MODEL_FAILED_FALLBACK_LOCAL" if counts["failed_count"] else "DATA_INSUFFICIENT"
             run.error_message = (f"有效结论 {counts['passed_count']} 只；结论/模型/评分失败 {counts['failed_count']} 只；"
                                  f"数据不足 {counts['data_blocked_count']} 只。请查看逐股失败原因并重新分析。")
@@ -3803,22 +3979,15 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     terminal_stage = (
         "MODEL_PREFLIGHT_FAILED" if run.analysis_mode == "MODEL_PREFLIGHT_FAILED"
         else "DATA_GATE_BLOCKED" if run.analysis_mode == "DATA_INSUFFICIENT"
+        else "RESEARCH_DIRECTION_REVIEW" if run.analysis_mode == "RESEARCH_DIRECTION_REVIEW"
         else "PARTIAL" if run.analysis_mode != "MODEL_COMPLETED"
         else "COMPLETED"
     )
     _progress(db, run, terminal_stage, 100,
-              f"已完成 {run.candidate_count} 只，等待人工复核" if run.analysis_mode == "MODEL_COMPLETED" else "执行结束，请查看逐股模型状态及缺口")
-    if model_requested and run.data_mode == "REAL":
-        prepared = _prepare_successful_hypothesis_reviews(
-            db, persisted_candidates, max_rounds=3,
-        )
-        if prepared:
-            run = db.get(SelectionRun, run.id)
-            _progress(
-                db, run, "RESEARCH_DIRECTION_REVIEW", 100,
-                f"初次分析已完成；{prepared} 只股票已生成竞争性假设，等待用户确认优先研究方向",
-                phase="ANALYSIS", research_candidate_count=prepared,
-            )
+              f"已完成 {run.candidate_count} 只，等待人工复核" if run.analysis_mode == "MODEL_COMPLETED"
+              else f"已生成 {prepared or counts.get('research_pending_count', 0)} 只股票的竞争性推理方向，等待用户确认" if run.analysis_mode == "RESEARCH_DIRECTION_REVIEW"
+              else "执行结束，请查看逐股模型状态及缺口",
+              phase="ANALYSIS", research_candidate_count=prepared or counts.get("research_pending_count", 0))
     db.refresh(run)
     return run
 
@@ -6985,9 +7154,14 @@ def _normalize_selection_model_row(raw: dict[str, Any]) -> dict[str, Any]:
     event_status = {
         "VERIFIED": "UNVERIFIED",
         "VALIDATED": "UNVERIFIED",
+        "PARTIAL": "UNVERIFIED",
         "PARTIALLY_VERIFIED": "UNVERIFIED",
         "PARTIALLY_VALIDATED": "UNVERIFIED",
         "CONTRADICTED": "CONFLICTED",
+    }
+    allowed_event_statuses = {
+        "UNVERIFIED", "PARTIALLY_REALIZED", "REALIZED", "NOT_REALIZED",
+        "CONFLICTED", "INSUFFICIENT",
     }
     normalized_events = []
     dropped_events = 0
@@ -7002,6 +7176,11 @@ def _normalize_selection_model_row(raw: dict[str, Any]) -> dict[str, Any]:
         status = str(event.get("validation_status") or "UNVERIFIED").upper()
         if status in event_status:
             event["validation_status"] = event_status[status]
+            downgraded_events += 1
+        elif status not in allowed_event_statuses:
+            # Provider-specific states such as PENDING/UNKNOWN do not prove
+            # realization. Preserve the event and fail closed as unverified.
+            event["validation_status"] = "UNVERIFIED"
             downgraded_events += 1
         normalized_events.append(event)
     raw["events"] = normalized_events
