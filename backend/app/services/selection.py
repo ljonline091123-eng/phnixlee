@@ -13,6 +13,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from math import ceil, isfinite
 from types import SimpleNamespace
 from threading import Event, Thread
+import hashlib
+import json
 import time as clock
 import re
 from typing import Any
@@ -34,6 +36,7 @@ from app.models.ai_hub import (
 )
 from app.models.market_data import (
     DataSource,
+    StockF10Cache,
     StockFinancialReport,
     StockKline,
     StockNews,
@@ -46,7 +49,8 @@ from app.services.model_errors import classify_model_error
 from app.services.catalog import select_data_source
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.schemas.selection import (
-    SelectionBackfillRequest, SelectionModelOutput, SelectionModelRecommendation,
+    SelectionBackfillRequest, SelectionHypothesisResearchRequest,
+    SelectionModelOutput, SelectionModelRecommendation,
     SelectionReviewRequest, SelectionRunCreate,
 )
 
@@ -73,6 +77,16 @@ _HYPOTHESIS_STATUS_MAP = {
     "PARTIALLY_REALIZED": "MIXED",
     "NOT_REALIZED": "CONTRADICTED",
 }
+
+_RESEARCH_DIMENSIONS_BY_CODE: dict[str, tuple[str, ...]] = {
+    "BUSINESS_MODEL": ("FINANCIAL", "COMPANY", "RESEARCH", "NEWS", "NOTICE"),
+    "MANAGEMENT_CHANGE": ("NOTICE", "NEWS", "FINANCIAL", "COMPANY", "RESEARCH"),
+    "ACQUISITION_SECOND_CURVE": ("NOTICE", "NEWS", "FINANCIAL", "COMPANY", "GRAPH", "RESEARCH"),
+    "CAPITAL_ACTION_INTENT": ("NOTICE", "NEWS", "COMPANY", "FUND_FLOW", "PRICE_VOLUME", "GRAPH"),
+}
+_RESEARCH_ACTIVE_STATUSES = {"QUEUED", "RUNNING"}
+_RESEARCH_RETRYABLE_STATUSES = {"SOURCE_FAILED", "MODEL_FAILED"}
+_RESEARCH_TERMINAL_STATUSES = {"COMPLETED", "SOURCE_EXHAUSTED", "MAX_ROUNDS", "NO_RESEARCH_REQUIRED"}
 
 
 def _phase_for_stage(stage: str, explicit_phase: str | None = None) -> str:
@@ -1485,6 +1499,276 @@ def _candidate_missing_dimensions(candidate: SelectionCandidate) -> set[str]:
     return dimensions
 
 
+def _research_questions(candidate: SelectionCandidate) -> list[dict[str, Any]]:
+    analysis = candidate.analysis_json or {}
+    model = analysis.get("model") if isinstance(analysis.get("model"), dict) else {}
+    thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
+    return [row for row in thesis.get("research_questions") or [] if isinstance(row, dict)]
+
+
+def _hypothesis_research_model_context(analysis: dict[str, Any]) -> dict[str, Any]:
+    """Build the bounded research memory that every verification round must inherit.
+
+    The model must update the same competing hypotheses instead of inventing a
+    disconnected explanation on each pass.  Full audit snapshots remain in
+    ``analysis_json``; this view only contains the state needed by the next
+    evidence-backed verification call.
+    """
+    model = analysis.get("model") if isinstance(analysis.get("model"), dict) else {}
+    thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
+    state = analysis.get("hypothesis_research") if isinstance(analysis.get("hypothesis_research"), dict) else {}
+    questions = []
+    for question in thesis.get("research_questions") or []:
+        if not isinstance(question, dict):
+            continue
+        questions.append({
+            "research_code": question.get("research_code"),
+            "question": question.get("question"),
+            "status": question.get("status"),
+            "confidence": question.get("confidence"),
+            "conclusion": question.get("conclusion"),
+            "known_facts": list(question.get("known_facts") or [])[:12],
+            "hypotheses": [{
+                "title": row.get("title"),
+                "thesis": row.get("thesis"),
+                "status": row.get("status"),
+                "direction": row.get("direction"),
+                "confidence": row.get("confidence"),
+                "supporting_document_ids": list(row.get("supporting_document_ids") or [])[:20],
+                "supporting_fact_ids": list(row.get("supporting_fact_ids") or [])[:20],
+                "counter_document_ids": list(row.get("counter_document_ids") or [])[:20],
+                "counter_fact_ids": list(row.get("counter_fact_ids") or [])[:20],
+                "invalidation_conditions": list(row.get("invalidation_conditions") or [])[:8],
+                "watch_conditions": list(row.get("watch_conditions") or [])[:8],
+            } for row in question.get("hypotheses") or [] if isinstance(row, dict)][:4],
+            "missing_evidence": list(question.get("missing_evidence") or [])[:8],
+            "tracking_metrics": list(question.get("tracking_metrics") or [])[:8],
+        })
+    history = []
+    for row in state.get("history") or []:
+        if not isinstance(row, dict):
+            continue
+        history.append({
+            "round": row.get("round"),
+            "status": row.get("status"),
+            "new_document_ids": list(row.get("new_document_ids") or [])[:30],
+            "new_fact_ids": list(row.get("new_fact_ids") or [])[:30],
+            "new_relation_ids": list(row.get("new_relation_ids") or [])[:30],
+            "structured_count_delta": row.get("structured_count_delta"),
+            "consecutive_no_increment": row.get("consecutive_no_increment"),
+            "source_outcome": row.get("source_outcome"),
+            "confidence_policy": row.get("confidence_policy"),
+        })
+    return {
+        "status": state.get("status") or "NOT_STARTED",
+        "current_round": state.get("round") or 0,
+        "max_rounds": state.get("max_rounds") or 0,
+        "consecutive_no_increment": state.get("consecutive_no_increment") or 0,
+        "terminal_reason": state.get("terminal_reason"),
+        "questions": questions,
+        "completed_rounds": history[-5:],
+    }
+
+
+def _research_source_outcome(backfill_result: dict[str, Any], candidate_id: int) -> dict[str, Any]:
+    """Separate provider failure from a successful search with no new evidence."""
+    row = next((item for item in backfill_result.get("results") or []
+                if int(item.get("candidate_id") or -1) == candidate_id), None)
+    operations = row.get("operations") if isinstance(row, dict) else {}
+    failed = []
+    exhausted = []
+    succeeded = []
+    for code, operation in (operations or {}).items():
+        if not isinstance(operation, dict):
+            failed.append({"operation": code, "status": "INVALID_RESULT"})
+            continue
+        status = str(operation.get("status") or "FAILED").upper()
+        detail = {"operation": code, "status": status}
+        if operation.get("error"):
+            detail["error"] = str(operation.get("error"))[:300]
+        if status == "FAILED":
+            failed.append(detail)
+        elif status in {"MISSING", "UNSUPPORTED", "EMPTY", "NO_DATA"}:
+            exhausted.append(detail)
+        else:
+            succeeded.append(detail)
+    projection_error = backfill_result.get("projection_error")
+    if projection_error:
+        failed.append({"operation": "GRAPH", "status": "FAILED",
+                       "error": str(projection_error)[:300]})
+    if row is None:
+        failed.append({"operation": "BACKFILL", "status": "FAILED",
+                       "error": "补数任务没有返回该股票的执行明细"})
+    return {
+        "status": "SOURCE_FAILED" if failed else "SOURCE_QUERIED",
+        "failed_operations": failed,
+        "exhausted_operations": exhausted,
+        "successful_operations": succeeded,
+        "candidate_result_status": row.get("status") if isinstance(row, dict) else None,
+    }
+
+
+def _research_evidence_state(candidate: SelectionCandidate) -> dict[str, Any]:
+    """Return a stable, compact fingerprint of auditable evidence for one candidate."""
+    evidence = candidate.evidence_json or {}
+    context = evidence.get("evidence_context") if isinstance(evidence.get("evidence_context"), dict) else {}
+    documents: dict[str, dict[str, Any]] = {}
+    for row in [*(evidence.get("documents") or []), *(context.get("documents") or [])]:
+        if not isinstance(row, dict) or row.get("id") is None:
+            continue
+        documents[str(row["id"])] = {
+            "source_table": row.get("source_table"),
+            "content_state": row.get("content_state"),
+            "content_hash": row.get("content_hash") or row.get("hash"),
+            "title": row.get("title"),
+            "published_at": row.get("published_at") or row.get("date"),
+        }
+    facts = {
+        str(row.get("id") or row.get("fact_id")): {
+            "fact_type": row.get("fact_type"),
+            "verification_status": row.get("verification_status"),
+            "observed_at": row.get("observed_at"),
+            "properties": row.get("properties"),
+        }
+        for row in evidence.get("facts") or []
+        if isinstance(row, dict) and (row.get("id") is not None or row.get("fact_id") is not None)
+    }
+    relations: dict[str, dict[str, Any]] = {}
+    for row in [*(evidence.get("relations") or []), *(evidence.get("graph_paths") or [])]:
+        if not isinstance(row, dict):
+            continue
+        relation_id = row.get("id") or row.get("relation_id") or row.get("path_id")
+        if relation_id is None:
+            continue
+        relations[str(relation_id)] = {
+            "predicate": row.get("predicate") or row.get("relation_type"),
+            "verification_status": row.get("verification_status"),
+            "observed_at": row.get("observed_at"),
+        }
+    structured: dict[str, list[dict[str, Any]]] = {}
+    for category, rows in (evidence.get("structured_observations") or {}).items():
+        if not isinstance(rows, list):
+            continue
+        structured[str(category)] = [{
+            "id": row.get("id") or row.get("fact_id"),
+            "observed_at": row.get("observed_at") or row.get("date") or row.get("report_period"),
+            "properties": row.get("properties"),
+        } for row in rows if isinstance(row, dict)]
+    payload = {"documents": documents, "facts": facts, "relations": relations, "structured": structured}
+    digest = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str,
+                                       separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {
+        "fingerprint": digest,
+        "document_count": len(documents),
+        "fact_count": len(facts),
+        "relation_count": len(relations),
+        "structured_count": sum(len(rows) for rows in structured.values()),
+        "document_ids": sorted(documents),
+        "fact_ids": sorted(facts),
+        "relation_ids": sorted(relations),
+    }
+
+
+def _build_hypothesis_research_plan(candidate: SelectionCandidate, *, round_no: int,
+                                    max_rounds: int = 3) -> dict[str, Any]:
+    """Translate unresolved model hypotheses into bounded existing-source refresh work."""
+    questions: list[dict[str, Any]] = []
+    all_dimensions: set[str] = set()
+    for question in _research_questions(candidate):
+        code = str(question.get("research_code") or "")
+        status = str(question.get("status") or "INSUFFICIENT").upper()
+        if status in {"COMPLETE", "NOT_APPLICABLE"} or code not in _RESEARCH_DIMENSIONS_BY_CODE:
+            continue
+        gaps = [row for row in question.get("missing_evidence") or [] if isinstance(row, dict)]
+        dimensions = set(_RESEARCH_DIMENSIONS_BY_CODE[code])
+        source_text = " ".join(
+            str(value) for gap in gaps for key in ("required_evidence", "preferred_sources", "search_queries")
+            for value in (gap.get(key) or [])
+        ).lower()
+        if "资金" in source_text or "fund" in source_text:
+            dimensions.add("FUND_FLOW")
+        if "量价" in source_text or "股价" in source_text or "price" in source_text:
+            dimensions.add("PRICE_VOLUME")
+        if "图谱" in source_text or "供应链" in source_text or "关联" in source_text:
+            dimensions.add("GRAPH")
+        all_dimensions.update(dimensions)
+        questions.append({
+            "research_code": code,
+            "question": question.get("question"),
+            "status_before": status,
+            "confidence_before": float(question.get("confidence") or 0),
+            "dimensions": sorted(dimensions),
+            "required_evidence": list(dict.fromkeys(
+                str(value) for gap in gaps for value in (gap.get("required_evidence") or []) if value
+            )),
+            "preferred_sources": list(dict.fromkeys(
+                str(value) for gap in gaps for value in (gap.get("preferred_sources") or []) if value
+            )),
+            "search_queries": list(dict.fromkeys(
+                str(value) for gap in gaps for value in (gap.get("search_queries") or []) if value
+            )),
+            "hypotheses": [{
+                "title": row.get("title"),
+                "status": row.get("status"),
+                "confidence": row.get("confidence"),
+            } for row in question.get("hypotheses") or [] if isinstance(row, dict)],
+        })
+    return {
+        "candidate_id": candidate.id,
+        "market": candidate.market,
+        "symbol": candidate.symbol,
+        "round": round_no,
+        "max_rounds": max_rounds,
+        "status": "PLANNED" if questions else "NO_RESEARCH_REQUIRED",
+        "dimensions": sorted(all_dimensions),
+        "questions": questions,
+        "baseline_evidence": _research_evidence_state(candidate),
+        "planned_at": _now().isoformat(),
+    }
+
+
+def _apply_research_confidence_policy(candidate: SelectionCandidate, *, evidence_added: bool,
+                                      consecutive_no_increment: int, terminal: bool) -> dict[str, int]:
+    """Apply deterministic confidence changes after the model classifies new evidence."""
+    questions = _research_questions(candidate)
+    open_high_confidence = low_confidence_closed = 0
+    for question in questions:
+        status = str(question.get("status") or "INSUFFICIENT").upper()
+        if status in {"COMPLETE", "NOT_APPLICABLE"}:
+            continue
+        hypotheses = [row for row in question.get("hypotheses") or [] if isinstance(row, dict)]
+        for hypothesis in hypotheses:
+            confidence = max(0.0, min(1.0, float(hypothesis.get("confidence") or 0)))
+            outcome = str(hypothesis.get("status") or "INSUFFICIENT").upper()
+            if evidence_added:
+                if outcome == "SUPPORTED":
+                    confidence = min(1.0, confidence + 0.15)
+                elif outcome == "MIXED":
+                    confidence = min(1.0, confidence + 0.05)
+                elif outcome == "CONTRADICTED":
+                    confidence = max(0.0, confidence - 0.20)
+            else:
+                confidence *= 0.65
+                if consecutive_no_increment >= 2:
+                    confidence = min(confidence, 0.20)
+            if terminal and outcome in {"INSUFFICIENT", "MIXED"}:
+                confidence = min(confidence, 0.10 if not evidence_added else 0.20)
+            hypothesis["confidence"] = round(confidence, 4)
+            if terminal and confidence <= 0.20 and outcome in {"INSUFFICIENT", "MIXED"}:
+                hypothesis["status"] = "INSUFFICIENT"
+                low_confidence_closed += 1
+            elif confidence > 0.20 and outcome not in {"SUPPORTED", "CONTRADICTED"}:
+                open_high_confidence += 1
+        if terminal and status in {"PARTIAL", "INSUFFICIENT"} and str(question.get("research_code")) != "BUSINESS_MODEL":
+            question["conclusion"] = (
+                f"{str(question.get('conclusion') or '').rstrip('。')}。已完成有界数据补全和多轮验证；"
+                "现有已接数据源未形成足够支持或反证，该推理方向按低置信线索关闭，不作为投资结论依据。"
+            )[:1200]
+            question["confidence"] = min(float(question.get("confidence") or 0), 0.20)
+    return {"open_high_confidence_count": open_high_confidence,
+            "low_confidence_closed_count": low_confidence_closed}
+
+
 def _evidence_data_gate(evidence: dict[str, Any]) -> dict[str, Any]:
     """Decide whether a stock has enough evidence to enter model analysis.
 
@@ -1834,13 +2118,28 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
             report("数据源采集结束，正在更新知识文档与图谱投影", percent=75, current_operation="GRAPH")
             try:
                 from app.services.knowledge_pipeline import run_stock_pipeline
+                research_round = int(payload.get("research_round") or 0)
+                # A hypothesis round is an incremental evidence refresh, not a
+                # new lakehouse publication.  Source services above already
+                # persist raw/normalized business rows. Re-exporting every
+                # company/master table and re-chunking the complete historical
+                # document set made a one-stock verification wait for minutes
+                # without improving the hypothesis evidence. Keep the scoped
+                # knowledge document/graph projection, while the normal batch
+                # backfill path retains the full lakehouse + chunk workflow.
                 pipeline_result = run_stock_pipeline(
                     db, market=run.market, symbols=[row.symbol for row in candidates],
                     knowledge_base_id=(run.knowledge_base_ids_json or [None])[0],
-                    graph_id=run.graph_ids_json[0], export_lakehouse=True, archive_chunks=True,
+                    graph_id=run.graph_ids_json[0],
+                    export_lakehouse=not bool(research_round),
+                    archive_chunks=not bool(research_round),
                     run_graph=True, run_agent_governance=False,
                     graph_documents_per_stock=80,
-                    idempotency_key=f"selection-backfill-knowledge:{run.id}:{payload.get('attempt', 1)}",
+                    idempotency_key=(
+                        f"selection-hypothesis-projection-v2:{run.id}:{candidates[0].id}:{research_round}"
+                        if research_round and len(candidates) == 1 else
+                        f"selection-backfill-knowledge:{run.id}:{payload.get('attempt', 1)}"
+                    ),
                 )
                 projection_id = pipeline_result.get("graph_id")
                 if projection_id:
@@ -1904,6 +2203,363 @@ def execute_selection_data_backfill(payload: dict[str, Any]) -> dict[str, Any]:
                 "rerun_id": rerun_id}
 
 
+def queue_selection_hypothesis_research(
+    db: Session,
+    run_id: int,
+    payload: SelectionHypothesisResearchRequest,
+) -> SelectionRun:
+    """Queue an event -> hypothesis -> collection -> verification research loop."""
+    from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
+
+    run = db.get(SelectionRun, run_id)
+    if run is None:
+        raise LookupError("选股任务不存在")
+    candidates = list(db.scalars(select(SelectionCandidate).where(
+        SelectionCandidate.run_id == run.id,
+        SelectionCandidate.decision == "PENDING",
+    )).all())
+    if payload.candidate_ids:
+        requested = set(payload.candidate_ids)
+        candidates = [row for row in candidates if row.id in requested]
+        if len(candidates) != len(requested):
+            raise ValueError("研究范围包含不属于该批次或已经完成人工决策的股票")
+    candidates = [row for row in candidates if _build_hypothesis_research_plan(row, round_no=1)["questions"]]
+    if not candidates:
+        raise ValueError("所选股票没有需要自动补数验证的重大事件假设")
+    active = list(db.scalars(select(ScheduledJob).where(
+        ScheduledJob.task_type.in_(("selection_hypothesis_research", "selection_data_backfill")),
+        ScheduledJob.status.in_(("PENDING", "RETRY", "RUNNING")),
+    )).all())
+    if any(int((job.payload_json or {}).get("selection_run_id", -1)) == run.id for job in active):
+        raise ValueError("该批次已有数据补全或假设研究任务正在执行")
+    previous = list(db.scalars(select(ScheduledJob).where(
+        ScheduledJob.task_type == "selection_hypothesis_research",
+        ScheduledJob.idempotency_key.like(f"selection-hypothesis-research:{run.id}:%"),
+    )).all())
+    attempt = len(previous) + 1
+    task_payload = {
+        "selection_run_id": run.id,
+        "candidate_ids": [row.id for row in candidates],
+        "max_rounds": payload.max_rounds,
+        "attempt": attempt,
+    }
+    key = f"selection-hypothesis-research:{run.id}:{attempt}"
+    pipeline = PipelineRun(
+        pipeline_type="selection_hypothesis_research", trigger_type="API", status="PENDING",
+        idempotency_key=key, input_json=task_payload, current_stage="selection_hypothesis_research",
+    )
+    db.add(pipeline)
+    db.flush()
+    db.add(PipelineStageRun(
+        pipeline_run_id=pipeline.id, stage_code="selection_hypothesis_research", status="PENDING",
+        max_attempts=3, input_json=task_payload,
+    ))
+    db.add(ScheduledJob(
+        task_type="selection_hypothesis_research", status="PENDING", idempotency_key=key,
+        pipeline_run_id=pipeline.id, payload_json=task_payload, max_attempts=3,
+    ))
+    progress = {
+        "status": "QUEUED", "attempt": attempt, "round": 0,
+        "max_rounds": payload.max_rounds, "percent": 0,
+        "candidate_count": len(candidates), "completed_count": 0,
+        "message": f"已排队研究 {len(candidates)} 只股票的重大事件假设",
+        "updated_at": _now().isoformat(),
+    }
+    run.criteria_json = {**(run.criteria_json or {}), "hypothesis_research_progress": progress}
+    for candidate in candidates:
+        analysis = deepcopy(candidate.analysis_json or {})
+        analysis["hypothesis_research"] = {
+            **(analysis.get("hypothesis_research") or {}),
+            "status": "QUEUED", "round": 0, "max_rounds": payload.max_rounds,
+            "history": list((analysis.get("hypothesis_research") or {}).get("history") or []),
+            "queued_at": _now().isoformat(),
+        }
+        candidate.analysis_json = analysis
+    db.commit()
+    from app.jobs.governance_runner import wake_governance_runner
+    wake_governance_runner()
+    return run
+
+
+def execute_selection_hypothesis_research(payload: dict[str, Any]) -> dict[str, Any]:
+    """Run bounded source-backed hypothesis research without creating a parallel fact system."""
+    from app.db.session import SessionLocal
+
+    run_id = int(payload["selection_run_id"])
+    candidate_ids = [int(value) for value in payload.get("candidate_ids") or []]
+    max_rounds = max(1, min(int(payload.get("max_rounds") or 3), 5))
+    completed: list[dict[str, Any]] = []
+    for candidate_id in candidate_ids:
+        with SessionLocal() as db:
+            existing_candidate = db.get(SelectionCandidate, candidate_id)
+            if existing_candidate is None or existing_candidate.run_id != run_id:
+                raise LookupError("假设研究任务引用的候选不存在")
+            existing_state = (existing_candidate.analysis_json or {}).get("hypothesis_research") or {}
+            if str(existing_state.get("status") or "").upper() == "COMPLETED":
+                completed.append({
+                    "candidate_id": existing_candidate.id, "symbol": existing_candidate.symbol,
+                    "status": "COMPLETED", "round": existing_state.get("round") or 0,
+                    "terminal_reason": existing_state.get("terminal_reason") or "ALREADY_COMPLETED",
+                })
+                continue
+            existing_history = [row for row in existing_state.get("history") or [] if isinstance(row, dict)]
+            finished_rounds = [
+                int(row.get("round") or 0) for row in existing_history
+                if str(row.get("status") or "").upper() in {"VERIFIED_WITH_INCREMENT", "NO_NEW_EVIDENCE"}
+            ]
+            start_round = max(finished_rounds, default=0) + 1
+            consecutive_no_increment = int(existing_state.get("consecutive_no_increment") or 0)
+        terminal_reason = "MAX_ROUNDS"
+        for round_no in range(start_round, max_rounds + 1):
+            with SessionLocal() as db:
+                run = db.get(SelectionRun, run_id)
+                candidate = db.get(SelectionCandidate, candidate_id)
+                if run is None or candidate is None or candidate.run_id != run_id:
+                    raise LookupError("假设研究任务引用的选股批次或候选不存在")
+                plan = _build_hypothesis_research_plan(candidate, round_no=round_no, max_rounds=max_rounds)
+                if not plan["questions"]:
+                    terminal_reason = "NO_RESEARCH_REQUIRED"
+                    analysis = deepcopy(candidate.analysis_json or {})
+                    state = dict(analysis.get("hypothesis_research") or {})
+                    state.update({
+                        "status": "COMPLETED", "round": max(0, round_no - 1),
+                        "max_rounds": max_rounds, "terminal_reason": terminal_reason,
+                        "open_high_confidence_count": 0,
+                        "history": list(state.get("history") or []),
+                        "completed_at": _now().isoformat(), "updated_at": _now().isoformat(),
+                    })
+                    analysis["hypothesis_research"] = state
+                    candidate.analysis_json = analysis
+                    db.commit()
+                    break
+                analysis = deepcopy(candidate.analysis_json or {})
+                research_state = dict(analysis.get("hypothesis_research") or {})
+                research_state.update({
+                    "status": "RUNNING", "round": round_no, "max_rounds": max_rounds,
+                    "current_plan": plan, "started_at": research_state.get("started_at") or _now().isoformat(),
+                    "updated_at": _now().isoformat(),
+                })
+                analysis["hypothesis_research"] = research_state
+                candidate.analysis_json = analysis
+                run_progress = dict((run.criteria_json or {}).get("hypothesis_research_progress") or {})
+                run.criteria_json = {**(run.criteria_json or {}), "hypothesis_research_progress": {
+                    **run_progress, "status": "RUNNING", "round": round_no,
+                    "current_candidate_id": candidate.id, "current_symbol": candidate.symbol,
+                    "percent": min(95, round(((len(completed) * max_rounds + round_no - 1)
+                                                / max(1, len(candidate_ids) * max_rounds)) * 100)),
+                    "message": f"第 {round_no}/{max_rounds} 轮：根据重大事件假设补数并验证 {candidate.name or candidate.symbol}",
+                    "updated_at": _now().isoformat(),
+                }}
+                db.commit()
+                baseline = plan["baseline_evidence"]
+                dimensions = plan["dimensions"]
+                period_months = int((run.criteria_json or {}).get("period_months") or 12)
+
+            backfill_result = execute_selection_data_backfill({
+                "selection_run_id": run_id,
+                "candidate_ids": [candidate_id],
+                "dimensions_by_candidate": {str(candidate_id): dimensions},
+                "period_months": period_months,
+                "force_refresh": True,
+                "rerun_analysis": False,
+                "attempt": f"research-{candidate_id}-{round_no}",
+                "research_round": round_no,
+            })
+            source_outcome = _research_source_outcome(backfill_result, candidate_id)
+            if source_outcome["status"] == "SOURCE_FAILED":
+                with SessionLocal() as db:
+                    run = db.get(SelectionRun, run_id)
+                    candidate = db.get(SelectionCandidate, candidate_id)
+                    if run is None or candidate is None:
+                        raise LookupError("假设研究补数失败后候选不存在")
+                    analysis = deepcopy(candidate.analysis_json or {})
+                    state = dict(analysis.get("hypothesis_research") or {})
+                    history = list(state.get("history") or [])
+                    history.append({
+                        "round": round_no, "status": "SOURCE_FAILED",
+                        "started_at": plan.get("planned_at"),
+                        "completed_at": _now().isoformat(),
+                        "questions": plan["questions"], "dimensions": dimensions,
+                        "baseline_evidence": baseline,
+                        "source_outcome": source_outcome,
+                        "backfill_status": backfill_result.get("status"),
+                        "consecutive_no_increment": consecutive_no_increment,
+                    })
+                    state.update({
+                        "status": "SOURCE_FAILED", "round": round_no,
+                        "max_rounds": max_rounds, "terminal_reason": "SOURCE_FAILED",
+                        "history": history, "current_plan": plan,
+                        "last_error": "部分已接数据源调用失败；保留上一轮假设和结论，等待受控重试",
+                        "updated_at": _now().isoformat(),
+                    })
+                    analysis["hypothesis_research"] = state
+                    candidate.analysis_json = analysis
+                    progress = dict((run.criteria_json or {}).get("hypothesis_research_progress") or {})
+                    run.criteria_json = {**(run.criteria_json or {}), "hypothesis_research_progress": {
+                        **progress, "status": "SOURCE_FAILED", "round": round_no,
+                        "current_candidate_id": candidate.id, "current_symbol": candidate.symbol,
+                        "message": "数据源调用失败，未把本轮计入无证据衰减；可继续重试",
+                        "source_outcome": source_outcome, "updated_at": _now().isoformat(),
+                    }}
+                    db.commit()
+                terminal_reason = "SOURCE_FAILED"
+                break
+            try:
+                reanalysis_result = execute_failed_selection_reanalysis({
+                    "selection_run_id": run_id,
+                    "candidate_ids": [candidate_id],
+                    "force_model_retry": True,
+                    "reuse_existing_data": True,
+                    "research_round": round_no,
+                })
+            except Exception as exc:
+                # A transport, provider or context-compaction exception is a
+                # retryable model-stage failure.  It must not leave the
+                # research loop permanently RUNNING or be counted as a
+                # successful source search with no evidence.
+                reanalysis_result = {
+                    "selection_run_id": run_id,
+                    "candidate_count": 1,
+                    "research_failed_count": 1,
+                    "status": "FAILED",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc)[:1200],
+                }
+            if int(reanalysis_result.get("research_failed_count") or 0) > 0:
+                with SessionLocal() as db:
+                    run = db.get(SelectionRun, run_id)
+                    candidate = db.get(SelectionCandidate, candidate_id)
+                    if run is None or candidate is None:
+                        raise LookupError("假设研究模型重验失败后候选不存在")
+                    analysis = deepcopy(candidate.analysis_json or {})
+                    state = dict(analysis.get("hypothesis_research") or {})
+                    history = list(state.get("history") or [])
+                    history.append({
+                        "round": round_no, "status": "MODEL_FAILED",
+                        "started_at": plan.get("planned_at"),
+                        "completed_at": _now().isoformat(),
+                        "questions": plan["questions"], "dimensions": dimensions,
+                        "baseline_evidence": baseline, "source_outcome": source_outcome,
+                        "backfill_status": backfill_result.get("status"),
+                        "reanalysis": reanalysis_result,
+                        "consecutive_no_increment": consecutive_no_increment,
+                    })
+                    state.update({
+                        "status": "MODEL_FAILED", "round": round_no,
+                        "max_rounds": max_rounds, "terminal_reason": "MODEL_FAILED",
+                        "history": history, "current_plan": plan,
+                        "last_error": "模型重验失败；保留已采集证据和上一轮假设，不执行置信度衰减",
+                        "updated_at": _now().isoformat(),
+                    })
+                    analysis["hypothesis_research"] = state
+                    candidate.analysis_json = analysis
+                    progress = dict((run.criteria_json or {}).get("hypothesis_research_progress") or {})
+                    run.criteria_json = {**(run.criteria_json or {}), "hypothesis_research_progress": {
+                        **progress, "status": "MODEL_FAILED", "round": round_no,
+                        "current_candidate_id": candidate.id, "current_symbol": candidate.symbol,
+                        "message": "模型重验失败，已保留补数成果和上一轮结论，可继续重试",
+                        "updated_at": _now().isoformat(),
+                    }}
+                    db.commit()
+                terminal_reason = "MODEL_FAILED"
+                break
+
+            with SessionLocal() as db:
+                run = db.get(SelectionRun, run_id)
+                candidate = db.get(SelectionCandidate, candidate_id)
+                if run is None or candidate is None:
+                    raise LookupError("假设研究重验后候选不存在")
+                after = _research_evidence_state(candidate)
+                new_documents = sorted(set(after["document_ids"]) - set(baseline["document_ids"]))
+                new_facts = sorted(set(after["fact_ids"]) - set(baseline["fact_ids"]))
+                new_relations = sorted(set(after["relation_ids"]) - set(baseline["relation_ids"]))
+                evidence_added = bool(new_documents or new_facts or new_relations
+                                      or after["structured_count"] > baseline["structured_count"])
+                consecutive_no_increment = 0 if evidence_added else consecutive_no_increment + 1
+                remaining = _build_hypothesis_research_plan(
+                    candidate, round_no=round_no + 1, max_rounds=max_rounds,
+                )["questions"]
+                terminal = not remaining or consecutive_no_increment >= 2 or round_no >= max_rounds
+                policy = _apply_research_confidence_policy(
+                    candidate, evidence_added=evidence_added,
+                    consecutive_no_increment=consecutive_no_increment, terminal=terminal,
+                )
+                analysis = deepcopy(candidate.analysis_json or {})
+                state = dict(analysis.get("hypothesis_research") or {})
+                history = list(state.get("history") or [])
+                history.append({
+                    "round": round_no,
+                    "status": "VERIFIED_WITH_INCREMENT" if evidence_added else "NO_NEW_EVIDENCE",
+                    "started_at": plan.get("planned_at"),
+                    "completed_at": _now().isoformat(),
+                    "questions": plan["questions"],
+                    "dimensions": dimensions,
+                    "baseline_evidence": baseline,
+                    "result_evidence": after,
+                    "new_document_ids": new_documents,
+                    "new_fact_ids": new_facts,
+                    "new_relation_ids": new_relations,
+                    "structured_count_delta": after["structured_count"] - baseline["structured_count"],
+                    "backfill_status": backfill_result.get("status"),
+                    "source_outcome": source_outcome,
+                    "reanalysis": reanalysis_result,
+                    "consecutive_no_increment": consecutive_no_increment,
+                    "confidence_policy": policy,
+                })
+                if terminal:
+                    terminal_reason = (
+                        "VERIFIED" if not remaining else
+                        "SOURCE_EXHAUSTED" if consecutive_no_increment >= 2 else "MAX_ROUNDS"
+                    )
+                state.update({
+                    "status": "COMPLETED" if terminal else "RUNNING",
+                    "round": round_no, "max_rounds": max_rounds,
+                    "terminal_reason": terminal_reason if terminal else None,
+                    "consecutive_no_increment": consecutive_no_increment,
+                    "open_high_confidence_count": policy["open_high_confidence_count"],
+                    "low_confidence_closed_count": policy["low_confidence_closed_count"],
+                    "history": history, "current_plan": None,
+                    "updated_at": _now().isoformat(),
+                    **({"completed_at": _now().isoformat()} if terminal else {}),
+                })
+                analysis["hypothesis_research"] = state
+                candidate.analysis_json = analysis
+                from app.services.selection_audit import capture_decision_snapshot
+                capture_decision_snapshot(db, candidate, snapshot_kind=f"HYPOTHESIS_RESEARCH_R{round_no}", as_of=run.as_of)
+                db.commit()
+                if terminal:
+                    break
+        with SessionLocal() as db:
+            candidate = db.get(SelectionCandidate, candidate_id)
+            if candidate is not None:
+                state = (candidate.analysis_json or {}).get("hypothesis_research") or {}
+                completed.append({
+                    "candidate_id": candidate.id, "symbol": candidate.symbol,
+                    "status": state.get("status") or "COMPLETED",
+                    "round": state.get("round") or 0,
+                    "terminal_reason": state.get("terminal_reason") or terminal_reason,
+                })
+
+    with SessionLocal() as db:
+        run = db.get(SelectionRun, run_id)
+        if run is None:
+            raise LookupError("选股任务不存在")
+        progress = dict((run.criteria_json or {}).get("hypothesis_research_progress") or {})
+        run.criteria_json = {**(run.criteria_json or {}), "hypothesis_research_progress": {
+            **progress,
+            "status": "COMPLETED" if all(row.get("status") == "COMPLETED" for row in completed) else "PARTIAL",
+            "percent": 100,
+            "completed_count": len(completed), "results": completed,
+            "message": (f"重大事件假设研究完成：{len(completed)} 只股票已完成有界补数与验证"
+                        if all(row.get("status") == "COMPLETED" for row in completed) else
+                        "重大事件假设研究部分完成；数据源或模型失败项已保留状态，可继续重试"),
+            "completed_at": _now().isoformat(), "updated_at": _now().isoformat(),
+        }}
+        db.commit()
+    overall_status = "COMPLETED" if all(row.get("status") == "COMPLETED" for row in completed) else "PARTIAL"
+    return {"selection_run_id": run_id, "status": overall_status, "results": completed}
+
+
 def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, Any]:
     """Refresh failed stocks, enforce the live gates, and preserve prior audit snapshots."""
     from app.db.session import SessionLocal
@@ -1932,7 +2588,10 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             _progress(db, run, "PARTIAL", 100, "失败项已由其他操作处理，无需重复重试")
             return {"selection_run_id": run.id, "candidate_count": 0, "completed_count": 0, "failed_count": 0}
 
-        refresh_candidates = [row for row in candidates if _candidate_needs_data_refresh(row)]
+        reuse_existing_data = bool(payload.get("reuse_existing_data"))
+        refresh_candidates = [] if reuse_existing_data else [
+            row for row in candidates if _candidate_needs_data_refresh(row)
+        ]
         refresh_symbols = [row.symbol for row in refresh_candidates]
         retry_state = (run.criteria_json or {}).get("retry_progress", {})
         data_message = (
@@ -1968,7 +2627,7 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 db,
                 run,
                 symbols=refresh_symbols if refresh_symbols else [row.symbol for row in candidates],
-                force_refresh=bool(refresh_symbols),
+                force_refresh=bool(refresh_symbols) and not reuse_existing_data,
             )
             months = int((run.criteria_json or {}).get("period_months") or 12)
             start, end = selection_period_bounds(run.as_of, months, run.market)
@@ -1986,8 +2645,12 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
                 evidence["data_gate"] = gate
                 evidence["as_of"] = run.as_of.isoformat()
                 evidence["analysis_period"] = {"start": start.isoformat(), "end": end.isoformat(), "months": months}
+                prior_analysis = deepcopy(row.analysis_json or {})
+                if payload.get("research_round"):
+                    evidence["hypothesis_research_context"] = _hypothesis_research_model_context(prior_analysis)
                 analysis = {key: value for key, value in (row.analysis_json or {}).items()
-                            if key in {"skill_code", "skill_version", "skill_chain", "model_attempts"}}
+                            if key in {"skill_code", "skill_version", "skill_chain", "model_attempts",
+                                       "hypothesis_research"}}
                 analysis.update({"model_output_status": "PENDING_MODEL_CALL", "data_gate": gate,
                                  "data_gate_status": gate["status"], "conclusion_available": False})
                 item = {"market": row.market, "symbol": row.symbol, "name": row.name,
@@ -2046,6 +2709,10 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             total = len(all_candidates)
             counts = _selection_result_counts(all_candidates, data_mode=run.data_mode)
             retry_counts = _selection_result_counts(candidates, data_mode=run.data_mode)
+            research_failed_count = sum(
+                str((row.analysis_json or {}).get("model_output_status") or "").upper() != "SUCCESS"
+                for row in candidates
+            )
             passed, citation_partial = counts["passed_count"], counts["citation_partial_count"]
             success = passed + citation_partial
             failed, blocked = counts["failed_count"], counts["data_blocked_count"]
@@ -2088,7 +2755,8 @@ def execute_failed_selection_reanalysis(payload: dict[str, Any]) -> dict[str, An
             _progress(db, run, terminal, 100, message)
             return {"selection_run_id": run.id, "candidate_count": len(candidates),
                     "completed_count": success, "failed_count": failed,
-                    "passed_count": passed, "citation_partial_count": citation_partial, "data_blocked_count": blocked}
+                    "passed_count": passed, "citation_partial_count": citation_partial, "data_blocked_count": blocked,
+                    "research_failed_count": research_failed_count}
         except Exception as exc:
             db.rollback()
             run = db.get(SelectionRun, run_id)
@@ -2326,7 +2994,7 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
         "EVIDENCE_GAP_DETECTOR", "MANAGEMENT_CHANGE_DEEP_DIVE",
         "ACQUISITION_IMPACT_ANALYST", "CAPITAL_ACTION_INTENT_ANALYST",
         "PEER_BENCHMARK_ANALYST", "COUNTER_EVIDENCE_REVIEWER",
-        "CONCLUSION_QUALITY_GATE",
+        "CONCLUSION_QUALITY_GATE", "HYPOTHESIS_RESEARCH_ORCHESTRATOR",
     ]
     skill_rows = list(db.scalars(select(ModelSkill).where(ModelSkill.skill_code.in_(skill_codes))).all())
     skill_by_code = {row.skill_code: row for row in skill_rows}
@@ -2416,6 +3084,30 @@ def create_selection_run(db: Session, payload: SelectionRunCreate, *, run_id: in
     )
     _progress(db, run, terminal_stage, 100,
               f"已完成 {run.candidate_count} 只，等待人工复核" if run.analysis_mode == "MODEL_COMPLETED" else "执行结束，请查看逐股模型状态及缺口")
+    if model_requested and run.data_mode == "REAL":
+        research_candidate_ids = [
+            row.id for row in persisted_candidates
+            if (row.analysis_json or {}).get("model_output_status") == "SUCCESS"
+            and _build_hypothesis_research_plan(row, round_no=1)["questions"]
+        ]
+        if research_candidate_ids:
+            try:
+                queue_selection_hypothesis_research(
+                    db, run.id,
+                    SelectionHypothesisResearchRequest(candidate_ids=research_candidate_ids, max_rounds=3),
+                )
+                run = db.get(SelectionRun, run.id)
+                _progress(
+                    db, run, "RESEARCH_QUEUED", 100,
+                    f"初次分析已完成；{len(research_candidate_ids)} 只股票存在可验证的重大事件假设，系统已自动进入补数研究循环",
+                    phase="ANALYSIS", research_candidate_count=len(research_candidate_ids),
+                )
+            except ValueError as exc:
+                warnings = list((run.criteria_json or {}).get("review_warnings") or [])
+                warnings.append(f"自动假设研究未排队：{str(exc)[:220]}")
+                run.criteria_json = {**(run.criteria_json or {}),
+                                     "review_warnings": list(dict.fromkeys(warnings))}
+                db.commit()
     db.refresh(run)
     return run
 
@@ -2854,6 +3546,7 @@ def _model_candidate_context(item: dict[str, Any]) -> dict[str, Any]:
             ) if row.get(key) is not None}
             for row in (evidence.get("governance_event_timeline") or [])[:40] if isinstance(row, dict)
         ],
+        "hypothesis_research_context": clip(evidence.get("hypothesis_research_context") or {}, 2_400),
         "selected_scope": {"knowledge_bases": (evidence.get("evidence_context") or {}).get("knowledge_base_versions", []),
                            "graphs": (evidence.get("evidence_context") or {}).get("graph_versions", [])},
         "prompt_compaction": {
@@ -3581,6 +4274,115 @@ def _compact_retry_model_context(
             {key: row.get(key) for key in ("id", "fact_type", "observed_at") if row.get(key) is not None}
             for row in evidence["facts"]
         ]
+    if encoded_size() > max_chars:
+        # A one-year disclosure set can contain dozens of map segments.  Every
+        # segment has already been read by the model; the reduce call only
+        # needs proof of complete coverage plus representative, citable
+        # findings.  Keeping one verbose finding per segment can exceed the
+        # final prompt budget even after all source bodies were removed.
+        source_digests = [row for row in evidence.get("evidence_segment_digests") or []
+                          if isinstance(row, dict)]
+        all_findings: list[dict[str, Any]] = []
+        covered_segment_indexes: list[Any] = []
+        segment_document_counts: list[int] = []
+        covered_dimensions: list[str] = []
+        covered_directions: list[str] = []
+        for digest in source_digests:
+            segment = digest.get("segment") if isinstance(digest.get("segment"), dict) else {}
+            findings = [row for row in digest.get("findings") or [] if isinstance(row, dict)]
+            analyzed_ids = list(digest.get("analyzed_document_ids") or [])
+            covered_segment_indexes.append(segment.get("index"))
+            segment_document_counts.append(len(analyzed_ids))
+            covered_dimensions.extend(str(row.get("dimension")) for row in findings if row.get("dimension"))
+            covered_directions.extend(str(row.get("direction")) for row in findings if row.get("direction"))
+            for finding in findings:
+                all_findings.append({**finding, "segment": segment})
+        representatives = prioritized_findings(all_findings, 16)
+        evidence["evidence_segment_digests"] = []
+        evidence["evidence_segment_coverage"] = {
+            "source_segment_count": len(source_digests),
+            "covered_segment_indexes": covered_segment_indexes,
+            "segment_document_counts": segment_document_counts,
+            "analyzed_document_count": sum(segment_document_counts),
+            "finding_dimensions": list(dict.fromkeys(covered_dimensions))[:16],
+            "finding_directions": list(dict.fromkeys(covered_directions))[:8],
+        }
+        evidence["evidence_segment_representative_findings"] = [{
+            key: (
+                str(row.get(key) or "")[:180] if key == "summary" else
+                [str(value)[:160] for value in (row.get(key) or [])[:1]] if key == "evidence_quotes" else
+                list(row.get(key) or [])[:12] if key in {
+                    "evidence_document_ids", "evidence_fact_ids", "evidence_relation_ids",
+                } else row.get(key)
+            )
+            for key in (
+                "segment", "dimension", "direction", "summary", "evidence_document_ids",
+                "evidence_fact_ids", "evidence_relation_ids", "evidence_quotes",
+            ) if row.get(key) not in (None, [], "")
+        } for row in representatives]
+        evidence["prompt_compaction"].update({
+            "segment_digest_mode": "ALL_SEGMENTS_COVERAGE_PLUS_REPRESENTATIVE_FINDINGS",
+            "representative_finding_count": len(representatives),
+        })
+    if encoded_size() > max_chars:
+        # The full citation universe remains in the persisted evidence
+        # snapshot.  The reduce call may cite only evidence retained in its
+        # representative findings, so shrink the prompt allowlist to that
+        # bounded set rather than failing the completed map pass.
+        representatives = evidence.get("evidence_segment_representative_findings") or []
+        cited_document_ids = list(dict.fromkeys(
+            value for row in representatives if isinstance(row, dict)
+            for value in (row.get("evidence_document_ids") or [])
+        ))
+        cited_fact_ids = list(dict.fromkeys(
+            str(value) for row in representatives if isinstance(row, dict)
+            for value in (row.get("evidence_fact_ids") or [])
+        ))
+        retained_fact_ids = [str(row.get("id")) for row in evidence.get("facts") or []
+                             if isinstance(row, dict) and row.get("id") is not None]
+        cited_fact_ids = list(dict.fromkeys([*cited_fact_ids, *retained_fact_ids]))[:48]
+        evidence["model_document_ids"] = cited_document_ids[:96]
+        evidence["document_ids"] = cited_document_ids[:96]
+        evidence["evidence_fact_ids"] = cited_fact_ids
+        evidence["citation_allowlist"] = {
+            "document_ids": cited_document_ids[:96], "fact_ids": cited_fact_ids,
+            "chunk_ids": [], "relation_ids": [],
+        }
+        evidence["evidence_segment_representative_findings"] = representatives[:10]
+        evidence["prompt_compaction"]["citation_scope"] = "REPRESENTATIVE_REDUCE_EVIDENCE"
+    if encoded_size() > max_chars:
+        representatives = evidence.get("evidence_segment_representative_findings") or []
+        evidence["documents"] = []
+        evidence["facts"] = [
+            {key: row.get(key) for key in ("id", "fact_type", "observed_at") if row.get(key) is not None}
+            for row in (evidence.get("facts") or [])[:4] if isinstance(row, dict)
+        ]
+        evidence["evidence_segment_representative_findings"] = [{
+            key: (
+                str(row.get(key) or "")[:100] if key == "summary" else
+                list(row.get(key) or [])[:6] if key in {"evidence_document_ids", "evidence_fact_ids"} else
+                row.get(key)
+            )
+            for key in ("segment", "dimension", "direction", "summary",
+                        "evidence_document_ids", "evidence_fact_ids")
+            if row.get(key) not in (None, [], "")
+        } for row in representatives[:6] if isinstance(row, dict)]
+        retained_document_ids = list(dict.fromkeys(
+            value for row in evidence["evidence_segment_representative_findings"]
+            for value in (row.get("evidence_document_ids") or [])
+        ))
+        retained_fact_ids = list(dict.fromkeys(
+            str(value) for row in evidence["evidence_segment_representative_findings"]
+            for value in (row.get("evidence_fact_ids") or [])
+        ))
+        evidence["model_document_ids"] = retained_document_ids
+        evidence["document_ids"] = retained_document_ids
+        evidence["evidence_fact_ids"] = retained_fact_ids
+        evidence["citation_allowlist"] = {
+            "document_ids": retained_document_ids, "fact_ids": retained_fact_ids,
+            "chunk_ids": [], "relation_ids": [],
+        }
+        evidence["prompt_compaction"]["final_hard_trim"] = True
     if encoded_size() > max_chars:
         raise ValueError(
             f"单股修复证据索引为 {encoded_size()} 字符，超过 {max_chars} 字符预算；"
@@ -5788,7 +6590,7 @@ def _apply_model_analysis(
         "EVIDENCE_GAP_DETECTOR", "MANAGEMENT_CHANGE_DEEP_DIVE",
         "ACQUISITION_IMPACT_ANALYST", "CAPITAL_ACTION_INTENT_ANALYST",
         "PEER_BENCHMARK_ANALYST", "COUNTER_EVIDENCE_REVIEWER",
-        "CONCLUSION_QUALITY_GATE",
+        "CONCLUSION_QUALITY_GATE", "HYPOTHESIS_RESEARCH_ORCHESTRATOR",
     ]
     analysis_skill_prompt_chars = 0
     if db is not None:
@@ -6110,6 +6912,10 @@ def _apply_model_analysis(
                 "文档、事实或关系；VERIFIED文档事实必须带连续原文引句。PARTIAL或INSUFFICIENT必须列出missing_evidence、"
                 "对结论的影响、优先官方来源、可执行检索词和external_research_plan，并说明后续tracking_metrics。"
                 "互联网或模型常识不能直接进入结论；外部补证必须先保存为可追溯证据文档，再重新分析。"
+                "如果evidence_json.hypothesis_research_context存在，本轮是同一研究问题的后续验证：必须逐项继承上一轮"
+                "research_code、竞争性假设、已支持/已反驳证据、当前置信度、失效条件和已完成轮次；只能根据本轮新增证据"
+                "更新原假设，禁止改写成一组无关的新假设。没有新增证据时保留问题身份并明确未获支持，不能凭常识补强；"
+                "新增反证时必须降低对应假设置信度，新增支持证据时说明它排除了哪些竞争性解释。"
             )
         contract_prompt_prefix = contract_prompt
         batch_allowlists = {str(row["symbol"]): row["evidence_json"]["citation_allowlist"] for row in batch}

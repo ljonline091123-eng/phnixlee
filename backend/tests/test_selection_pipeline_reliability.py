@@ -204,6 +204,61 @@ def test_one_year_retry_uses_all_segment_digests_under_hard_budget():
     assert compact["evidence_json"]["prompt_compaction"]["all_segment_digests_included"] is True
 
 
+def test_large_map_reduce_retry_keeps_all_segment_coverage_under_hard_budget():
+    documents = [
+        {"id": index, "source_table": "stock_notice", "title": f"年度资料{index}",
+         "published_at": "2026-10-30", "content_state": "TEXT_AVAILABLE", "content": BODY * 30}
+        for index in range(240)
+    ]
+    facts = [
+        {"id": f"fact:{index}", "fact_type": "FINANCIAL_OBSERVATION",
+         "properties": {"value": index, "detail": BODY * 30}}
+        for index in range(30)
+    ]
+    allowlist = {
+        "document_ids": list(range(240)), "notice_document_ids": list(range(240)),
+        "fact_ids": [row["id"] for row in facts],
+        "financial_fact_ids": [row["id"] for row in facts],
+    }
+    digests = []
+    for index in range(1, 61):
+        start = (index - 1) * 4
+        digests.append({
+            "segment": {"index": index, "total": 60},
+            "analyzed_document_ids": list(range(start, start + 4)),
+            "findings": [{
+                "dimension": "INDUSTRY" if index % 2 else "GOVERNANCE",
+                "direction": "MIXED", "summary": BODY * 8,
+                "evidence_document_ids": list(range(start, start + 4)),
+                "evidence_fact_ids": [f"fact:{index % 30}"],
+                "evidence_relation_ids": [], "evidence_quotes": [BODY * 3],
+                "causal_chain": [BODY * 3, BODY * 3], "uncertainty": BODY * 4,
+            }],
+            "conflicts": [BODY * 4], "limitations": [BODY * 4],
+        })
+    item = {"market": "HK", "symbol": "02533", "name": "黑芝麻智能", "analysis_json": {},
+            "hard_rules_json": {}, "evidence_json": {"documents": documents, "facts": facts,
+                                                       "citation_allowlist": allowlist}}
+    summary = {"symbol": "02533", "evidence_json": {
+        "citation_allowlist": allowlist, "evidence_segment_digests": digests,
+    }}
+
+    compact = _compact_retry_model_context(item, summary_item=summary, max_chars=14_000)
+    rendered = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+    evidence = compact["evidence_json"]
+
+    assert len(rendered) <= 14_000
+    assert evidence["evidence_segment_digests"] == []
+    coverage = evidence["evidence_segment_coverage"]
+    assert coverage["source_segment_count"] == 60
+    assert coverage["covered_segment_indexes"] == list(range(1, 61))
+    assert coverage["analyzed_document_count"] == 240
+    assert evidence["prompt_compaction"]["segment_digest_mode"] == (
+        "ALL_SEGMENTS_COVERAGE_PLUS_REPRESENTATIVE_FINDINGS"
+    )
+    assert 1 <= len(evidence["evidence_segment_representative_findings"]) <= 16
+
+
 def test_v7_prompt_uses_compact_field_guide_instead_of_full_json_schema():
     guide = _selection_output_contract_guide("FUNDAMENTAL_THESIS_V7")
     assert len(guide) < 5_000

@@ -11,6 +11,7 @@ from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.orchestration.company_governance import CompanyGovernanceWorkflow
 from app.services.selection import (
     refresh_tracking, execute_failed_selection_reanalysis, execute_selection_data_backfill,
+    execute_selection_hypothesis_research,
     execute_selection_job,
 )
 from app.services.change_detection import run_change_detection
@@ -28,6 +29,7 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
     "selection_analysis": execute_selection_job,
     "selection_retry_failed": execute_failed_selection_reanalysis,
     "selection_data_backfill": execute_selection_data_backfill,
+    "selection_hypothesis_research": execute_selection_hypothesis_research,
     "company_graph_governance": CompanyGovernanceWorkflow().execute,
     'foundation_archive_evidence': LegacyEvidenceArchiveWorkflow().execute,
     "daily_master_sync": MasterDataSyncWorkflow().execute,

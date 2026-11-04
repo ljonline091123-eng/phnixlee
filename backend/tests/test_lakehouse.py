@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -27,6 +28,28 @@ def _engine():
 def _filesystem(monkeypatch, tmp_path):
     monkeypatch.setenv("LAKE_STORAGE_BACKEND", "filesystem")
     monkeypatch.setenv("LAKE_FILESYSTEM_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+
+
+def test_minio_client_uses_bounded_fail_fast_timeouts(monkeypatch):
+    monkeypatch.setenv("LAKE_STORAGE_BACKEND", "minio")
+    monkeypatch.setenv("LAKE_S3_CONNECT_TIMEOUT_SECONDS", "0.7")
+    monkeypatch.setenv("LAKE_S3_READ_TIMEOUT_SECONDS", "2.5")
+    get_settings.cache_clear()
+    captured = {}
+
+    class FakePoolManager:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    with patch("urllib3.PoolManager", FakePoolManager), patch("minio.Minio") as minio:
+        lakehouse._minio_client()
+
+    timeout = captured["timeout"]
+    assert timeout.connect_timeout == 0.7
+    assert timeout.read_timeout == 2.5
+    assert captured["retries"] is False
+    assert minio.call_args.kwargs["http_client"].__class__ is FakePoolManager
     get_settings.cache_clear()
 
 

@@ -100,7 +100,7 @@ export type SelectionCandidate = {
   entry_price: number | null; entry_date: string | null; hard_score: number;
   hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence;
   analysis_json: Record<string, unknown> & { publication?: {
-    status: "READY_REVIEW" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "RESEARCH_INCOMPLETE" | "NOT_ANALYZED";
+    status: "READY_REVIEW" | "READY_REVIEW_WITH_UNCERTAINTY" | "CONCLUSION_FAILED" | "SCORE_FAILED" | "MODEL_FAILED" | "DATA_INSUFFICIENT" | "RESEARCH_RUNNING" | "RESEARCH_INCOMPLETE" | "NOT_ANALYZED";
     reason: string; conclusion_available: boolean; scoring_available: boolean; retryable: boolean;
   }};
   decision: string; review_notes: string | null; target_price: number | null; stop_price: number | null;
@@ -189,6 +189,10 @@ export type SelectionBackfillRequest = {
   force_refresh?: boolean;
   rerun_analysis?: boolean;
 };
+export type SelectionHypothesisResearchRequest = {
+  candidate_ids?: number[];
+  max_rounds?: number;
+};
 export type SelectionModelSwitchRequest = {
   model_instance_code?: string | null;
   model_instance_codes: string[];
@@ -237,6 +241,8 @@ export const selectionApi = {
   ),
   backfill: (id: number, payload: SelectionBackfillRequest) => request<SelectionRun>(`/selection/runs/${id}/backfill`, { method: "POST", body: JSON.stringify(payload) }),
   backfillStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/backfill-status`),
+  hypothesisResearch: (id: number, payload: SelectionHypothesisResearchRequest) => request<SelectionRun>(`/selection/runs/${id}/hypothesis-research`, { method: "POST", body: JSON.stringify(payload) }),
+  hypothesisResearchStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/hypothesis-research-status`),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),
   getRun: (id: number) => request<SelectionRun>(`/selection/runs/${id}`),
   history: (params: {query?: string; market?: string; page?: number; page_size?: number} = {}) => {

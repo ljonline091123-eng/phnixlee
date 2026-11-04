@@ -613,6 +613,16 @@ class SelectionBackfillRequest(BaseModel):
         return self
 
 
+class SelectionHypothesisResearchRequest(BaseModel):
+    candidate_ids: list[int] = Field(default_factory=list, max_length=500)
+    max_rounds: int = Field(default=3, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def unique_research_scope(self) -> "SelectionHypothesisResearchRequest":
+        self.candidate_ids = list(dict.fromkeys(self.candidate_ids))
+        return self
+
+
 class SelectionModelSwitchRequest(BaseModel):
     """Explicitly select another model for unresolved candidates.
 

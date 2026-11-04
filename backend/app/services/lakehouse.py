@@ -198,9 +198,24 @@ def storage_mode() -> str:
 
 def _minio_client():
     from minio import Minio
+    import urllib3
+
     settings = get_settings()
+    # Object storage is an auditable archive, but an unavailable local MinIO
+    # must not hold a SQLite write transaction for the client's long default
+    # retry window. Callers already record archive failures and preserve the
+    # normalized business row, so fail fast here and let the governed retry
+    # path archive the payload after storage recovers.
+    http_client = urllib3.PoolManager(
+        timeout=urllib3.Timeout(
+            connect=max(0.1, float(settings.lake_s3_connect_timeout_seconds)),
+            read=max(0.1, float(settings.lake_s3_read_timeout_seconds)),
+        ),
+        retries=False,
+    )
     return Minio(settings.lake_s3_endpoint, access_key=settings.lake_s3_access_key,
-                 secret_key=settings.lake_s3_secret_key, secure=settings.lake_s3_secure)
+                 secret_key=settings.lake_s3_secret_key, secure=settings.lake_s3_secure,
+                 http_client=http_client)
 
 
 def storage_health() -> dict[str, Any]:

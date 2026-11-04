@@ -11,6 +11,8 @@ const assessmentNames: Record<string, string> = {BUSINESS_OUTLOOK: "主营赛道
 const researchNames: Record<string, string> = {BUSINESS_MODEL: "公司赚钱逻辑", MANAGEMENT_CHANGE: "重大管理层变化", ACQUISITION_SECOND_CURVE: "并购与第二曲线", CAPITAL_ACTION_INTENT: "回购、注销与锁定行为"};
 const researchStatusNames: Record<string, string> = {COMPLETE: "已完成", PARTIAL: "部分完成", INSUFFICIENT: "证据不足", NOT_APPLICABLE: "不适用"};
 const researchResolutionNames: Record<string, string> = {LOCAL_SOURCE_PENDING: "等待本地数据补齐", EXTERNAL_RESEARCH_REQUIRED: "需要外部补证", USER_INPUT_REQUIRED: "需要用户补充", UNAVAILABLE: "当前不可得"};
+const researchLoopNames: Record<string, string> = {QUEUED: "等待执行", RUNNING: "正在补数验证", COMPLETED: "已完成", SOURCE_EXHAUSTED: "现有来源已查无新增证据", MAX_ROUNDS: "达到本轮验证上限", SOURCE_FAILED: "数据源调用失败，可重试", MODEL_FAILED: "模型重验失败，可重试"};
+const researchRoundNames: Record<string, string> = {VERIFIED_WITH_INCREMENT: "发现新增证据并完成重验", NO_NEW_EVIDENCE: "来源查询成功，但未发现新增证据", SOURCE_FAILED: "数据源调用失败，本轮不降权", MODEL_FAILED: "模型重验失败，本轮不降权"};
 const array = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
 export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH";
@@ -101,7 +103,7 @@ export function SelectionDiagnostics({ candidate }: { candidate: SelectionCandid
   </section>;
 }
 
-export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; backfillDisabled?: boolean; onRescore?: () => void}) {
+export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, onResearch, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; onResearch?: () => void; backfillDisabled?: boolean; onRescore?: () => void}) {
   const analysis = candidate.analysis_json;
   const model = (analysis.model || {}) as SelectionRecord;
   const modelFailed = analysis.model_output_status === "FAILED";
@@ -120,6 +122,8 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const hypotheses = array(thesis?.hypotheses);
   const researchQuestions = array(thesis?.research_questions);
   const deepAssessments = array(thesis?.deep_assessments);
+  const researchLoop = (analysis.hypothesis_research || {}) as SelectionRecord;
+  const researchHistory = array(researchLoop.history);
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
   const documents = [...new Map([
@@ -144,7 +148,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。失败原因、模型调用和处理建议请查看“数据事实”页签。</p></div>
   </section>;
   return <section className="selection-analysis">
-    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，先补证后再生成可跟踪评分。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
+    <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_RUNNING" ? "正在主动研究" : publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : publication.status === "READY_REVIEW_WITH_UNCERTAINTY" ? "可复核 · 含低置信保留项" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_RUNNING" ? "系统正在补数并重新验证假设，研究结束后再生成可跟踪评分。" : publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，系统会继续补数验证。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
     {thesis ? <section className={`analysis-thesis ${String(thesis.status || "INSUFFICIENT").toLowerCase()}`}>
       <div className="analysis-thesis-heading"><div><span>基本面主线</span><h3>整体投资逻辑</h3><p>先判断公司如何赚钱，再用行业、公司行为、产业链、估值预期和交易状态交叉验证。</p></div><div><strong>{thesisStatusNames[String(thesis.status)] || "待核验"}</strong><small>置信度 {Math.round(Number(thesis.confidence || 0) * 100)}%</small></div></div>
       <div className="analysis-thesis-core"><article><small>公司靠什么赚钱</small><strong>{String(thesis.primary_business || "主营证据不足")}</strong><p>{String(thesis.earning_engine_summary || "尚未识别收入和利润发动机")}</p></article><article><small>盈利质量</small><strong>收入与利润是否可持续</strong><p>{String(thesis.profit_quality_summary || "盈利质量证据不足")}</p></article></div>
@@ -180,6 +184,25 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
             {array(question.evidence_document_ids).length > 0 && <div className="analysis-references">{array(question.evidence_document_ids).map(id => reference(Number(id)))}</div>}
           </article>;
         })}</div>
+      </section>}
+      {(researchLoop.status || researchHistory.length > 0) && <section className="analysis-research-loop" aria-label="重大事件假设研究历程">
+        <div className="analysis-research-heading"><div><span>事件驱动研究闭环</span><h4>重大事件 → 竞争性假设 → 补数 → 重验</h4></div><small>第 {Number(researchLoop.round || 0)} / {Number(researchLoop.max_rounds || 3)} 轮 · {researchLoopNames[String(researchLoop.status)] || researchLoopNames[String(researchLoop.terminal_reason)] || "待执行"}</small></div>
+        <p className="research-loop-explain">系统只对可能改变结论的重大事件假设主动补数。只有来源查询成功且连续两轮没有新增证据，才会降低次级假设置信度；数据源或模型失败不会被当作“查无证据”。</p>
+        {["SOURCE_FAILED", "MODEL_FAILED"].includes(String(researchLoop.status)) && <p className="batch-alert error"><strong>{researchLoopNames[String(researchLoop.status)]}</strong><br />{String(researchLoop.last_error || "上一轮假设、已采集证据和结论均已保留，可继续重试。")}</p>}
+        {researchHistory.length > 0 ? <ol className="research-rounds">{researchHistory.map((round, index) => {
+          const questions = array(round.questions);
+          const newDocuments = strings(round.new_document_ids);
+          const newFacts = strings(round.new_fact_ids);
+          const newRelations = strings(round.new_relation_ids);
+          return <li key={`${Number(round.round || index + 1)}-${String(round.completed_at || "")}`}>
+            <header><strong>第 {Number(round.round || index + 1)} 轮</strong><span className={String(round.status) === "VERIFIED_WITH_INCREMENT" ? "success" : "warning"}>{researchRoundNames[String(round.status)] || "研究状态待核"}</span></header>
+            <p>研究事项：{questions.map(item => researchNames[String(item.research_code)] || String(item.question || item.research_code)).join("；") || "重大事件假设"}</p>
+            <p>调用板块：{strings(round.dimensions).map(code => names[code] || code).join("、") || "按研究问题动态确定"}</p>
+            <div><span>新增原文 {newDocuments.length}</span><span>新增事实 {newFacts.length}</span><span>新增关系 {newRelations.length}</span><span>结构化增量 {Number(round.structured_count_delta || 0)}</span></div>
+            {["SOURCE_FAILED", "MODEL_FAILED"].includes(String(round.status)) ? <small>失败轮次不计入无新增证据次数，也不会触发假设置信度衰减。</small> : Number(round.consecutive_no_increment || 0) > 0 && <small>连续 {Number(round.consecutive_no_increment)} 轮无新增证据，相关假设已按确定性规则衰减置信度。</small>}
+          </li>;
+        })}</ol> : <p className="batch-missing">研究任务已识别，等待后台执行第一轮数据补全与验证。</p>}
+        {researchLoop.status !== "RUNNING" && researchLoop.status !== "QUEUED" && publication.status === "RESEARCH_INCOMPLETE" && onResearch && <button type="button" disabled={backfillDisabled} onClick={onResearch}>继续执行假设研究</button>}
       </section>}
       {deepAssessments.length > 0 && <div className="analysis-deep-assessments"><h4>一年期深度判断</h4><div>{deepAssessments.map((item, index) => <article key={`${String(item.assessment_code)}-${index}`}>
         <header><strong>{assessmentNames[String(item.assessment_code)] || String(item.assessment_code || "分析维度")}</strong><span className={`analysis-direction ${String(item.direction || "UNKNOWN").toLowerCase()}`}>{names[String(item.direction)] || "待判断"}</span></header>
