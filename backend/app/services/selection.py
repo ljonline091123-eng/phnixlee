@@ -57,6 +57,23 @@ def _now() -> datetime:
 
 _SELECTION_PHASES = ("DATA", "MODEL_PREFLIGHT", "ANALYSIS")
 
+# Model providers use several equivalent spellings for hypothesis outcomes.
+# Keep this mapping at module scope because both the row normalizer and the
+# batch parser normalize hypotheses. A local mapping in only one of those
+# paths caused valid provider responses to fail with NameError during parsing.
+_HYPOTHESIS_STATUS_MAP = {
+    "UNVERIFIED": "INSUFFICIENT",
+    "VERIFIED": "SUPPORTED",
+    "REALIZED": "SUPPORTED",
+    "PARTIALLY_SUPPORTED": "MIXED",
+    "PARTIAL_SUPPORTED": "MIXED",
+    "PARTIALLY_VERIFIED": "MIXED",
+    "PARTIALLY_VALIDATED": "MIXED",
+    "PARTIAL": "MIXED",
+    "PARTIALLY_REALIZED": "MIXED",
+    "NOT_REALIZED": "CONTRADICTED",
+}
+
 
 def _phase_for_stage(stage: str, explicit_phase: str | None = None) -> str:
     value = str(explicit_phase or stage or "").upper()
@@ -5336,44 +5353,152 @@ def _normalize_selection_model_row(raw: dict[str, Any]) -> dict[str, Any]:
         status = str(finding.get("validation_status") or "UNVERIFIED").upper()
         if status in event_status:
             finding["validation_status"] = event_status[status]
+        elif status not in {
+            "UNVERIFIED", "PARTIALLY_REALIZED", "REALIZED", "NOT_REALIZED",
+            "CONFLICTED", "INSUFFICIENT",
+        }:
+            # Unknown validation states do not prove realization; fail closed.
+            finding["validation_status"] = "INSUFFICIENT"
 
     business = raw.get("business_quality")
     if isinstance(business, dict):
+        if str(business.get("status") or "INSUFFICIENT").upper() not in {"SUPPORTED", "INSUFFICIENT"}:
+            business["status"] = "INSUFFICIENT"
         allowed_levels = {"UNKNOWN", "LOW", "MEDIUM", "HIGH", "LEADING"}
         level = str(business.get("technology_level") or "UNKNOWN").upper()
         # INSUFFICIENT and descriptive prose do not prove a technology level.
         business["technology_level"] = level if level in allowed_levels else "UNKNOWN"
 
+    value_chain = raw.get("value_chain_analysis")
+    if isinstance(value_chain, dict) and str(value_chain.get("status") or "INSUFFICIENT").upper() not in {
+        "SUPPORTED", "INSUFFICIENT",
+    }:
+        value_chain["status"] = "INSUFFICIENT"
+
     thesis = raw.get("investment_thesis")
     if isinstance(thesis, dict):
-        hypothesis_status_map = {
-            "UNVERIFIED": "INSUFFICIENT", "VERIFIED": "SUPPORTED", "REALIZED": "SUPPORTED",
-            "PARTIALLY_SUPPORTED": "MIXED", "PARTIAL_SUPPORTED": "MIXED", "PARTIALLY_VERIFIED": "MIXED",
-            "PARTIALLY_VALIDATED": "MIXED", "PARTIAL": "MIXED", "PARTIALLY_REALIZED": "MIXED",
-            "NOT_REALIZED": "CONTRADICTED",
-        }
-        status_map = {
-            "UNVERIFIED": "INSUFFICIENT",
-            "VERIFIED": "SUPPORTED",
-            "REALIZED": "SUPPORTED",
-            "PARTIALLY_SUPPORTED": "MIXED",
-            "PARTIAL_SUPPORTED": "MIXED",
-            "PARTIALLY_VERIFIED": "MIXED",
-            "PARTIALLY_VALIDATED": "MIXED",
-            "PARTIAL": "MIXED",
-            "PARTIALLY_REALIZED": "MIXED",
-            "NOT_REALIZED": "CONTRADICTED",
-        }
-        for hypothesis in thesis.get("hypotheses") or []:
+        try:
+            thesis["confidence"] = max(0.0, min(1.0, float(thesis.get("confidence") or 0)))
+        except (TypeError, ValueError):
+            thesis["confidence"] = 0.0
+        def _as_list(value: Any) -> list[Any]:
+            if value is None:
+                return []
+            return value if isinstance(value, list) else [value]
+
+        def _normalize_hypothesis_shape(hypothesis: Any) -> dict[str, Any] | None:
+            # Some providers serialize a hypothesis as a short string. Keep
+            # the claim auditable, but explicitly mark it insufficient rather
+            # than dropping it or inventing evidence.
+            if isinstance(hypothesis, str):
+                claim = hypothesis.strip()
+                if not claim:
+                    return None
+                return {
+                    "title": claim[:120],
+                    "thesis": claim[:800],
+                    "status": "INSUFFICIENT",
+                    "direction": "UNKNOWN",
+                    "horizon": "UNKNOWN",
+                    "confidence": 0.0,
+                    "supporting_document_ids": [],
+                    "supporting_fact_ids": [],
+                    "supporting_relation_ids": [],
+                    "counter_document_ids": [],
+                    "counter_fact_ids": [],
+                    "counter_relation_ids": [],
+                    "evidence_items": [],
+                    "invalidation_conditions": [],
+                    "watch_conditions": [],
+                }
             if not isinstance(hypothesis, dict):
-                continue
+                return None
+            allowed_keys = {
+                "title", "thesis", "status", "direction", "horizon", "confidence",
+                "supporting_document_ids", "supporting_fact_ids", "supporting_relation_ids",
+                "counter_document_ids", "counter_fact_ids", "counter_relation_ids",
+                "evidence_items", "invalidation_conditions", "watch_conditions",
+            }
+            # Keep the typed contract closed when a provider adds prose-only
+            # fields such as `rationale` to a hypothesis object.
+            for key in list(hypothesis):
+                if key not in allowed_keys:
+                    hypothesis.pop(key, None)
+            title = str(hypothesis.get("title") or "待核对假设").strip()
+            hypothesis["title"] = title[:120]
+            hypothesis["thesis"] = str(hypothesis.get("thesis") or title).strip()[:800]
             status = str(hypothesis.get("status") or "INSUFFICIENT").upper()
-            if status in status_map:
-                hypothesis["status"] = status_map[status]
+            hypothesis["status"] = _HYPOTHESIS_STATUS_MAP.get(status, "INSUFFICIENT")
+            direction = str(hypothesis.get("direction") or "UNKNOWN").upper()
+            if direction not in {"POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"}:
+                hypothesis["direction"] = "UNKNOWN"
+            hypothesis.setdefault("direction", "UNKNOWN")
             hypothesis["horizon"] = horizon(hypothesis.get("horizon"))
+            try:
+                confidence = float(hypothesis.get("confidence") or 0)
+            except (TypeError, ValueError):
+                confidence = 0.0
+            if confidence > 1 and confidence <= 100:
+                confidence /= 100
+            hypothesis["confidence"] = max(0.0, min(1.0, confidence))
+            for key in (
+                "supporting_document_ids", "supporting_fact_ids", "supporting_relation_ids",
+                "counter_document_ids", "counter_fact_ids", "counter_relation_ids",
+                "evidence_items", "invalidation_conditions", "watch_conditions",
+            ):
+                hypothesis[key] = _as_list(hypothesis.get(key))
+            return hypothesis
+
+        thesis["hypotheses"] = [
+            normalized for hypothesis in thesis.get("hypotheses") or []
+            if (normalized := _normalize_hypothesis_shape(hypothesis)) is not None
+        ]
         for assessment in thesis.get("deep_assessments") or []:
             if isinstance(assessment, dict):
                 assessment["time_horizon"] = horizon(assessment.get("time_horizon"))
+        for research in thesis.get("research_questions") or []:
+            if not isinstance(research, dict):
+                continue
+            research_status = str(research.get("status") or "INSUFFICIENT").upper()
+            if research_status not in {"COMPLETE", "PARTIAL", "INSUFFICIENT", "NOT_APPLICABLE"}:
+                research["status"] = "INSUFFICIENT"
+            research["known_facts"] = _as_list(research.get("known_facts"))
+            research["hypotheses"] = _as_list(research.get("hypotheses"))
+            research["missing_evidence"] = _as_list(research.get("missing_evidence"))
+            research["external_research_plan"] = [
+                str(value) for value in _as_list(research.get("external_research_plan"))
+            ]
+            research["tracking_metrics"] = [
+                str(value) for value in _as_list(research.get("tracking_metrics"))
+            ]
+            research["evidence_document_ids"] = [
+                int(value) for value in _as_list(research.get("evidence_document_ids"))
+                if str(value).isdigit()
+            ]
+            research["evidence_fact_ids"] = [
+                str(value) for value in _as_list(research.get("evidence_fact_ids"))
+            ]
+            research["evidence_relation_ids"] = [
+                int(value) for value in _as_list(research.get("evidence_relation_ids"))
+                if str(value).isdigit()
+            ]
+            for gap in research["missing_evidence"]:
+                if not isinstance(gap, dict):
+                    continue
+                for key in ("required_evidence", "preferred_sources", "search_queries"):
+                    gap[key] = [str(value) for value in _as_list(gap.get(key))]
+                resolution = str(gap.get("resolution_status") or "UNAVAILABLE").upper()
+                if resolution not in {
+                    "LOCAL_SOURCE_PENDING", "EXTERNAL_RESEARCH_REQUIRED",
+                    "USER_INPUT_REQUIRED", "UNAVAILABLE",
+                }:
+                    gap["resolution_status"] = "UNAVAILABLE"
+            normalized_hypotheses = []
+            for hypothesis in research.get("hypotheses") or []:
+                normalized = _normalize_hypothesis_shape(hypothesis)
+                if normalized is not None:
+                    normalized_hypotheses.append(normalized)
+            research["hypotheses"] = normalized_hypotheses
 
     if dropped_events or downgraded_events:
         warnings = list(raw.get("semantic_linkage_warnings") or [])
@@ -5431,7 +5556,8 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
             if not orphan_fields:
                 continue
             for key, value in orphan_fields.items():
-                rows[0].setdefault(key, value)
+                if not isinstance(rows[0].get(key), dict):
+                    rows[0][key] = value
             payload = decoded
             break
     if payload is None:
@@ -5439,6 +5565,16 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
     rows = payload if isinstance(payload, list) else payload.get("candidates") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ValueError("模型结果缺少 candidates 列表")
+
+    # For a single-stock request, providers may place optional deep-analysis
+    # objects beside `candidates` even when the JSON itself is valid. Apply
+    # the same narrowly scoped recovery used for truncated responses.
+    if isinstance(payload, dict) and len(rows) == 1 and isinstance(rows[0], dict):
+        for key in ("business_quality", "value_chain_analysis", "investment_thesis"):
+            value = payload.get(key)
+            if isinstance(value, dict):
+                if not isinstance(rows[0].get(key), dict):
+                    rows[0][key] = value
 
     parsed: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
@@ -5480,9 +5616,11 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
 
                 def _normalize_hypothesis(hypothesis: dict[str, Any]) -> None:
                     status = str(hypothesis.get("status") or "INSUFFICIENT").upper()
-                    if status in hypothesis_status_map:
-                        hypothesis["status"] = hypothesis_status_map[status]
-                    hypothesis["horizon"] = horizon(hypothesis.get("horizon"))
+                    if status in _HYPOTHESIS_STATUS_MAP:
+                        hypothesis["status"] = _HYPOTHESIS_STATUS_MAP[status]
+                    # _normalize_selection_model_row already canonicalizes
+                    # horizon values. This parser pass only normalizes IDs
+                    # and statuses, so it must not call a local-only helper.
                     _normalize_fact_ids(hypothesis, "supporting_fact_ids", "counter_fact_ids")
                     for evidence_item in hypothesis.get("evidence_items") or []:
                         if isinstance(evidence_item, dict) and evidence_item.get("reference_id") is not None:
@@ -5492,8 +5630,16 @@ def _parse_model_recommendations(response_text: str, expected_symbols: set[str])
                     if isinstance(thesis.get(key), list):
                         thesis[key] = [str(value) for value in thesis[key]]
                 for classification in thesis.get("classifications") or []:
-                    if isinstance(classification, dict) and isinstance(classification.get("evidence_fact_ids"), list):
+                    if not isinstance(classification, dict):
+                        continue
+                    if isinstance(classification.get("evidence_fact_ids"), list):
                         classification["evidence_fact_ids"] = [str(value) for value in classification["evidence_fact_ids"]]
+                    try:
+                        relevance = float(classification.get("relevance_score") or 0)
+                    except (TypeError, ValueError):
+                        relevance = 0.0
+                    if relevance > 1 and relevance <= 100:
+                        classification["relevance_score"] = relevance / 100
                 for assessment in thesis.get("deep_assessments") or []:
                     if isinstance(assessment, dict) and isinstance(assessment.get("evidence_fact_ids"), list):
                         assessment["evidence_fact_ids"] = [str(value) for value in assessment["evidence_fact_ids"]]

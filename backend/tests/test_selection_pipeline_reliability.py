@@ -445,6 +445,105 @@ def test_model_status_synonyms_are_normalized_without_weakening_contract():
     assert alternate["investment_thesis"]["hypotheses"][0]["horizon"] == "MULTI_PERIOD"
 
 
+def test_parser_normalizes_hypotheses_without_local_scope_error():
+    row = output()
+    row["investment_thesis"] = {
+        "status": "PARTIAL",
+        "primary_business": "测试主营业务",
+        "earning_engine_summary": "测试收入与利润驱动",
+        "profit_quality_summary": "测试利润质量",
+        "industry_chain_summary": "测试行业与产业链",
+        "valuation_summary": "测试估值",
+        "institution_view_summary": "测试机构预期",
+        "market_timing_summary": "测试量价与资金",
+        "overall_logic": "测试整体投资逻辑",
+        "confidence": 0.5,
+        "hypotheses": [{
+            "title": "测试假设",
+            "thesis": "测试假设内容",
+            "status": "PARTIALLY_SUPPORTED",
+            "direction": "MIXED",
+            "horizon": "12个月",
+            "confidence": 0.5,
+            "supporting_document_ids": [],
+            "supporting_fact_ids": [],
+            "supporting_relation_ids": [],
+            "counter_document_ids": [],
+            "counter_fact_ids": [],
+            "counter_relation_ids": [],
+            "evidence_items": [],
+            "invalidation_conditions": [],
+            "watch_conditions": [],
+        }],
+        "deep_assessments": [],
+    }
+
+    parsed, errors = _parse_model_recommendations(
+        json.dumps({"candidates": [row]}, ensure_ascii=False), {"688627"}
+    )
+
+    assert errors == {}
+    hypothesis = parsed["688627"]["investment_thesis"]["hypotheses"][0]
+    assert hypothesis["status"] == "MIXED"
+    assert hypothesis["horizon"] == "LONG"
+
+
+def test_parser_recovers_root_deep_fields_and_fail_closed_research_shapes():
+    row = output()
+    row["investment_thesis"] = None
+    root_thesis = {
+        "status": "PARTIAL",
+        "primary_business": "测试主营业务",
+        "earning_engine_summary": "测试收入与利润驱动",
+        "profit_quality_summary": "测试利润质量",
+        "industry_chain_summary": "测试行业与产业链",
+        "valuation_summary": "测试估值",
+        "institution_view_summary": "测试机构预期",
+        "market_timing_summary": "测试量价与资金",
+        "overall_logic": "测试整体投资逻辑",
+        "confidence": 0.4,
+        "hypotheses": [],
+        "deep_assessments": [],
+        "research_questions": [{
+            "research_code": "BUSINESS_MODEL",
+            "question": "测试主营业务问题",
+            "status": "OPEN",
+            "conclusion": "测试证据不足",
+            "confidence": 0.1,
+            "known_facts": [],
+            "hypotheses": ["仅有一句待核对假设"],
+            "missing_evidence": [{
+                "gap_code": "MISSING_REPORT",
+                "description": "缺少报告",
+                "impact_on_conclusion": "无法确认",
+                "required_evidence": "最新报告",
+                "preferred_sources": "公司公告",
+                "search_queries": "主营收入",
+                "resolution_status": "OPEN",
+            }],
+            "external_research_plan": "补充报告",
+            "tracking_metrics": "收入",
+            "evidence_document_ids": [],
+            "evidence_fact_ids": [],
+            "evidence_relation_ids": [],
+        }],
+    }
+
+    parsed, errors = _parse_model_recommendations(
+        json.dumps({"candidates": [row], "investment_thesis": root_thesis}, ensure_ascii=False),
+        {"688627"},
+    )
+
+    assert errors == {}
+    thesis = parsed["688627"]["investment_thesis"]
+    question = thesis["research_questions"][0]
+    assert question["status"] == "INSUFFICIENT"
+    assert question["hypotheses"][0]["status"] == "INSUFFICIENT"
+    assert question["hypotheses"][0]["direction"] == "UNKNOWN"
+    assert question["missing_evidence"][0]["resolution_status"] == "UNAVAILABLE"
+    assert question["missing_evidence"][0]["required_evidence"] == ["最新报告"]
+
+
 def test_parser_recovers_single_candidate_deep_analysis_written_at_root():
     row = output()
     value_chain = {
