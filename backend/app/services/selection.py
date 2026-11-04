@@ -1168,7 +1168,15 @@ def _selection_result_counts(candidates: list[SelectionCandidate], *, data_mode:
         elif status == "SUCCESS":
             from app.services.selection_evidence import conclusion_publication
             publication = conclusion_publication(analysis)
-            counts["passed_count" if publication["conclusion_available"] else "failed_count"] += 1
+            if publication["conclusion_available"]:
+                counts["passed_count"] += 1
+            elif publication["provisional_conclusion_available"]:
+                # The model, evidence contract and scorecard succeeded, but
+                # one or more V8 research questions still need evidence.
+                # This is a reviewable partial result, not a model failure.
+                counts["citation_partial_count"] += 1
+            else:
+                counts["failed_count"] += 1
             if (analysis.get("llm_evaluation") or {}).get("status") == "FAILED":
                 counts["evaluation_failed_count"] += 1
     return counts
@@ -4020,6 +4028,16 @@ def _sanitize_investment_thesis_evidence(output: dict[str, Any], item: dict[str,
     for hypothesis in thesis.get("hypotheses") or []:
         if not isinstance(hypothesis, dict):
             continue
+        old_support = list(hypothesis.get("supporting_document_ids") or [])
+        old_counter = list(hypothesis.get("counter_document_ids") or [])
+        declared_support = {
+            value for value in (_normalize_document_reference(raw) for raw in old_support)
+            if value is not None
+        }
+        declared_counter = {
+            value for value in (_normalize_document_reference(raw) for raw in old_counter)
+            if value is not None
+        }
         valid_items: list[dict[str, Any]] = []
         support_documents: set[int] = set()
         counter_documents: set[int] = set()
@@ -4041,6 +4059,18 @@ def _sanitize_investment_thesis_evidence(output: dict[str, Any], item: dict[str,
                     support_documents.add(document_id)
                 elif valid and stance == "COUNTER":
                     counter_documents.add(document_id)
+                elif stance == "MIXED":
+                    # Mixed evidence may support and challenge the same
+                    # hypothesis. It must still be declared on one side.
+                    if document_id in declared_support:
+                        support_documents.add(document_id)
+                    if document_id in declared_counter:
+                        counter_documents.add(document_id)
+                    if document_id not in declared_support and document_id not in declared_counter:
+                        # Preserve mixed evidence only when the model has
+                        # declared its document in one of the two evidence
+                        # lists; otherwise withdraw it below.
+                        valid = False
             elif reference_type == "FACT":
                 valid = reference_id in facts
             elif reference_type == "RELATION":
@@ -4053,8 +4083,6 @@ def _sanitize_investment_thesis_evidence(output: dict[str, Any], item: dict[str,
                     f"投资假设“{hypothesis.get('title') or '未命名'}”的一项证据引句或引用未通过原文核验，已撤销该引用"
                 )
         hypothesis["evidence_items"] = valid_items
-        old_support = list(hypothesis.get("supporting_document_ids") or [])
-        old_counter = list(hypothesis.get("counter_document_ids") or [])
         hypothesis["supporting_document_ids"] = [
             value for value in old_support
             if _normalize_document_reference(value) in support_documents
@@ -4092,6 +4120,29 @@ def _sanitize_investment_thesis_evidence(output: dict[str, Any], item: dict[str,
             hypothesis["direction"] = "UNKNOWN"
             hypothesis["confidence"] = min(float(hypothesis.get("confidence") or 0), 0.35)
             changed = True
+    # Research-question facts use the same evidence contract as hypothesis
+    # facts. Providers often paraphrase a document into the `quote` field;
+    # retain the fact but downgrade it instead of failing the whole stock.
+    for research in thesis.get("research_questions") or []:
+        if not isinstance(research, dict):
+            continue
+        for known in research.get("known_facts") or []:
+            if not isinstance(known, dict) or str(known.get("reference_type") or "") != "DOCUMENT":
+                continue
+            reference_id = str(known.get("reference_id") or "")
+            if not reference_id.isdigit() or int(reference_id) not in documents:
+                known["verification_status"] = "UNVERIFIED"
+                known["quote"] = None
+                changed = True
+                continue
+            document = documents[int(reference_id)]
+            body = normalize_text(document.get("content") or document.get("excerpt"))
+            quote = normalize_text(known.get("quote"))
+            if str(known.get("verification_status") or "") == "VERIFIED" and (not quote or quote not in body):
+                known["verification_status"] = "UNVERIFIED"
+                known["quote"] = None
+                notes.append("研究问题文档事实引句未逐字匹配，已降级为未验证事实")
+                changed = True
 
     if thesis.get("status") == "SUPPORTED" and not any(
         row.get("status") in {"SUPPORTED", "MIXED"}
@@ -4393,6 +4444,18 @@ def _validate_investment_thesis_output(
             elif reference_type == "RELATION":
                 if not reference_id.isdigit() or int(reference_id) not in relations:
                     raise ValueError("投资假设证据明细引用了本次上下文之外的图谱关系")
+        for evidence_item in evidence_items:
+            if str(evidence_item.get("stance") or "") != "MIXED":
+                continue
+            reference_id = str(evidence_item.get("reference_id") or "")
+            if evidence_item.get("reference_type") == "DOCUMENT" and reference_id.isdigit():
+                document_id = int(reference_id)
+                if document_id in supporting[0]:
+                    covered_support_documents.add(document_id)
+                if document_id in counter[0]:
+                    covered_counter_documents.add(document_id)
+                if document_id not in supporting[0] and document_id not in counter[0]:
+                    raise ValueError("MIXED evidence must be listed in support or counter evidence")
         if require_deep_assessments:
             if supporting[0] - covered_support_documents:
                 raise ValueError("V7投资假设存在未说明公司影响方向的支持文档")

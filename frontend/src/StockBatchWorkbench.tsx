@@ -432,7 +432,13 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const modelCount = run?.candidates.filter(item => item.analysis_json.publication?.status === "READY_REVIEW").length || 0;
   const dataBlockedCandidates = run?.candidates.filter(item => item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN") || [];
   const partialCount = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.publication?.status === "READY_REVIEW").length || 0;
-  const failedCandidates = run?.candidates.filter(item => item.analysis_json.publication?.retryable) || [];
+  const researchIncompleteCandidates = run?.candidates.filter(item => item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE") || [];
+  const failedCandidates = run?.candidates.filter(item => {
+    const status = text(item.analysis_json.publication?.status);
+    return !!item.analysis_json.publication?.retryable
+      && status !== "RESEARCH_INCOMPLETE"
+      && status !== "DATA_INSUFFICIENT";
+  }) || [];
   const unresolvedCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.publication?.retryable || item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA")) || [];
   const modelPickerOptions = modelInstances.filter(item => item.enabled && modelProviders.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const availableSwitchModels = modelPickerOptions.filter(modelIsSelectable);
@@ -498,7 +504,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       <div><small>本批股票</small><strong>{selectedCount} 只</strong><small>公司已关联 {companyCount} 只</small></div>
       <div><small>本次载入证据</small><strong>{documentCount} 篇文档</strong><small>按证据文档编号去重</small></div>
       <div><small>已通过引用校验</small><strong>{modelCount} / {selectedCount}</strong><small>{run?.analysis_mode === "RULE_ONLY" ? "本批为规则候选，未调用模型" : "模型研判与来源引用"}</small></div>
-      <div><small>需要处理</small><strong>{failedCandidates.length} 失败 · {partialCount} 待复核 · {dataBlockedCandidates.length} 数据不足</strong><small>{running ? "正在后台执行" : "待复核仅指已生成有效结论；失败包含模型、结论校验及评分失败"}</small></div>
+      <div><small>需要处理</small><strong>{partialCount} 待复核 · {researchIncompleteCandidates.length} 待补证 · {failedCandidates.length} 失败 · {dataBlockedCandidates.length} 数据不足</strong><small>{running ? "正在后台执行" : "待补证表示模型与证据校验已通过，但研究问题尚未闭环；不会计为模型失败"}</small></div>
       <div><small>本批确认后跟踪</small><strong>{runTracking.length} 只</strong><small>{runTracking.filter(item => item.status === "COMPLETED").length} 只已复盘</small></div>
     </section>
     <div className="batch-scope"><p className="batch-note">{run ? `当前批次 #${run.id} · ${Number(run.criteria_json.period_months || 12)} 个月（${text(run.criteria_json.period_start)} 至 ${text(run.criteria_json.period_end)}）· ${run.knowledge_base_ids_json.length} 个知识库 · ${run.graph_ids_json.length} 张图谱。` : "点击“新建选股”选择股票，或运行20股基准样本。"}本次分析使用已入库数据，行情日期逐股显示；引用校验通过不等于投资结论已经验证。</p><button onClick={() => setShowData(!showData)} aria-expanded={showData}>{showData ? "收起基准样本验收" : "查看20股基准样本验收"}</button></div>
@@ -531,7 +537,8 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       {backfillActive && <div className="batch-progress" role="status"><div><strong>{text(backfillProgress.message) || "正在补齐缺失数据"}</strong><span>{Number(backfillProgress.percent || 0)}%</span></div><progress aria-label="数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /><small>逐股票、逐板块记录成功、空数据和失败原因；旧分析保持不变。</small></div>}
       {run.error_message && <p className="batch-alert error">{run.error_message}</p>}
       {(unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
-        <div className="selection-scope-heading"><strong>有效结论 {modelCount} 只 · 待复核 {partialCount} 只 · 失败 {failedCandidates.length} 只 · 数据不足 {dataBlockedCandidates.length} 只</strong><button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在复用数据并重新分析…" : run.status === "FAILED" ? "复用数据并重新执行" : `重新分析 ${unresolvedCandidates.length} 只未通过股票`}</button></div>
+        <div className="selection-scope-heading"><strong>有效结论 {modelCount} 只 · 待复核 {partialCount} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败 {failedCandidates.length} 只 · 数据不足 {dataBlockedCandidates.length} 只</strong><button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在复用数据并重新分析…" : run.status === "FAILED" ? "复用数据并重新执行" : `补证或重新分析 ${unresolvedCandidates.length} 只股票`}</button></div>
+        {researchIncompleteCandidates.length > 0 && <details><summary>查看研究未闭环与待补证事项（{researchIncompleteCandidates.length}）</summary><div className="selection-failure-list">{researchIncompleteCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p><b>核心分析已通过，研究问题待补证</b>：{text(item.analysis_json.publication?.reason) || "部分研究问题仍缺少可核验证据。"}</p><p className="batch-note">该状态不是模型调用失败。可查看“分析与证据”中的研究问题和缺口，补齐后再重新分析。</p></article>)}</div></details>}
         {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="使用分析模型重试"><strong>重试模型</strong><span>使用上方已勾选的分析模型，按顺序进行预检和重试：{analysisModelCodes.length ? analysisModelCodes.join(" → ") : "尚未勾选"}</span><button type="button" disabled={busy || running || !analysisModelCodes.length || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "使用已选模型重试"}</button><small>重试不再单独选择模型，避免上下两处配置不一致；原批次、证据和调用记录保持不变。</small></div>}
         <p className="batch-note">重试不会默认重复采集：证据齐全项复用本地数据，仅数据门禁确认缺失的股票增量同步；整批异常会创建新批次并保留原批次。</p>
         {retryProgress.message && <p role="status">{text(retryProgress.message)}</p>}

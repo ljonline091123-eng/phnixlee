@@ -544,6 +544,82 @@ def test_parser_recovers_root_deep_fields_and_fail_closed_research_shapes():
     assert question["missing_evidence"][0]["required_evidence"] == ["最新报告"]
 
 
+def test_mixed_hypothesis_evidence_and_unverifiable_research_quote_are_downgraded_safely():
+    output_row = output()
+    output_row["investment_thesis"] = {
+        "status": "PARTIAL",
+        "primary_business": "测试主营业务",
+        "earning_engine_summary": "测试收入驱动",
+        "profit_quality_summary": "测试利润质量",
+        "industry_chain_summary": "测试产业链",
+        "valuation_summary": "测试估值",
+        "institution_view_summary": "测试机构预期",
+        "market_timing_summary": "测试市场状态",
+        "overall_logic": "测试整体逻辑",
+        "confidence": 0.4,
+        "hypotheses": [{
+            "title": "混合证据假设",
+            "thesis": "支持与反证并存",
+            "status": "MIXED",
+            "direction": "MIXED",
+            "horizon": "LONG",
+            "confidence": 0.5,
+            "supporting_document_ids": [1],
+            "supporting_fact_ids": [],
+            "supporting_relation_ids": [],
+            "counter_document_ids": [2],
+            "counter_fact_ids": [],
+            "counter_relation_ids": [],
+            "evidence_items": [{
+                "reference_type": "DOCUMENT", "reference_id": "1", "stance": "SUPPORT",
+                "claim": "支持事实", "company_specific_effect": "正面影响",
+                "quote": "支持原文", "rationale": "支持理由",
+            }, {
+                "reference_type": "DOCUMENT", "reference_id": "2", "stance": "MIXED",
+                "claim": "混合事实", "company_specific_effect": "影响不确定",
+                "quote": "混合原文", "rationale": "混合理由",
+            }],
+            "invalidation_conditions": ["支持证据失效"],
+            "watch_conditions": [],
+        }],
+        "deep_assessments": [],
+        "research_questions": [{
+            "research_code": "BUSINESS_MODEL",
+            "question": "主营是什么",
+            "status": "PARTIAL",
+            "conclusion": "存在证据缺口",
+            "confidence": 0.3,
+            "known_facts": [{
+                "reference_type": "DOCUMENT", "reference_id": "1",
+                "verification_status": "VERIFIED", "fact": "摘要事实",
+                "significance": "用于验证主营", "quote": "不是正文中的连续原文",
+            }],
+            "hypotheses": [],
+            "missing_evidence": [{
+                "gap_code": "MISSING", "description": "缺少正文",
+                "impact_on_conclusion": "无法确认", "required_evidence": [],
+                "preferred_sources": [], "search_queries": [],
+                "resolution_status": "UNAVAILABLE",
+            }],
+            "external_research_plan": ["补充正文"], "tracking_metrics": [],
+            "evidence_document_ids": [1], "evidence_fact_ids": [], "evidence_relation_ids": [],
+        }],
+    }
+    item = {"evidence_json": {"documents": [
+        {"id": 1, "source_table": "stock_news", "content": "支持原文"},
+        {"id": 2, "source_table": "stock_news", "content": "混合原文"},
+    ], "facts": [], "graph_paths": []}}
+
+    _sanitize_investment_thesis_evidence(output_row, item)
+
+    hypothesis = output_row["investment_thesis"]["hypotheses"][0]
+    assert hypothesis["status"] == "MIXED"
+    assert len(hypothesis["evidence_items"]) == 2
+    fact = output_row["investment_thesis"]["research_questions"][0]["known_facts"][0]
+    assert fact["verification_status"] == "UNVERIFIED"
+    assert fact["quote"] is None
+
+
 def test_parser_recovers_single_candidate_deep_analysis_written_at_root():
     row = output()
     value_chain = {
@@ -843,6 +919,37 @@ def test_result_counts_are_exclusive_and_do_not_rewrite_empty_historical_success
                       "data_blocked_count": 2, "evaluation_failed_count": 1}
     assert sum(counts[key] for key in ("passed_count", "citation_partial_count", "failed_count", "data_blocked_count")) == len(rows)
     assert [row.analysis_json for row in rows] == before
+
+
+def test_result_counts_treat_incomplete_v8_research_as_reviewable_partial_not_failure():
+    questions = [{
+        "research_code": code,
+        "status": "PARTIAL" if code == "MANAGEMENT_CHANGE" else "SUPPORTED",
+    } for code in (
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    )]
+    row = SimpleNamespace(
+        evidence_json=evidence(),
+        analysis_json={
+            "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+            "model_output_status": "SUCCESS",
+            "analysis_validation_status": "PASSED",
+            "model": {
+                "reasoning": "核心分析已经完成，管理层变动仍需补充证据。",
+                "confidence": .68,
+                "investment_thesis": {"research_questions": questions},
+            },
+            "scoring": valid_scorecard(),
+        },
+    )
+
+    counts = _selection_result_counts([row])
+
+    assert counts == {
+        "passed_count": 0, "citation_partial_count": 1, "failed_count": 0,
+        "data_blocked_count": 0, "evaluation_failed_count": 0,
+    }
 
 
 def test_unquoted_financial_event_is_withdrawn_without_failing_core_analysis():
@@ -1304,6 +1411,81 @@ def test_terminal_summary_preserves_evaluation_failure(isolated):
     result = _run_read(db, run)
     assert result.criteria_json["result_counts"]["evaluation_failed_count"] == 1
     assert "LLM 评价生成失败" in result.error_message
+
+
+def test_terminal_read_projects_research_incomplete_as_model_partial(isolated):
+    from app.api.selection import _run_read
+    db = isolated
+    run = SelectionRun(
+        market="HK", status="PARTIAL", data_mode="REAL",
+        analysis_mode="MODEL_FAILED_FALLBACK_LOCAL", completed_at=datetime.now(timezone.utc),
+        error_message="旧汇总误报模型失败", criteria_json={
+            "progress": {
+                "phases": {
+                    "DATA": {"status": "PARTIAL"},
+                    "MODEL_PREFLIGHT": {"status": "SUCCESS"},
+                    "ANALYSIS": {"status": "FAILED"},
+                },
+                "message": "旧汇总误报模型失败",
+            },
+            "retry_progress": {"message": "旧汇总误报模型失败"},
+        },
+    )
+    db.add(run)
+    db.flush()
+    questions = [{
+        "research_code": code,
+        "status": "PARTIAL" if code == "MANAGEMENT_CHANGE" else "SUPPORTED",
+    } for code in (
+        "BUSINESS_MODEL", "MANAGEMENT_CHANGE",
+        "ACQUISITION_SECOND_CURVE", "CAPITAL_ACTION_INTENT",
+    )]
+    db.add(SelectionCandidate(
+        run_id=run.id, market="HK", symbol="02533", name="黑芝麻智能",
+        evidence_json=evidence(), analysis_json={
+            "analysis_contract": "FUNDAMENTAL_RESEARCH_V8",
+            "model_output_status": "SUCCESS",
+            "analysis_validation_status": "PASSED",
+            "model": {
+                "reasoning": "核心分析已经完成，管理层变动仍需补证。",
+                "confidence": .68,
+                "investment_thesis": {"research_questions": questions},
+            },
+            "scoring": valid_scorecard(),
+        },
+    ))
+    db.commit()
+
+    result = _run_read(db, run)
+
+    assert result.analysis_mode == "MODEL_PARTIAL"
+    assert result.status == "PARTIAL"
+    assert result.criteria_json["result_counts"]["citation_partial_count"] == 1
+    assert result.criteria_json["result_counts"]["failed_count"] == 0
+    assert result.criteria_json["retry_progress"]["completed_count"] == 1
+    assert result.criteria_json["progress"]["phases"]["ANALYSIS"]["status"] == "PARTIAL"
+    assert "研究未闭环待补证 1 只" in result.error_message
+
+
+def test_lightweight_run_list_does_not_reclassify_partial_summary_as_model_error(isolated):
+    from app.api.selection import _run_read
+    db = isolated
+    summary = "研究未闭环待补证 1 只；核心模型与证据校验已通过。"
+    run = SelectionRun(
+        market="HK", status="PARTIAL", data_mode="REAL",
+        analysis_mode="MODEL_PARTIAL", completed_at=datetime.now(timezone.utc),
+        error_message=summary, criteria_json={"result_counts": {
+            "passed_count": 0, "citation_partial_count": 1, "failed_count": 0,
+            "data_blocked_count": 0, "evaluation_failed_count": 0,
+        }},
+    )
+    db.add(run)
+    db.commit()
+
+    result = _run_read(db, run, include_candidates=False)
+
+    assert result.analysis_mode == "MODEL_PARTIAL"
+    assert result.error_message == summary
 
 
 def test_selection_transport_budget_disables_hidden_retry():

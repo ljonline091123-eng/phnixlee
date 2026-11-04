@@ -275,7 +275,14 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
         "reviewed_count", "tracking_count", "missing_data_json", "error_message", "as_of", "completed_at",
         "created_at", "updated_at",
     )}
-    if payload.get("error_message"):
+    # Only raw terminal model failures should be translated by the model-error
+    # classifier. A MODEL_PARTIAL summary may legitimately mention evidence
+    # gaps; classifying that prose again falsely turns a reviewable result into
+    # an out-of-scope citation error in the lightweight run list.
+    if payload.get("error_message") and (
+        run.status == "FAILED"
+        or run.analysis_mode in {"MODEL_PREFLIGHT_FAILED", "MODEL_FAILED_FALLBACK_LOCAL"}
+    ):
         error_detail = classify_model_error(payload["error_message"])
         if error_detail["category"] != "MODEL_UNKNOWN":
             payload["error_message"] = f"{error_detail['title']}：{error_detail['summary']} 建议：{error_detail['suggestion']}"
@@ -317,7 +324,15 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
             # user sees, retaining all original database audit fields.
             counts = _selection_result_counts(payload["candidates"], data_mode=run.data_mode)
             criteria_json["result_counts"] = counts
+            resolved_count = counts["passed_count"] + counts["citation_partial_count"]
+            if counts["passed_count"] == len(payload["candidates"]):
+                payload["analysis_mode"] = "MODEL_COMPLETED"
+                payload["status"] = "REVIEW"
+            elif resolved_count:
+                payload["analysis_mode"] = "MODEL_PARTIAL"
+                payload["status"] = "PARTIAL"
             summary = (f"本轮已结束：有效结论 {counts['passed_count']} 只、"
+                       f"研究未闭环待补证 {counts['citation_partial_count']} 只、"
                        f"模型/结论/评分失败 {counts['failed_count']} 只、数据不足 {counts['data_blocked_count']} 只。")
             if counts["evaluation_failed_count"]:
                 summary += f"另有 {counts['evaluation_failed_count']} 只股票的 LLM 评价生成失败。"
@@ -332,8 +347,22 @@ def _run_read(db: Session, run: SelectionRun, include_candidates: bool = True) -
                 state = dict(criteria_json[key])
                 if state.get("message") != summary:
                     state["historical_message"] = state.get("historical_message") or state.get("message")
-                state.update({"message": summary, **counts})
+                state.update({
+                    "message": summary,
+                    "completed_count": resolved_count,
+                    **counts,
+                })
                 criteria_json[key] = state
+            phases = (criteria_json.get("progress") or {}).get("phases")
+            if isinstance(phases, dict) and isinstance(phases.get("ANALYSIS"), dict):
+                analysis_phase = dict(phases["ANALYSIS"])
+                analysis_phase["status"] = (
+                    "SUCCESS" if payload["analysis_mode"] == "MODEL_COMPLETED"
+                    else "PARTIAL" if payload["analysis_mode"] == "MODEL_PARTIAL"
+                    else analysis_phase.get("status")
+                )
+                phases["ANALYSIS"] = analysis_phase
+                criteria_json["progress"]["phases"] = phases
             payload["criteria_json"] = criteria_json
     return SelectionRunRead(**payload)
 

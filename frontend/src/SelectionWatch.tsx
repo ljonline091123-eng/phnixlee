@@ -489,7 +489,14 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
   const selectableMatches = stockMatches.filter(item => !chosenStocks.some(stock => stock.market === item.market && stock.symbol === item.symbol));
   const allMatchesSelected = stockMatches.length > 0 && selectableMatches.length === 0;
   const selectedMatchCount = stockMatches.length - selectableMatches.length;
-  const failedModelCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.publication?.retryable || item.analysis_json.publication?.status === "DATA_INSUFFICIENT")) ?? [];
+  const researchIncompleteCandidates = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE") ?? [];
+  const failedModelCandidates = run?.candidates.filter(item => {
+    const status = item.analysis_json.publication?.status;
+    return item.decision === "PENDING" && (
+      status === "DATA_INSUFFICIENT"
+      || (!!item.analysis_json.publication?.retryable && status !== "RESEARCH_INCOMPLETE")
+    );
+  }) ?? [];
   const retryProgress = (run?.criteria_json.retry_progress as SelectionRecord | undefined) ?? {};
   const retryActive = ["QUEUED", "RUNNING"].includes(String(retryProgress.status || ""));
   const modelScopeSelected = Boolean(form.knowledge_base_ids.length && governedGraphs.some(item => form.graph_ids.includes(item.id)));
@@ -644,10 +651,11 @@ export function SelectionWorkbench({ mode, initialCreate = false, initialModelCo
           {["QUEUED", "RUNNING"].includes(textOf((run.criteria_json.backfill_progress as SelectionRecord)?.status)) && <div className="batch-progress"><strong>{textOf((run.criteria_json.backfill_progress as SelectionRecord)?.message) || "正在补齐缺失数据"}</strong><progress aria-label="数据补齐进度" max="100" value={Number((run.criteria_json.backfill_progress as SelectionRecord)?.percent || 0)} /></div>}
           <p className="selection-help">模型：{run.model_instance_code || "自动路由 / 规则预选"} · {run.knowledge_base_ids_json.length} 个知识库 · {run.graph_ids_json.length} 张图谱。未确认的候选不会进入预测跟踪。</p>
           {run.error_message && <p className="form-error">{run.error_message}</p>}
-          {(failedModelCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
-            <div className="selection-scope-heading"><strong>有效结论 {successfulModelCount} / {run.candidates.length} 只 · 待处理 {failedModelCandidates.length} 只</strong>
+          {(failedModelCandidates.length > 0 || researchIncompleteCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析结果处理">
+            <div className="selection-scope-heading"><strong>有效结论 {successfulModelCount} / {run.candidates.length} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败或数据不足 {failedModelCandidates.length} 只</strong>
               {run.status === "FAILED" ? <button type="button" disabled={busy} onClick={() => void retryWholeRun()}>重新执行此批次</button> : <button type="button" disabled={busy || retryActive || !failedModelCandidates.length} onClick={() => void retryFailed()}>{retryActive ? "正在重新分析…" : `重新分析 ${failedModelCandidates.length} 只未通过股票`}</button>}
             </div>
+            {researchIncompleteCandidates.length > 0 && <details><summary>查看研究未闭环与待补证事项（{researchIncompleteCandidates.length}）</summary><div className="selection-failure-list">{researchIncompleteCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p>{textOf(item.analysis_json.publication?.reason) || "部分研究问题仍缺少可核验证据。"}</p><small>核心模型与证据校验已通过；该状态不计为模型失败。</small></article>)}</div></details>}
             {failedModelCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="更换模型并重试">
               <strong>重试模型</strong><span>{selectedModelCode ? `沿用分析模型：${selectedModelCode}` : "尚未选择可用分析模型"}</span>
               <button type="button" disabled={busy || retryActive || !selectedModelCode || !availableSwitchModels.length} onClick={() => void retryFailedWithModel()}>
