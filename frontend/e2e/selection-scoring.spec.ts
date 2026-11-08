@@ -36,11 +36,19 @@ test("真实候选展示八维雷达图和证据下钻", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "选股分析工作台" })).toBeVisible();
   await page.getByRole("button", { name: "分析与证据" }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.locator(".score-radar svg")).toBeVisible();
-  await expect(page.getByText(/可信综合分/)).toBeVisible();
-  await page.locator(".analysis-deep-dive > summary").click();
-  await page.getByText("查看八维评分依据、覆盖与权重").click();
-  await expect(page.locator(".scorecard-grid article")).toHaveCount(8);
+  const directionReview = page.getByText("已生成竞争性推理方向，等待你的确认");
+  if (await directionReview.count()) {
+    await expect(directionReview).toBeVisible();
+    await expect(page.getByText(/这些内容不是事实或投资结论/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "确认并开始补证" })).toBeVisible();
+    await expect(page.locator(".human-hypothesis-list article")).toHaveCount(8);
+  } else {
+    await expect(page.locator(".score-radar svg")).toBeVisible();
+    await expect(page.getByText(/可信综合分/)).toBeVisible();
+    await page.locator(".analysis-deep-dive > summary").click();
+    await page.getByText("查看八维评分依据、覆盖与权重").click();
+    await expect(page.locator(".scorecard-grid article")).toHaveCount(8);
+  }
   const dialogOverflow = await page.locator(".batch-detail").evaluate(element => element.scrollWidth > element.clientWidth + 1);
   expect(dialogOverflow).toBeFalsy();
   await page.screenshot({ path: "test-results/selection-radar-desktop.png", fullPage: false });

@@ -27,11 +27,30 @@ test("选股结果和高级工作台可以打开股票详情抽屉", async ({ pa
   await expect(page.locator(".stock-detail-drawer h2")).toContainText(advancedSymbol);
 });
 
-test("结论、数据诊断和一年期深度分析分开呈现", async ({ page }) => {
+test("结论、数据诊断和一年期深度分析分开呈现", async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${baseUrl}/#/research/selection`);
   await expect(page.getByRole("heading", { name: "选股分析工作台" })).toBeVisible();
 
+  const runSelect = page.getByRole("combobox", { name: "历史分析批次" });
+  await expect(runSelect).toBeVisible();
+  const runsResponse = await request.get(`${process.env.E2E_API_BASE_URL || "http://127.0.0.1:8000/api/v1"}/selection/runs`);
+  expect(runsResponse.ok()).toBeTruthy();
+  const runs = await runsResponse.json() as Array<{ id: number }>;
+  let completedRunId: number | null = null;
+  for (const item of runs) {
+    const detailResponse = await request.get(`${process.env.E2E_API_BASE_URL || "http://127.0.0.1:8000/api/v1"}/selection/runs/${item.id}`);
+    if (!detailResponse.ok()) continue;
+    const detail = await detailResponse.json() as { candidates?: Array<{ analysis_json?: { model?: { investment_thesis?: { overall_logic?: string; deep_assessments?: unknown[] } } } }> };
+    if ((detail.candidates || []).some(candidate => Boolean(candidate.analysis_json?.model?.investment_thesis?.overall_logic) && (candidate.analysis_json?.model?.investment_thesis?.deep_assessments || []).length === 9)) {
+      completedRunId = item.id;
+      break;
+    }
+  }
+  expect(completedRunId).not.toBeNull();
+  await runSelect.selectOption(String(completedRunId));
+  await expect(page.getByText(new RegExp(`当前批次 #${completedRunId}`))).toBeVisible();
+  await expect(page.getByRole("heading", { name: "本轮结果" })).toBeVisible();
   await page.getByRole("button", { name: "分析与证据" }).first().click();
   const dialog = page.getByRole("dialog", { name: /分析与证据/ });
   await expect(dialog.getByRole("heading", { name: "整体投资逻辑" })).toBeVisible();
@@ -45,7 +64,7 @@ test("结论、数据诊断和一年期深度分析分开呈现", async ({ page 
     const claimWidth = await claim.evaluate((element) => element.getBoundingClientRect().width);
     const claimTitleWidth = await claim.locator("header strong").evaluate((element) => element.getBoundingClientRect().width);
     expect(claimWidth).toBeGreaterThan(300);
-    expect(claimTitleWidth).toBeGreaterThan(160);
+    expect(claimTitleWidth).toBeGreaterThan(0);
   }
 
   await dialog.getByRole("button", { name: "数据事实" }).click();

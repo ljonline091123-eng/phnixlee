@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SelectionWorkbench as AdvancedWorkbench } from "./SelectionWatch";
 import { api, type ModelInstance, type ModelProvider } from "./api";
-import { selectionApi, type BatchAcceptance, type SelectionCandidate, type SelectionRecord, type SelectionRun, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type BatchAcceptance, type SelectionCandidate, type SelectionHypothesisDirectionRequest, type SelectionRecord, type SelectionResearchReviewRequest, type SelectionRun, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 import { SelectionAnalysis, SelectionDiagnostics, type AnalysisDimension } from "./SelectionAnalysis";
 import { DataGapDecisionDialog, type DataGapDecision } from "./DataGapDecisionDialog";
@@ -210,7 +210,9 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const retryActive = ["QUEUED", "RUNNING"].includes(text(retryProgress.status));
   const backfillProgress = (run?.criteria_json.backfill_progress || {}) as SelectionRecord;
   const backfillActive = ["QUEUED", "RUNNING"].includes(text(backfillProgress.status));
-  const running = isRunning(run) || retryActive || backfillActive;
+  const hypothesisProgress = (run?.criteria_json.hypothesis_research_progress || {}) as SelectionRecord;
+  const hypothesisActive = ["QUEUED", "RUNNING"].includes(text(hypothesisProgress.status));
+  const running = isRunning(run) || retryActive || backfillActive || hypothesisActive;
 
   useEffect(() => {
     setDetail(current => {
@@ -258,6 +260,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
         setRun(next);
         const nextRetry = (next.criteria_json.retry_progress || {}) as SelectionRecord;
         const nextBackfill = (next.criteria_json.backfill_progress || {}) as SelectionRecord;
+        const nextHypothesis = (next.criteria_json.hypothesis_research_progress || {}) as SelectionRecord;
         const rerunId = Number(nextBackfill.rerun_id || 0);
         if (rerunId > 0 && !["QUEUED", "RUNNING"].includes(text(nextBackfill.status))) {
           const rerun = await selectionApi.getRun(rerunId);
@@ -267,7 +270,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
           setNotice(`${text(nextBackfill.message) || "补齐任务结束，请核对剩余缺口"}；已进入新分析批次 #${rerunId}，原批次 #${next.id} 保留。`);
           return;
         }
-        if (isRunning(next) || ["QUEUED", "RUNNING"].includes(text(nextRetry.status)) || ["QUEUED", "RUNNING"].includes(text(nextBackfill.status))) timer = setTimeout(() => void poll(), 1000);
+        if (isRunning(next) || ["QUEUED", "RUNNING"].includes(text(nextRetry.status)) || ["QUEUED", "RUNNING"].includes(text(nextBackfill.status)) || ["QUEUED", "RUNNING"].includes(text(nextHypothesis.status))) timer = setTimeout(() => void poll(), 1000);
         else { setRuns(await selectionApi.listRuns()); setNotice(next.analysis_mode === "MODEL_COMPLETED" ? `真实模型已完成${next.candidate_count}只股票的分析，请核对证据。` : next.analysis_mode === "RULE_ONLY" ? "候选池已生成，可查看规则与证据。" : "执行已结束，失败项与待核对项请查看下方明细。"); }
       } catch (err) { if (valid) { setError(`进度读取失败，将重试：${message(err)}`); timer = setTimeout(() => void poll(), 4000); } }
     };
@@ -389,6 +392,39 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       setNotice(candidateIds.length ? "已提交该股票的数据补齐，完成后自动创建新分析批次。" : "已提交本批次缺失数据补齐，完成后自动创建新分析批次。");
     } catch (err) { setError(message(err)); } finally { setBusy(false); }
   }
+  async function prepareDirection() {
+    if (!detail) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.prepareHypothesisDirection(detail.id);
+      setDetail(next);
+      setRun(current => current && current.id === next.run_id ? {...current, candidates: current.candidates.map(row => row.id === next.id ? next : row), analysis_mode: "RESEARCH_DIRECTION_REVIEW", status: "PARTIAL"} : current);
+      setNotice("已生成竞争性推理方向，请先确认优先验证项；当前不是投资结论。");
+    } catch (err) { setError(message(err)); }
+    finally { setBusy(false); }
+  }
+  async function confirmDirection(payload: SelectionHypothesisDirectionRequest) {
+    if (!detail) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.confirmHypothesisDirection(detail.id, payload);
+      setDetail(next);
+      setRun(await selectionApi.getRun(detail.run_id));
+      setNotice(payload.action === "SKIP_RESEARCH" ? "已结束本轮协同研究。" : "已确认推理方向，后台将按确认方向补数并重新验证。");
+    } catch (err) { setError(message(err)); }
+    finally { setBusy(false); }
+  }
+  async function reviewResearch(payload: SelectionResearchReviewRequest) {
+    if (!detail) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const next = await selectionApi.reviewHypothesisResearch(detail.id, payload);
+      setDetail(next);
+      setRun(await selectionApi.getRun(detail.run_id));
+      setNotice(payload.action === "STOP_TRACKING" ? "已停止该研究方向。" : "已保存研究复核意见，系统将按状态继续或结束该方向。");
+    } catch (err) { setError(message(err)); }
+    finally { setBusy(false); }
+  }
   async function rescore(item: SelectionCandidate) {
     setBusy(true); setError("");
     try {
@@ -433,13 +469,21 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
   const dataBlockedCandidates = run?.candidates.filter(item => item.analysis_json.data_gate_status === "MISSING_DATA" || item.analysis_json.model_output_status === "NOT_RUN") || [];
   const partialCount = run?.candidates.filter(item => item.decision === "PENDING" && item.analysis_json.publication?.status === "READY_REVIEW").length || 0;
   const researchIncompleteCandidates = run?.candidates.filter(item => item.analysis_json.publication?.status === "RESEARCH_INCOMPLETE") || [];
+  const directionPendingCandidates = run?.candidates.filter(item => item.decision === "PENDING" && text((item.analysis_json.hypothesis_research as SelectionRecord | undefined)?.status) === "WAITING_USER_DIRECTION") || [];
   const failedCandidates = run?.candidates.filter(item => {
     const status = text(item.analysis_json.publication?.status);
+    const researchStatus = text((item.analysis_json.hypothesis_research as SelectionRecord | undefined)?.status);
     return !!item.analysis_json.publication?.retryable
       && status !== "RESEARCH_INCOMPLETE"
-      && status !== "DATA_INSUFFICIENT";
+      && status !== "DATA_INSUFFICIENT"
+      && !["WAITING_USER_DIRECTION", "READY_FOR_RESEARCH", "QUEUED", "RUNNING", "WAITING_EVIDENCE_REVIEW", "WAITING_CONCLUSION_REVIEW"].includes(researchStatus);
   }) || [];
-  const unresolvedCandidates = run?.candidates.filter(item => item.decision === "PENDING" && (item.analysis_json.publication?.retryable || item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA")) || [];
+  const unresolvedCandidates = run?.candidates.filter(item => {
+    const researchStatus = text((item.analysis_json.hypothesis_research as SelectionRecord | undefined)?.status);
+    return item.decision === "PENDING"
+      && !["WAITING_USER_DIRECTION", "READY_FOR_RESEARCH", "QUEUED", "RUNNING", "WAITING_EVIDENCE_REVIEW", "WAITING_CONCLUSION_REVIEW"].includes(researchStatus)
+      && (item.analysis_json.publication?.retryable || item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA");
+  }) || [];
   const modelPickerOptions = modelInstances.filter(item => item.enabled && modelProviders.some(provider => provider.id === item.provider_id && provider.enabled && provider.provider_type !== "MOCK"));
   const availableSwitchModels = modelPickerOptions.filter(modelIsSelectable);
   async function testUnavailableModel(item: ModelInstance) {
@@ -504,7 +548,7 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       <div><small>本批股票</small><strong>{selectedCount} 只</strong><small>公司已关联 {companyCount} 只</small></div>
       <div><small>本次载入证据</small><strong>{documentCount} 篇文档</strong><small>按证据文档编号去重</small></div>
       <div><small>已通过引用校验</small><strong>{modelCount} / {selectedCount}</strong><small>{run?.analysis_mode === "RULE_ONLY" ? "本批为规则候选，未调用模型" : "模型研判与来源引用"}</small></div>
-      <div><small>需要处理</small><strong>{partialCount} 待复核 · {researchIncompleteCandidates.length} 待补证 · {failedCandidates.length} 失败 · {dataBlockedCandidates.length} 数据不足</strong><small>{running ? "正在后台执行" : "待补证表示模型与证据校验已通过，但研究问题尚未闭环；不会计为模型失败"}</small></div>
+      <div><small>需要处理</small><strong>{partialCount} 待复核 · {directionPendingCandidates.length} 待确认方向 · {researchIncompleteCandidates.length} 待补证 · {failedCandidates.length} 失败 · {dataBlockedCandidates.length} 数据不足</strong><small>{running ? "正在后台执行" : "待确认方向必须先由用户选择，待补证表示模型与证据校验已通过但研究问题尚未闭环"}</small></div>
       <div><small>本批确认后跟踪</small><strong>{runTracking.length} 只</strong><small>{runTracking.filter(item => item.status === "COMPLETED").length} 只已复盘</small></div>
     </section>
     <div className="batch-scope"><p className="batch-note">{run ? `当前批次 #${run.id} · ${Number(run.criteria_json.period_months || 12)} 个月（${text(run.criteria_json.period_start)} 至 ${text(run.criteria_json.period_end)}）· ${run.knowledge_base_ids_json.length} 个知识库 · ${run.graph_ids_json.length} 张图谱。` : "点击“新建选股”选择股票，或运行20股基准样本。"}本次分析使用已入库数据，行情日期逐股显示；引用校验通过不等于投资结论已经验证。</p><button onClick={() => setShowData(!showData)} aria-expanded={showData}>{showData ? "收起基准样本验收" : "查看20股基准样本验收"}</button></div>
@@ -536,8 +580,9 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
       </div>}
       {backfillActive && <div className="batch-progress" role="status"><div><strong>{text(backfillProgress.message) || "正在补齐缺失数据"}</strong><span>{Number(backfillProgress.percent || 0)}%</span></div><progress aria-label="数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /><small>逐股票、逐板块记录成功、空数据和失败原因；旧分析保持不变。</small></div>}
       {run.error_message && <p className="batch-alert error">{run.error_message}</p>}
-      {(unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析失败处理">
-        <div className="selection-scope-heading"><strong>有效结论 {modelCount} 只 · 待复核 {partialCount} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败 {failedCandidates.length} 只 · 数据不足 {dataBlockedCandidates.length} 只</strong><button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在复用数据并重新分析…" : run.status === "FAILED" ? "复用数据并重新执行" : `补证或重新分析 ${unresolvedCandidates.length} 只股票`}</button></div>
+      {(directionPendingCandidates.length > 0 || unresolvedCandidates.length > 0 || retryActive || run.status === "FAILED") && <section className="selection-recovery" aria-label="分析结果处理">
+        <div className="selection-scope-heading"><strong>有效结论 {modelCount} 只 · 待复核 {partialCount} 只 · 待确认方向 {directionPendingCandidates.length} 只 · 研究待补证 {researchIncompleteCandidates.length} 只 · 失败 {failedCandidates.length} 只 · 数据不足 {dataBlockedCandidates.length} 只</strong>{(unresolvedCandidates.length > 0 || run.status === "FAILED") && <button disabled={busy || running} onClick={() => void retryAnalysis()}>{retryActive ? "正在复用数据并重新分析…" : run.status === "FAILED" ? "复用数据并重新执行" : `补证或重新分析 ${unresolvedCandidates.length} 只股票`}</button>}</div>
+        {directionPendingCandidates.length > 0 && <p role="status"><strong>等待用户确认：</strong>系统已从真实模型调用中恢复竞争性推理方向，这些内容不是事实或投资结论。请打开对应股票的“分析与证据”，确认后才会按方向补数和重验。</p>}
         {researchIncompleteCandidates.length > 0 && <details><summary>查看研究未闭环与待补证事项（{researchIncompleteCandidates.length}）</summary><div className="selection-failure-list">{researchIncompleteCandidates.map(item => <article key={item.id}><strong>{item.name || item.symbol} · {item.symbol}</strong><p><b>核心分析已通过，研究问题待补证</b>：{text(item.analysis_json.publication?.reason) || "部分研究问题仍缺少可核验证据。"}</p><p className="batch-note">该状态不是模型调用失败。可查看“分析与证据”中的研究问题和缺口，补齐后再重新分析。</p></article>)}</div></details>}
         {unresolvedCandidates.length > 0 && run.status !== "FAILED" && <div className="selection-model-switch" role="group" aria-label="使用分析模型重试"><strong>重试模型</strong><span>使用上方已勾选的分析模型，按顺序进行预检和重试：{analysisModelCodes.length ? analysisModelCodes.join(" → ") : "尚未勾选"}</span><button type="button" disabled={busy || running || !analysisModelCodes.length || !availableSwitchModels.length} onClick={() => void retryWithModel()}>{busy ? "正在检查模型…" : "使用已选模型重试"}</button><small>重试不再单独选择模型，避免上下两处配置不一致；原批次、证据和调用记录保持不变。</small></div>}
         <p className="batch-note">重试不会默认重复采集：证据齐全项复用本地数据，仅数据门禁确认缺失的股票增量同步；整批异常会创建新批次并保留原批次。</p>
@@ -549,15 +594,16 @@ export function StockBatchWorkbench({ mode }: { mode: "selection" | "tracking" }
         const dataBlocked = item.analysis_json.model_output_status === "NOT_RUN" || item.analysis_json.data_gate_status === "MISSING_DATA";
         const success = !!item.analysis_json.publication?.conclusion_available;
         const publication = (item.analysis_json.publication || {}) as SelectionRecord;
-        const local = !!item.analysis_json.local_multi_source;
-         return <tr key={item.id}><td><button type="button" className="batch-stock-link" title="打开股票详细信息" onClick={() => setDetailStock({ market: item.market, symbol: item.symbol, name: item.name || item.symbol })}><strong>{item.name || item.symbol}</strong><small>{item.symbol}</small></button></td><td>{number(item.entry_price)} 元<small>{item.entry_date || "缺少日期"}</small></td><td><span className={`batch-badge ${success ? "" : "warning"}`}>{dataBlocked ? "数据不足 · 未分析" : publication.status === "CONCLUSION_FAILED" ? "结论校验失败" : publication.status === "SCORE_FAILED" ? "评分生成失败" : publication.status === "RESEARCH_INCOMPLETE" ? "研究未闭环 · 待补证" : success ? label(text(item.analysis_json.recommendation)) : local ? "模型失败 · 本地证据盘点" : label(text(item.analysis_json.model_output_status))}</span><small className="batch-clamp">{dataBlocked ? text(item.analysis_json.model_failure_reason) || "未达到模型分析数据门槛" : success ? text((item.analysis_json.model as SelectionRecord)?.headline || item.analysis_json.summary) : publication.retryable ? text(publication.reason) : local ? "模型未返回成功结果；仅保存证据盘点，不是模型结论" : "尚无有效模型结论"}</small></td><td>{rows(item.evidence_json.documents).length} 篇文档<small>{rows(item.evidence_json.facts).length} 条事实与观测</small></td><td>{label(item.decision)}</td><td><button onClick={() => { setDetail(item); setFocusDocument(null); setDetailTab("conclusion"); setTargetPrice(text(item.analysis_json.target_price)); }}>分析与证据</button></td></tr>;
+          const local = !!item.analysis_json.local_multi_source;
+          const researchStatus = text((item.analysis_json.hypothesis_research as SelectionRecord | undefined)?.status);
+          return <tr key={item.id}><td><button type="button" className="batch-stock-link" title="打开股票详细信息" onClick={() => setDetailStock({ market: item.market, symbol: item.symbol, name: item.name || item.symbol })}><strong>{item.name || item.symbol}</strong><small>{item.symbol}</small></button></td><td>{number(item.entry_price)} 元<small>{item.entry_date || "缺少日期"}</small></td><td><span className={`batch-badge ${success ? "" : "warning"}`}>{researchStatus === "WAITING_USER_DIRECTION" ? "等待确认推理方向" : dataBlocked ? "数据不足 · 未分析" : publication.status === "CONCLUSION_FAILED" ? "结论校验失败" : publication.status === "SCORE_FAILED" ? "评分生成失败" : publication.status === "RESEARCH_INCOMPLETE" ? "研究未闭环 · 待补证" : success ? label(text(item.analysis_json.recommendation)) : local ? "模型失败 · 本地证据盘点" : label(text(item.analysis_json.model_output_status))}</span><small className="batch-clamp">{researchStatus === "WAITING_USER_DIRECTION" ? "请先确认竞争性假设，确认后系统才会按方向补数验证。" : dataBlocked ? text(item.analysis_json.model_failure_reason) || "未达到模型分析数据门槛" : success ? text((item.analysis_json.model as SelectionRecord)?.headline || item.analysis_json.summary) : publication.retryable ? text(publication.reason) : local ? "模型未返回成功结果；仅保存证据盘点，不是模型结论" : "尚无有效模型结论"}</small></td><td>{rows(item.evidence_json.documents).length} 篇文档<small>{rows(item.evidence_json.facts).length} 条事实与观测</small></td><td>{label(item.decision)}</td><td><button onClick={() => { setDetail(item); setFocusDocument(null); setDetailTab("conclusion"); setTargetPrice(text(item.analysis_json.target_price)); }}>分析与证据</button></td></tr>;
       })}</tbody></table>{!run.candidates.length && !running && <p className="batch-empty">本轮无可分析结果，请检查数据与失败原因。</p>}</div>{run.candidates.length > pageSize && <nav className="batch-pagination" aria-label="分析结果分页"><span>共 {run.candidates.length} 只 · 第 {Math.min(resultPage, pageCount)} / {pageCount} 页</span><button disabled={resultPage <= 1} onClick={() => setResultPage(page => page - 1)}>上一页</button><button disabled={resultPage >= pageCount} onClick={() => setResultPage(page => page + 1)}>下一页</button></nav>}</section>}
     {mode === "tracking" && <section className="batch-card"><div className="batch-card-title"><div><h2>跟踪与复盘</h2><span>从人工确认后的有效交易日开始，当前为10日规则。</span></div><button onClick={() => setAdvanced(true)}>查看详细复盘与Skill回归</button></div><div className="batch-table-wrap"><table><thead><tr><th>股票</th><th>目标 / 最新价</th><th>有效交易日</th><th>累计收益</th><th>最大回撤</th><th>状态</th></tr></thead><tbody>{tracking.map(item => <tr key={item.id}><td><button type="button" className="batch-stock-link" title="打开股票详细信息" onClick={() => setDetailStock({ market: item.market, symbol: item.symbol, name: item.name || item.symbol })}><strong>{item.name || item.symbol}</strong><small>{item.symbol}</small></button></td><td>{number(item.target_price)} / {number(item.latest_price)}</td><td>{item.observed_sessions} / {item.required_sessions}</td><td>{number(item.cumulative_return_pct)}%</td><td>{number(item.max_drawdown_pct)}%</td><td>{label(item.status)}</td></tr>)}</tbody></table>{!tracking.length && <p className="batch-empty">确认入选后自动建立跟踪。尚未发生的交易日不会生成收益结果。</p>}</div></section>}
     {detail && <div className="batch-overlay" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setDetail(null); }}><section ref={dialogRef} className="batch-detail" role="dialog" aria-modal="true" aria-label={`${detail.name || detail.symbol}分析与证据`}>
       <header><div><h2>{detail.name || detail.symbol}</h2><span>{detail.symbol} · 行情 {detail.entry_date} · {number(detail.entry_price)} 元</span></div><button disabled={busy} onClick={() => setDetail(null)}>关闭</button></header>
       {(error || notice || backfillActive || busy) && <div className="batch-dialog-feedback" aria-live="polite">{error && <p className="batch-alert error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{busy && <p>正在提交，请稍候…</p>}{backfillActive && <><strong>{text(backfillProgress.message) || "数据补齐任务已排队"}</strong><p>批次 #{run?.id} · {Number(backfillProgress.completed_count || 0)}/{Number(backfillProgress.candidate_count || 0)} 只 · {Number(backfillProgress.percent || 0)}%</p><progress aria-label="弹窗数据补齐进度" max="100" value={Number(backfillProgress.percent || 0)} /></>}</div>}
       <nav className="batch-tabs" aria-label="研判详情分类">{[["conclusion", "分析结论"], ["facts", "数据事实"], ["documents", "原文与引用"], ["trace", "关系与血缘"], ["llm", "LLM评价"]].map(([key, title]) => <button key={key} className={detailTab === key ? "active" : ""} aria-pressed={detailTab === key} onClick={() => { setDetailTab(key); if (key === "llm") void loadLlmEvaluation(detail); }}>{title}</button>)}</nav>
-      {detailTab === "conclusion" && <SelectionAnalysis candidate={detail} backfillDisabled={busy || running} onBackfillAll={() => void backfill([detail.id])} onRescore={() => void rescore(detail)} onDocument={id => {setFocusDocument(id); setDetailTab("documents");}} onBackfillDimension={dimension => void backfill([detail.id], [dimension])} />}
+      {detailTab === "conclusion" && <SelectionAnalysis candidate={detail} backfillDisabled={busy || running} onBackfillAll={() => void backfill([detail.id])} onRescore={() => void rescore(detail)} onDocument={id => {setFocusDocument(id); setDetailTab("documents");}} onBackfillDimension={dimension => void backfill([detail.id], [dimension])} onPrepareDirection={() => void prepareDirection()} onConfirmDirection={payload => void confirmDirection(payload)} onReviewResearch={payload => void reviewResearch(payload)} />}
       {detailTab === "facts" && <><SelectionDiagnostics candidate={detail} />{(evidenceCoverage.requires_data_backfill === true || detail.analysis_json.data_gate_status === "MISSING_DATA") && <button disabled={busy || running} onClick={() => void backfill([detail.id])}>补齐真实缺失并重新分析</button>}{detail.analysis_json.publication?.status === "SCORE_FAILED" && <button disabled={busy || running} onClick={() => void rescore(detail)}>重新生成八维评分</button>}<details className="batch-missing"><summary>原始限制与审计版本</summary><ul>{(Array.isArray(evidence?.missing_data) ? evidence.missing_data : []).map((item, index) => <li key={index}>{String(item)}</li>)}</ul><p className="batch-note">Skill：{text(detail.analysis_json.skill_code)} / {text(detail.analysis_json.skill_version)}<br />模型：{text(detail.analysis_json.actual_instance_code || detail.analysis_json.model_version)}</p></details><h3>股票与公司</h3><p>{text(evidence?.identity?.company?.name) || "公司名称未提供"}</p><p className="batch-note">{text(evidence?.identity?.canonical_security_id)} · {text(evidence?.identity?.canonical_company_id)}</p><h3>数值与事实</h3><div className="batch-facts">{factList.slice(0, 35).map((fact, index) => <Fact key={`${fact.id}-${index}`} fact={fact} />)}</div></>}
       {detailTab === "documents" && <><p className="batch-note">模型引用 {citedIds.size} 篇文档 · 事实 {model.evidence_fact_ids?.length || 0} 条 · 切片 {model.evidence_chunk_ids?.length || 0} 条。展开文档可读取本次保存的原文快照。</p>{[...documentList].sort((a,b) => Number(Number(b.id) === focusDocument) - Number(Number(a.id) === focusDocument)).map(doc => <SourceDocument key={`${detail.id}-${doc.id}`} doc={doc} candidateId={detail.id} cited={citedIds.has(Number(doc.id))} selected={Number(doc.id) === focusDocument} />)}<h3>本次载入的切片</h3>{rows(evidence?.chunks).map((chunk, index) => <details key={index}><summary>{text(chunk.section_title) || `片段${index + 1}`} · 向量{label(text(chunk.embedding_status))}</summary><p>{text(chunk.text)}</p></details>)}</>}
       {detailTab === "trace" && <><h3>图谱关系</h3>{rows(evidence?.graph_paths).slice(0, 12).map((path, index) => <p key={index}>{text(path.subject_name)} → {label(text(path.predicate))} → {text(path.object_name)}<br /><small>证据文档 #{path.evidence_document_id} · {label(text(path.verification_status))}</small></p>)}<h3>血缘追踪</h3><p className="batch-note">{rows(evidence?.lineage).length} 条血缘记录 · {rows(evidence?.lakehouse_datasets).length} 个湖仓版本</p>{rows(evidence?.lineage).slice(0, 10).map((item, index) => <details key={index}><summary>{text(item.transformation)}</summary><p>{text(item.upstream_type)}:{text(item.upstream_id)} → {text(item.downstream_type)}:{text(item.downstream_id)}</p></details>)}<p className="batch-note">上下文版本：{text(evidence?.context_version)}<br />图谱版本：{text(evidence?.graph_version)}</p></>}
