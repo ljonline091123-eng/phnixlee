@@ -664,6 +664,79 @@ class SelectionHypothesisDirectionRequest(BaseModel):
         return self
 
 
+class SelectionAiResearchEvidence(BaseModel):
+    """One evidence-linked statement used by the AI-directed research trial."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    reference_type: Literal["DOCUMENT", "FACT", "RELATION"]
+    reference_id: str = Field(min_length=1, max_length=128)
+    stance: Literal["FACT", "SUPPORT", "COUNTER", "MIXED"]
+    claim: str = Field(min_length=2, max_length=600)
+    quote: str | None = Field(default=None, max_length=500)
+
+
+class SelectionAiResearchDirection(BaseModel):
+    """A model-proposed research direction, not a verified conclusion."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    direction_id: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9_\-]+$")
+    title: str = Field(min_length=2, max_length=160)
+    hypothesis: str = Field(min_length=2, max_length=800)
+    why_it_matters: str = Field(min_length=2, max_length=800)
+    current_judgment: str = Field(min_length=2, max_length=1000)
+    confidence: float = Field(ge=0, le=1)
+    supporting_evidence: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=8)
+    counter_evidence: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=8)
+    data_gaps: list[str] = Field(default_factory=list, max_length=8)
+    suggested_sources: list[str] = Field(default_factory=list, max_length=8)
+    suggested_dimensions: list[Literal[
+        "NEWS", "NOTICE", "FINANCIAL", "PRICE_VOLUME", "FUND_FLOW",
+        "COMPANY", "RESEARCH", "GRAPH",
+    ]] = Field(default_factory=list, max_length=8)
+    recommended_priority: Literal["PRIORITY", "NORMAL", "PAUSED"] = "NORMAL"
+
+
+class SelectionAiDirectedResearchOutput(BaseModel):
+    """Strict output contract for the evidence-first AI research planner."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    mode: Literal["AI_DIRECTED_RESEARCH_V1"] = "AI_DIRECTED_RESEARCH_V1"
+    summary: str = Field(min_length=2, max_length=1200)
+    business_profile: str = Field(min_length=2, max_length=1200)
+    key_findings: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=12)
+    major_events: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=10)
+    directions: list[SelectionAiResearchDirection] = Field(min_length=3, max_length=5)
+    preliminary_conclusion: str = Field(min_length=2, max_length=1600)
+    conclusion_status: Literal["PARTIAL", "INSUFFICIENT", "READY_FOR_DIRECTION_REVIEW"]
+    data_quality_notes: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def unique_direction_ids(self) -> "SelectionAiDirectedResearchOutput":
+        values = [row.direction_id for row in self.directions]
+        if len(values) != len(set(values)):
+            raise ValueError("AI研究方向标识不得重复")
+        return self
+
+
+class SelectionAiResearchConfirmRequest(BaseModel):
+    """Human gate for the dynamic research directions."""
+
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["CONFIRM_AND_RESEARCH", "SAVE_DRAFT", "SKIP_RESEARCH"]
+    selected_direction_ids: list[str] = Field(default_factory=list, max_length=5)
+    reviewer: str = Field(default="USER", min_length=1, max_length=128)
+    comment: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def confirmed_direction_required(self) -> "SelectionAiResearchConfirmRequest":
+        self.selected_direction_ids = list(dict.fromkeys(
+            value.strip() for value in self.selected_direction_ids if value.strip()
+        ))
+        if self.action == "CONFIRM_AND_RESEARCH" and not self.selected_direction_ids:
+            raise ValueError("请至少选择一个研究方向")
+        return self
+
+
 class SelectionResearchReviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     phase: Literal["EVIDENCE", "CONCLUSION"]

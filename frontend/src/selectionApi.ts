@@ -107,6 +107,12 @@ export type SelectionCandidate = {
   target_return_pct: number | null; confidence: number | null; prediction_id: number | null;
   reviewed_at: string | null; created_at: string; tracking_id: number | null;
 };
+export type SelectionAiResearchConfirmRequest = {
+  action: "CONFIRM_AND_RESEARCH" | "SAVE_DRAFT" | "SKIP_RESEARCH";
+  selected_direction_ids: string[];
+  reviewer?: string;
+  comment?: string | null;
+};
 export type SelectionRun = {
   id: number; market: string; universe_scope: string; candidate_limit: number; criteria_json: Record<string, unknown>;
   model_instance_code: string | null; knowledge_base_ids_json: number[]; graph_ids_json: number[];
@@ -283,6 +289,9 @@ export const selectionApi = {
   hypothesisResearchStatus: (id: number) => request<SelectionRecord>(`/selection/runs/${id}/hypothesis-research-status`),
   prepareHypothesisDirection: (candidateId: number) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/hypothesis-direction/prepare`, {method: "POST"}),
   confirmHypothesisDirection: (candidateId: number, payload: SelectionHypothesisDirectionRequest) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/hypothesis-direction`, {method: "POST", body: JSON.stringify(payload)}),
+  prepareAiResearch: (candidateId: number, modelInstanceCode?: string | null) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/ai-research/prepare${modelInstanceCode ? `?model_instance_code=${encodeURIComponent(modelInstanceCode)}` : ""}`, {method: "POST"}),
+  getAiResearch: (candidateId: number) => request<SelectionRecord>(`/selection/candidates/${candidateId}/ai-research`),
+  confirmAiResearch: (candidateId: number, payload: SelectionAiResearchConfirmRequest) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/ai-research/confirm`, {method: "POST", body: JSON.stringify(payload)}),
   reviewHypothesisResearch: (candidateId: number, payload: SelectionResearchReviewRequest) => request<SelectionCandidate>(`/selection/candidates/${candidateId}/research-review`, {method: "POST", body: JSON.stringify(payload)}),
   researchLearning: (candidateId: number) => request<SelectionResearchLearning>(`/selection/candidates/${candidateId}/research-learning`),
   listRuns: () => request<SelectionRun[]>("/selection/runs"),

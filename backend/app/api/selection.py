@@ -13,6 +13,7 @@ from app.models.selection import (
 )
 from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
+    SelectionAiResearchConfirmRequest,
     SelectionBackfillRequest,
     SelectionHypothesisDirectionRequest,
     SelectionHypothesisResearchRequest,
@@ -44,6 +45,11 @@ from app.services.selection import (
     refresh_tracking, review_candidate, generate_candidate_llm_evaluation,
     probe_selection_model, _selection_model_instance,
     _evidence_data_gate, _elapsed_between, _selection_result_counts,
+)
+from app.services.ai_directed_research import (
+    ai_directed_research_read,
+    confirm_ai_directed_research,
+    prepare_ai_directed_research,
 )
 from app.models.ai_hub import (
     KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph,
@@ -1157,6 +1163,50 @@ def prepare_hypothesis_direction(
 ) -> SelectionCandidateRead:
     try:
         return _candidate_read(db, prepare_selection_hypothesis_review(db, candidate_id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/candidates/{candidate_id}/ai-research/prepare", response_model=SelectionCandidateRead)
+def prepare_ai_research(
+    candidate_id: int,
+    model_instance_code: str | None = Query(default=None, max_length=64),
+    db: Session = Depends(get_db),
+) -> SelectionCandidateRead:
+    """Read the existing evidence and propose dynamic research directions.
+
+    This endpoint is deliberately independent of the legacy eight-dimension
+    scorecard and does not write facts, relations, or source data.
+    """
+    try:
+        return _candidate_read(db, prepare_ai_directed_research(
+            db, candidate_id, model_instance_code=model_instance_code,
+        ))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/candidates/{candidate_id}/ai-research")
+def get_ai_research(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="选股候选不存在")
+    return ai_directed_research_read(candidate)
+
+
+@router.post("/candidates/{candidate_id}/ai-research/confirm", response_model=SelectionCandidateRead, status_code=202)
+def confirm_ai_research(
+    candidate_id: int,
+    payload: SelectionAiResearchConfirmRequest,
+    db: Session = Depends(get_db),
+) -> SelectionCandidateRead:
+    """Persist the user's direction gate without promoting hypotheses to facts."""
+    try:
+        return _candidate_read(db, confirm_ai_directed_research(db, candidate_id, payload))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
