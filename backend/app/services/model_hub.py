@@ -601,6 +601,103 @@ def _research_question_skill(code: str, name: str, purpose: str, contract: str) 
 
 
 RESEARCH_QUESTION_SKILLS = (
+    {
+        "skill_code": "AI_DIRECTED_RESEARCH_PLANNER",
+        "skill_name": "AI主动研究方向规划",
+        "description": "读取单股有界证据包，先形成公司画像和重大事项，再提出可由用户确认的动态研究方向。",
+        "instructions": (
+            "你是证据优先的证券研究规划智能体。只读取本次请求提供的白名单文档、事实和关系，"
+            "不得访问任意数据库、互联网或补写不存在的数据。先用主营、收入、利润、公司行为、行业与产业链、"
+            "量价资金和机构研究形成公司画像，再识别真正可能改变投资判断的重大事项。"
+            "提出3至5个动态研究方向，每个方向必须包含待验证假设、重要性、当前判断、支持证据、反证、缺口、"
+            "建议来源、可调用的数据维度和优先级。方向是研究假设，不是事实或收益概率；confidence仅表示现有证据"
+            "对该研究方向的支持程度。事实、推断、假设和未知必须分开。DOCUMENT引用必须使用白名单文档ID并附"
+            "输入中可连续核对的原文引句；FACT和RELATION引用必须使用白名单ID。缺失问董秘、供应链或公告正文时，"
+            "应写成来源缺失或正文不可得，不能推断为公司没有相关事项。必须同时寻找反证，不能把行业文章的标题"
+            "情绪直接当成公司利空。只按调用方JSON Schema输出，不附加解释、Markdown或买卖指令。"
+        ),
+        "enabled": True,
+        "lifecycle_status": "ENABLED",
+        "skill_type": "PROMPT_SOP",
+        "input_contract_json": {
+            "type": "object", "required": ["candidate_id", "market", "symbol", "as_of", "evidence"],
+            "properties": {
+                "candidate_id": {"type": "integer", "minimum": 1},
+                "market": {"type": "string"}, "symbol": {"type": "string"},
+                "as_of": {"type": "string"}, "evidence": {"type": "object"},
+            }, "additionalProperties": False,
+        },
+        "output_contract_json": {
+            "type": "object",
+            "required": ["mode", "summary", "business_profile", "key_findings", "major_events",
+                         "directions", "preliminary_conclusion", "conclusion_status", "data_quality_notes"],
+            "properties": {
+                "mode": {"const": "AI_DIRECTED_RESEARCH_V1"},
+                "summary": {"type": "string"}, "business_profile": {"type": "string"},
+                "key_findings": {"type": "array"}, "major_events": {"type": "array"},
+                "directions": {"type": "array", "minItems": 3, "maxItems": 5},
+                "preliminary_conclusion": {"type": "string"},
+                "conclusion_status": {"enum": ["PARTIAL", "INSUFFICIENT", "READY_FOR_DIRECTION_REVIEW"]},
+                "data_quality_notes": {"type": "array"},
+            }, "additionalProperties": False,
+        },
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": False, "unrestricted_database_write": False,
+            "allowed_operations": ["READ_GOVERNED_EVIDENCE", "PROPOSE_RESEARCH_DIRECTION",
+                                   "RETURN_EVIDENCE_LINKED_RESEARCH"],
+            "allowed_services": ["selection_evidence", "graph_rag"],
+        },
+        "side_effect_level": "READ_ONLY",
+        "idempotency_policy": "REQUIRED",
+        "retry_policy_json": {"max_attempts": 2, "retry_on": ["TimeoutError", "RuntimeError"], "backoff": "EXPONENTIAL"},
+        "error_policy_json": {"on_error": "FAIL_CLOSED", "retain_audit": True, "fabricate_fallback": False},
+        "config_json": {"task_type": "stock_screening", "execution_mode": "EVIDENCE_GROUNDED_LLM",
+                        "managed_contract_version": "AI_DIRECTED_RESEARCH_V1"},
+    },
+    {
+        "skill_code": "AI_DIRECTED_RESEARCH_VERIFIER",
+        "skill_name": "AI主动研究补证复核",
+        "description": "对用户确认的动态研究方向执行证据复核，区分支持、反证、交织和证据不足。",
+        "instructions": (
+            "你是AI主动研究的第二阶段复核Skill。只读取本次白名单内的文档、事实和关系，"
+            "逐项复核用户确认的研究方向。必须区分事实、推断、反证和未知；不得把方向选择当作事实，"
+            "不得把未找到证据表述为不存在，不得生成买卖指令。DOCUMENT引用必须提供输入中可连续核对的原文引句，"
+            "FACT和RELATION必须使用白名单ID。证据不足返回INSUFFICIENT并降低置信度；同时保留剩余缺口和下一步受控来源。"
+            "只按调用方JSON Schema返回，不附加Markdown或解释。"
+        ),
+        "enabled": True,
+        "lifecycle_status": "ENABLED",
+        "skill_type": "PROMPT_SOP",
+        "input_contract_json": {
+            "type": "object", "required": ["candidate_id", "market", "symbol", "round", "directions", "evidence"],
+            "properties": {"candidate_id": {"type": "integer"}, "market": {"type": "string"},
+                           "symbol": {"type": "string"}, "round": {"type": "integer"},
+                           "directions": {"type": "array"}, "evidence": {"type": "object"}},
+            "additionalProperties": False,
+        },
+        "output_contract_json": {
+            "type": "object",
+            "required": ["mode", "overall_summary", "overall_status", "direction_results", "risk_notes", "data_quality_notes"],
+            "properties": {"mode": {"const": "AI_DIRECTED_RESEARCH_VERIFICATION_V1"},
+                           "overall_summary": {"type": "string"},
+                           "overall_status": {"enum": ["READY_FOR_REVIEW", "PARTIAL", "INSUFFICIENT"]},
+                           "direction_results": {"type": "array", "minItems": 1, "maxItems": 5},
+                           "risk_notes": {"type": "array"}, "data_quality_notes": {"type": "array"}},
+            "additionalProperties": False,
+        },
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": False, "unrestricted_database_write": False,
+            "allowed_operations": ["READ_GOVERNED_EVIDENCE", "VERIFY_USER_APPROVED_DIRECTION",
+                                   "RETURN_EVIDENCE_LINKED_RESEARCH"],
+            "allowed_services": ["selection_evidence", "graph_rag"],
+        },
+        "side_effect_level": "READ_ONLY",
+        "idempotency_policy": "REQUIRED",
+        "retry_policy_json": {"max_attempts": 2, "retry_on": ["TimeoutError", "RuntimeError"], "backoff": "EXPONENTIAL"},
+        "error_policy_json": {"on_error": "FAIL_CLOSED", "retain_audit": True, "fabricate_fallback": False},
+        "config_json": {"task_type": "stock_screening", "execution_mode": "EVIDENCE_GROUNDED_LLM",
+                        "managed_contract_version": "AI_DIRECTED_RESEARCH_VERIFICATION_V1"},
+    },
     _research_question_skill("RESEARCH_QUESTION_PLANNER", "研究问题规划", "将主营、管理层、并购和资本行为转化为可验证研究问题", "RESEARCH_QUESTION_V1"),
     _research_question_skill("EVIDENCE_GAP_DETECTOR", "证据缺口检测", "识别结论所需证据、缺口影响和优先补证路径", "EVIDENCE_GAP_V1"),
     _research_question_skill("MANAGEMENT_CHANGE_DEEP_DIVE", "管理层变化深度分析", "分析董事、总裁和核心管理层调整的事实、交接、连续性与竞争性解释", "MANAGEMENT_CHANGE_V1"),

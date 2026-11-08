@@ -1,6 +1,6 @@
 # GEMINI QUANT 系统总体设计（核心模型、Skill 与复盘链路）
 
-> 更新日期：2026-10-28。本文描述当前生产架构；选股评价实施细节见 [selection-scoring-implementation.md](selection-scoring-implementation.md)。
+> 更新日期：2026-11-09。本文描述当前生产架构；选股评价实施细节见 [selection-scoring-implementation.md](selection-scoring-implementation.md)。
 
 ## 四层应用架构
 
@@ -75,6 +75,24 @@ V7 保留并复用两个可审计的语义模块：
 这两个模块通过 `BUSINESS_MOAT_VALUE_ANALYST` 和 `VALUE_CHAIN_TRANSMISSION_ANALYST` 执行，`HOLISTIC_INVESTMENT_THESIS_ANALYST` 负责将其与财务、治理、估值、机构预期和交易状态编排成整体投资逻辑，三者均为只读 Skill。影响分表示研究影响强弱，不是股价涨跌幅预测。GraphRAG 将 F10 `profile` 和 `business_composition` 投影为 `BUSINESS_PROFILE`、`BUSINESS_COMPOSITION` 来源事实；原始 JSON 仍保留在 `stock_f10_cache`，不会因模型分析而改写。
 
 选股研究从 V7 起进一步采用问题驱动的 V8 契约，详见 `docs/research-question-driven-analysis-v8.md`。整体编排先回答主营赚钱逻辑、重大管理层变化、并购与第二曲线、资本行为动因四个问题，再汇总八维评分；八维不再替代研究问题。重大事件产生的开放假设由 `HYPOTHESIS_RESEARCH_ORCHESTRATOR` 自动转换为已接数据源补数任务，完成证据增量比较、知识投影、单股重验和确定性置信度更新。默认三轮、连续两轮无新增证据即降权关闭次级推理方向；主营证据不足仍是硬门槛。数据源失败和模型失败不等于查无证据，系统保留上一轮假设、结论和已采集证据并支持重试；每轮模型重验必须继承原研究问题、支持/反证与证据增量。外部资料只有先形成可追溯证据文档，才能进入同一闭环。
+
+## AI 主动研究试验模式
+
+2026-11-09 起增加 `AI_DIRECTED_RESEARCH_V1` 单股试验模式。该模式不删除八维评分、V8 研究问题或历史结果，但把它们降为对照和后台质量检查，不再作为试验页面的首要交互。首个试验对象为港股黑芝麻智能 `HK:02533`。
+
+新主流程为：读取现有有界证据包 → 形成公司画像和重大事项 → 提出 3 至 5 个动态研究方向 → 用户多选确认 → 生成受控补证计划 → 后台队列执行现有采集服务 → 以补证前后证据增量调用 `AI_DIRECTED_RESEARCH_VERIFIER` → 用户确认阶段结论或继续补证。模型输出只能保存为候选研究视图，不能写入 `FoundationFact` 或直接升级知识图谱关系；用户选择也只是研究优先级，不是事实确认。补证失败、模型失败和证据不足分开记录；模型重试复用已完成的补证快照，不重复采集。
+
+`AI_DIRECTED_RESEARCH_PLANNER` 是只读 Skill。所有文档、事实和关系引用必须来自本次实际送入模型的白名单；文档证据要求连续原文引句。模型若返回可读方向但未遵循严格 JSON/引用契约，系统可以保留规划文本，但必须降低置信度、删除白名单外引用、标记待人工核对，不得将其包装成已验证结论。模型空响应、欠费或网络超时统一标记 `MODEL_FAILED`，保留调用日志和旧结果，不使用 Mock 或历史八维结果冒充成功。
+
+`AI_DIRECTED_RESEARCH_VERIFIER` 同样是只读 Skill。若供应商重复返回规划结构，系统只保留文本并统一降级为 `INSUFFICIENT`；不能把兼容修复当作验证成功。
+
+当前试验接口为：
+
+- `POST /api/v1/selection/candidates/{candidate_id}/ai-research/prepare`
+- `GET /api/v1/selection/candidates/{candidate_id}/ai-research`
+- `POST /api/v1/selection/candidates/{candidate_id}/ai-research/confirm`
+
+试验状态保存在 `selection_candidate.analysis_json.ai_directed_research`，用户确认记录写入既有 `selection_research_feedback` 审计表。该设计避免新增重复事实体系，并可随候选历史版本回溯。
 
 一年期资料超过单次上下文预算时，系统按文档/事实记录边界分段读取，再将每段的证据 ID、逐字引句、方向、冲突和限制汇总进入最终研判。原文不被摘要覆盖。最终生成与契约重试只使用分段摘要、结构化数值、证据白名单和精简输出契约，单次模型输入硬限制为 60,000 字符；完整 JSON Schema 留在服务端做严格校验。
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { selectionApi } from "./selectionApi";
 import type {
-  SelectionCandidate, SelectionHypothesisDirectionRequest, SelectionRecord,
+  SelectionAiResearchConfirmRequest, SelectionCandidate, SelectionHypothesisDirectionRequest, SelectionRecord,
   SelectionResearchLearning, SelectionResearchReviewRequest,
   SelectionScorecard, SelectionScoreDimensionResult,
 } from "./selectionApi";
@@ -22,6 +22,102 @@ const researchRoundNames: Record<string, string> = {VERIFIED_WITH_INCREMENT: "�
 const array = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value : [];
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
 export type AnalysisDimension = "NEWS" | "NOTICE" | "FINANCIAL" | "PRICE_VOLUME" | "FUND_FLOW" | "COMPANY" | "RESEARCH" | "GRAPH";
+
+const aiResearchStatusNames: Record<string, string> = {
+  NOT_STARTED: "尚未启动", WAITING_USER_DIRECTION: "等待用户确认方向", MODEL_FAILED: "模型调用失败",
+  READY_FOR_EVIDENCE_COLLECTION: "方向已确认，等待补证", QUEUED: "已排队，等待补证",
+  RUNNING: "正在补证与AI复核", WAITING_CONCLUSION_REVIEW: "阶段结论待确认",
+  COMPLETED: "本轮研究已确认", DIRECTION_DRAFT_SAVED: "已保存方向草稿",
+  SOURCE_FAILED: "数据源补证失败", STOPPED_BY_USER: "用户已停止",
+};
+
+function AiDirectedResearchPanel({candidate, disabled, onUpdated}: {
+  candidate: SelectionCandidate;
+  disabled?: boolean;
+  onUpdated?: (candidate: SelectionCandidate) => void;
+}) {
+  const initial = (candidate.analysis_json.ai_directed_research || {}) as SelectionRecord;
+  const [state, setState] = useState<SelectionRecord>(initial);
+  const [selected, setSelected] = useState<string[]>(Array.isArray(initial.selected_direction_ids) ? initial.selected_direction_ids.map(String) : []);
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const next = (candidate.analysis_json.ai_directed_research || {}) as SelectionRecord;
+    setState(next);
+    setSelected(Array.isArray(next.selected_direction_ids) ? next.selected_direction_ids.map(String) : []);
+  }, [candidate.id, candidate.analysis_json.ai_directed_research]);
+  useEffect(() => {
+    if (!(["QUEUED", "RUNNING", "READY_FOR_EVIDENCE_COLLECTION"].includes(String(state.status)))) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const next = await selectionApi.getAiResearch(candidate.id);
+        if (stopped) return;
+        setState(next as SelectionRecord);
+        const nextStatus = String((next as SelectionRecord).status || "");
+        if (!["QUEUED", "RUNNING", "READY_FOR_EVIDENCE_COLLECTION"].includes(nextStatus)) {
+          const refreshed = await selectionApi.candidate(candidate.id);
+          if (!stopped) onUpdated?.(refreshed);
+        }
+      } catch { /* The next poll or the visible action will expose a durable error. */ }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2200);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [candidate.id, state.status, onUpdated]);
+  async function prepare() {
+    setBusy(true); setError("");
+    try {
+      const next = await selectionApi.prepareAiResearch(candidate.id);
+      setState((next.analysis_json.ai_directed_research || {}) as SelectionRecord);
+      onUpdated?.(next);
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusy(false); }
+  }
+  async function confirm(action: SelectionAiResearchConfirmRequest["action"]) {
+    setBusy(true); setError("");
+    try {
+      const next = await selectionApi.confirmAiResearch(candidate.id, {
+        action, selected_direction_ids: selected, reviewer: "USER", comment: comment.trim() || null,
+      });
+      setState((next.analysis_json.ai_directed_research || {}) as SelectionRecord);
+      onUpdated?.(next);
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { setBusy(false); }
+  }
+  const directions = array(state.directions);
+  const status = String(state.status || "NOT_STARTED");
+  return <section className="ai-directed-research-panel" aria-label="AI主动研究试验">
+    <header className="ai-directed-research-heading"><div><span>新主流程 · AI主动研究试验</span><h3>先理解现有证据，再由你确认研究方向</h3></div><strong>{aiResearchStatusNames[status] || status}</strong></header>
+    {status === "NOT_STARTED" && <div className="ai-directed-empty"><p>系统暂不把八维分数当作主结论。点击后，AI将读取黑芝麻智能已有的主营、财务、新闻、公告、公司行为、量价、研究和图谱证据，提出3至5个可验证方向。</p><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void prepare()}>{busy ? "正在读取证据并分析…" : "读取现有证据并提出研究方向"}</button></div>}
+    {status === "MODEL_FAILED" && directions.length === 0 && <div className="ai-directed-empty error"><p>本次没有形成研究结论，系统没有把失败响应写入事实或结论。{String(state.error || "")}</p><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void prepare()}>{busy ? "正在重试…" : "重试AI主动研究"}</button></div>}
+    {status !== "NOT_STARTED" && !(status === "MODEL_FAILED" && directions.length === 0) && <>
+      <div className="ai-directed-summary"><div><small>AI当前公司画像</small><p>{String(state.business_profile || "尚未形成公司画像")}</p></div><div><small>初步判断（不等于投资建议）</small><p>{String(state.summary || state.preliminary_conclusion || "尚未形成初步判断")}</p></div></div>
+      {array(state.key_findings).length > 0 && <details open className="ai-directed-evidence"><summary>关键事实（{array(state.key_findings).length}）</summary><ul>{array(state.key_findings).map((item, index) => <li key={index}><b>{String(item.stance || "FACT") === "FACT" ? "事实" : String(item.stance || "")}</b> {String(item.claim || "")}{item.quote && <blockquote>{String(item.quote)}</blockquote>}<small>{String(item.reference_type || "")} #{String(item.reference_id || "")}</small></li>)}</ul></details>}
+      {array(state.major_events).length > 0 && <details className="ai-directed-evidence"><summary>AI识别的重大事项（{array(state.major_events).length}）</summary><ul>{array(state.major_events).map((item, index) => <li key={index}>{String(item.claim || "")}{item.quote && <blockquote>{String(item.quote)}</blockquote>}<small>{String(item.reference_type || "")} #{String(item.reference_id || "")}</small></li>)}</ul></details>}
+      <div className="ai-directed-directions"><div className="ai-directed-directions-title"><div><small>用户确认节点</small><h4>请选择本轮要继续验证的方向</h4></div><span>{selected.length}/{directions.length} 已选</span></div>{directions.map((row, index) => {
+        const id = String(row.direction_id || `direction_${index}`); const checked = selected.includes(id);
+        return <article key={id} className={checked ? "selected" : ""}><label><input type="checkbox" checked={checked} disabled={busy || status === "READY_FOR_EVIDENCE_COLLECTION" || status === "STOPPED_BY_USER"} onChange={event => setSelected(current => event.target.checked ? [...current, id] : current.filter(value => value !== id))} /><strong>{String(row.title || "研究方向")}</strong><em>{Math.round(Number(row.confidence || 0) * 100)}% · {String(row.recommended_priority || "NORMAL") === "PRIORITY" ? "建议优先" : "建议常规"}</em></label><p><b>待验证假设：</b>{String(row.hypothesis || "")}</p><p><b>为什么重要：</b>{String(row.why_it_matters || "")}</p><p><b>AI当前判断：</b>{String(row.current_judgment || "")}</p>{array(row.supporting_evidence).length > 0 && <details><summary>支持证据（{array(row.supporting_evidence).length}）</summary><ul>{array(row.supporting_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{array(row.counter_evidence).length > 0 && <details><summary>反证与不确定性（{array(row.counter_evidence).length}）</summary><ul>{array(row.counter_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{strings(row.data_gaps).length > 0 && <p className="ai-directed-gap"><b>待补证：</b>{strings(row.data_gaps).join("；")}</p>}</article>;
+      })}</div>
+      {status === "WAITING_USER_DIRECTION" && <div className="ai-directed-actions"><label>给本轮研究的补充意见（选填）<textarea rows={2} value={comment} onChange={event => setComment(event.target.value)} placeholder="例如：先核验高管变动是否与业务转型有关。" /></label><div><button type="button" disabled={disabled || busy || selected.length === 0} onClick={() => void confirm("CONFIRM_AND_RESEARCH")} className="primary-button">确认方向并生成补证计划</button><button type="button" disabled={disabled || busy} onClick={() => void confirm("SAVE_DRAFT")}>保存草稿</button><button type="button" disabled={disabled || busy} onClick={() => void confirm("SKIP_RESEARCH")}>本轮不治理</button></div></div>}
+      {status === "READY_FOR_EVIDENCE_COLLECTION" && <div className="ai-directed-next"><strong>方向已确认</strong><p>已生成受控补证计划，未将推断写入事实库。数据补齐完成后，再调用AI复核支持证据、反证和置信度。</p><p>维度：{strings(state.collection_plan?.dimensions).join("、") || "当前没有可自动调用的维度"}</p></div>}
+      {(status === "QUEUED" || status === "RUNNING") && <div className="ai-directed-progress"><div className="ai-directed-progress-head"><strong>{String(state.progress?.message || "正在处理")}</strong><span>{Number(state.progress?.percent || 0)}%</span></div><div className="ai-directed-progress-track"><i style={{width: `${Math.max(4, Math.min(100, Number(state.progress?.percent || 0)))}%`}} /></div><small>当前阶段：数据补证 → 证据增量比较 → AI复核。该过程不会改写事实库中的原始事实。</small></div>}
+      {(status === "SOURCE_FAILED" || status === "MODEL_FAILED") && <div className="ai-directed-empty error"><p>{status === "SOURCE_FAILED" ? "受控数据补证失败" : "模型复核失败"}：{String(state.last_error || "失败详情已记录，现有方向和历史结果均已保留。")}</p><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void confirm("REQUEST_MORE_EVIDENCE")}>{busy ? "正在重新排队…" : "保留现有证据并重试"}</button></div>}
+      {status === "WAITING_CONCLUSION_REVIEW" && <section className="ai-directed-verification" aria-label="AI主动研究阶段结论">
+        <header><div><small>补证完成 · 用户复核节点</small><h4>AI阶段复核结果</h4></div><strong>{String(state.latest_verification?.overall_status || "READY_FOR_REVIEW") === "READY_FOR_REVIEW" ? "可复核" : "证据仍不充分"}</strong></header>
+        <p className="ai-directed-verification-summary">{String(state.latest_verification?.overall_summary || "尚未形成阶段复核摘要")}</p>
+        {array(state.latest_verification?.direction_results).map((row, index) => <article key={`${String(row.direction_id)}-${index}`}><div><strong>{String(directions.find(item => String(item.direction_id) === String(row.direction_id))?.title || row.direction_id || "研究方向")}</strong><span className={`ai-verdict ai-verdict-${String(row.judgment || "INSUFFICIENT").toLowerCase()}`}>{String(row.judgment || "INSUFFICIENT") === "SUPPORTED" ? "支持" : String(row.judgment || "") === "CONTRADICTED" ? "反证" : String(row.judgment || "") === "MIXED" ? "交织" : "证据不足"} · {Math.round(Number(row.confidence || 0) * 100)}%</span></div><p>{String(row.conclusion || "尚未形成方向结论")}</p>{array(row.supporting_evidence).length > 0 && <small>支持证据：{array(row.supporting_evidence).map(item => String(item.claim || "")).join("；")}</small>}{array(row.counter_evidence).length > 0 && <small>反证：{array(row.counter_evidence).map(item => String(item.claim || "")).join("；")}</small>}{strings(row.remaining_gaps).length > 0 && <small>仍需验证：{strings(row.remaining_gaps).join("；")}</small>}</article>)}
+        <div className="ai-directed-actions"><button type="button" disabled={disabled || busy} onClick={() => void confirm("REQUEST_MORE_EVIDENCE")}>继续补证一轮</button><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void confirm("ACCEPT_RESULT")}>确认本轮阶段结论</button></div>
+      </section>}
+      {status === "DIRECTION_DRAFT_SAVED" && <p className="ai-directed-next">方向草稿已保存。确认后才会进入补证阶段。</p>}
+      {status === "COMPLETED" && <p className="ai-directed-next"><strong>本轮阶段结论已确认。</strong> 原始证据、模型调用和各轮结果已保留；该确认不会自动写成 FoundationFact，也不构成买卖建议。</p>}
+      {status === "STOPPED_BY_USER" && <p className="ai-directed-next">用户已停止本轮主动研究，历史结果仍保留。</p>}
+      {strings(state.data_quality_notes).length > 0 && <details className="ai-directed-notes"><summary>数据质量与引用提醒（{strings(state.data_quality_notes).length}）</summary><ul>{strings(state.data_quality_notes).map((item, index) => <li key={index}>{item}</li>)}</ul></details>}
+    </>}
+    {error && <p className="batch-alert error">{error}</p>}
+  </section>;
+}
 
 function HypothesisDirectionReview({review, busy, onSubmit}: {
   review: SelectionRecord;
@@ -225,7 +321,7 @@ export function SelectionDiagnostics({ candidate }: { candidate: SelectionCandid
   </section>;
 }
 
-export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, onResearch, onPrepareDirection, onConfirmDirection, onReviewResearch, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; onResearch?: () => void; onPrepareDirection?: () => void; onConfirmDirection?: (payload: SelectionHypothesisDirectionRequest) => void; onReviewResearch?: (payload: SelectionResearchReviewRequest) => void; backfillDisabled?: boolean; onRescore?: () => void}) {
+export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, onBackfillAll, onResearch, onPrepareDirection, onConfirmDirection, onReviewResearch, onAiResearchUpdated, backfillDisabled, onRescore}: {candidate: SelectionCandidate; onDocument?: (id: number) => void; onBackfillDimension?: (dimension: AnalysisDimension) => void; onBackfillAll?: () => void; onResearch?: () => void; onPrepareDirection?: () => void; onConfirmDirection?: (payload: SelectionHypothesisDirectionRequest) => void; onReviewResearch?: (payload: SelectionResearchReviewRequest) => void; onAiResearchUpdated?: (candidate: SelectionCandidate) => void; backfillDisabled?: boolean; onRescore?: () => void}) {
   const analysis = candidate.analysis_json;
   const model = (analysis.model || {}) as SelectionRecord;
   const modelFailed = analysis.model_output_status === "FAILED";
@@ -281,6 +377,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   } : directionReview;
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
+  const aiDirectedTrial = (candidate.market === "HK" && candidate.symbol === "02533") || !!analysis.ai_directed_research;
   const waitingDirection = researchLoop.status === "WAITING_USER_DIRECTION";
   const documents = [...new Map([
     ...array(candidate.evidence_json.documents),
@@ -298,16 +395,20 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const largeMoney = (value: unknown) => typeof value === "number" ? `${(value / 100000000).toFixed(2)} 亿元` : "—";
   const ratio = (value: unknown) => typeof value === "number" ? `${(value * 100).toFixed(2)}%` : "—";
   if (dataBlocked) return <section className="selection-analysis">
-    <div className="analysis-empty-conclusion"><strong>尚未形成可用投资结论</strong><p>本轮没有达到最低证据门槛。具体缺失项和补齐入口请查看“数据事实”页签。</p></div>
+    {aiDirectedTrial && <AiDirectedResearchPanel candidate={candidate} disabled={backfillDisabled} onUpdated={onAiResearchUpdated} />}
+    <details className="analysis-legacy-scorecard"><summary>历史八维分析状态</summary><div className="analysis-empty-conclusion"><strong>尚未形成可用投资结论</strong><p>本轮没有达到最低证据门槛。具体缺失项和补齐入口请查看“数据事实”页签。</p></div></details>
   </section>;
   if (waitingDirection && directionReviewForDisplay.questions && onConfirmDirection) return <section className="selection-analysis">
-    <div className="analysis-empty-conclusion"><strong>已生成竞争性推理方向，等待你的确认</strong><p>系统从真实模型调用中恢复并独立校验了以下研究问题。它们只是待验证方向，不是事实或投资结论；确认后系统才会调用已接入数据源补数、重验并形成阶段结论。</p>{researchLoop.direction_seed_model_call_log_id ? <small>方向来源：模型调用 #{String(researchLoop.direction_seed_model_call_log_id)} · 未写入事实库</small> : null}</div>
-    <HypothesisDirectionReview review={directionReviewForDisplay} busy={backfillDisabled} onSubmit={onConfirmDirection} />
+    {aiDirectedTrial && <AiDirectedResearchPanel candidate={candidate} disabled={backfillDisabled} onUpdated={onAiResearchUpdated} />}
+    <details className="analysis-legacy-scorecard"><summary>历史八维研究方向</summary><div className="analysis-empty-conclusion"><strong>已生成竞争性推理方向，等待你的确认</strong><p>这是旧八维流程保留的研究方向，不作为本次AI主动研究试验的主结论。</p>{researchLoop.direction_seed_model_call_log_id ? <small>方向来源：模型调用 #{String(researchLoop.direction_seed_model_call_log_id)} · 未写入事实库</small> : null}</div><HypothesisDirectionReview review={directionReviewForDisplay} busy={backfillDisabled} onSubmit={onConfirmDirection} /></details>
   </section>;
   if (modelFailed) return <section className="selection-analysis">
-    <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。可以先生成竞争性推理方向，由你确认后再让系统按方向补数验证；失败原因和模型调用请查看“数据事实”页签。</p>{onPrepareDirection && <button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button>}</div>
+    {aiDirectedTrial && <AiDirectedResearchPanel candidate={candidate} disabled={backfillDisabled} onUpdated={onAiResearchUpdated} />}
+    <details className="analysis-legacy-scorecard"><summary>历史八维分析状态</summary><div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。失败原因和模型调用请查看“数据事实”页签。</p>{onPrepareDirection && <button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成旧版方向确认方案</button>}</div></details>
   </section>;
   return <section className="selection-analysis">
+    {aiDirectedTrial && <AiDirectedResearchPanel candidate={candidate} disabled={backfillDisabled} onUpdated={onAiResearchUpdated} />}
+    <details className="analysis-legacy-scorecard" open={!aiDirectedTrial}><summary>历史八维分析（保留用于对照，不作为本次试验主流程）</summary>
     <div className="analysis-verdict-layout"><div className="analysis-verdict"><span className={`analysis-signal ${publication.conclusion_available && model.decision === "WATCH" ? "watch" : ""}`}>{publication.status === "RESEARCH_RUNNING" ? "正在主动研究" : publication.status === "RESEARCH_INCOMPLETE" ? "阶段性研究" : publication.status === "READY_REVIEW_WITH_UNCERTAINTY" ? "可复核 · 含低置信保留项" : !publication.conclusion_available ? "未形成有效结论" : names[model.decision] || "待判断"}</span><h3>{model.headline || "历史分析摘要"}</h3><small>模型综合置信度 {typeof model.confidence === "number" ? `${Math.round(model.confidence * 100)}%` : "—"} · 事件证据置信度 {typeof confidence.final_confidence === "number" ? `${Math.round(confidence.final_confidence * 100)}%` : "—"} · 均不等于收益概率</small>{publication.scoring_available && scoring && <div className="score-summary"><strong>可信综合分 {scoring.trusted_score == null ? "证据不足" : scoring.trusted_score.toFixed(1)}</strong><span>基础分 {scoring.base_score == null ? "--" : scoring.base_score.toFixed(1)} · 覆盖 {Math.round(scoring.coverage * 100)}% · 证据置信 {Math.round(scoring.evidence_confidence * 100)}%</span><small>{String(scoring.profile?.profile_name || "评价方案")} v{String(scoring.profile?.version || "--")} · 分数不是收益概率</small></div>}</div>{validationPartial ? <div className="score-radar-empty"><strong>引用尚未通过，不生成有效评分</strong><p>保留初步研判用于核对，但不会将其计入有效结论或跟踪决策。</p></div> : publication.scoring_available && scoring?.dimensions?.length ? <ScoreRadar rows={scoring.dimensions} /> : <div className="score-radar-empty"><strong>尚未生成有效雷达图</strong><p>{publication.status === "RESEARCH_RUNNING" ? "系统正在补数并重新验证假设，研究结束后再生成可跟踪评分。" : publication.status === "RESEARCH_INCOMPLETE" ? "研究问题尚未闭环，系统会继续补数验证。" : publication.status === "SCORE_FAILED" ? "结论完整性已通过，可按当前已发布方案补算评分。" : "请先重新分析并通过结论校验，再生成评分。"}</p>{publication.status === "SCORE_FAILED" && onRescore && <button type="button" disabled={backfillDisabled} onClick={onRescore}>生成八维评分</button>}</div>}</div>
     {thesis ? <section className={`analysis-thesis ${String(thesis.status || "INSUFFICIENT").toLowerCase()}`}>
       <div className="analysis-thesis-heading"><div><span>基本面主线</span><h3>整体投资逻辑</h3><p>先判断公司如何赚钱，再用行业、公司行为、产业链、估值预期和交易状态交叉验证。</p></div><div><strong>{thesisStatusNames[String(thesis.status)] || "待核验"}</strong><small>置信度 {Math.round(Number(thesis.confidence || 0) * 100)}%</small></div></div>
@@ -429,6 +530,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
     {typeof confidence.final_confidence === "number" && <details className="analysis-confidence"><summary>事件证据置信度如何计算 · {Math.round(confidence.final_confidence * 100)}%</summary><div>{[["来源可靠性", confidence.source_reliability], ["时间一致性", confidence.temporal_consistency], ["跨文档支持", confidence.cross_document_support], ["结构化事实支持", confidence.structured_fact_support], ["语义抽取置信度", confidence.model_extraction_confidence], ["冲突惩罚", confidence.conflict_penalty]].map(([title, value]) => <p key={String(title)}><span>{String(title)}</span><progress max="1" value={Number(value || 0)} /><strong>{Math.round(Number(value || 0) * 100)}%</strong></p>)}</div><small>来源可靠性与模型判断分开计算；同源转载不增加独立证据，时间相邻不自动构成因果。</small></details>}
     <div className="analysis-checks">{[["支持因素", model.positives], ["主要风险", model.risks], ["接下来观察", model.watch_conditions]].map(([title, value]) => strings(value).length > 0 && <div key={String(title)}><h4>{String(title)}</h4><ul>{strings(value).map((item, index) => <li key={index}>{item}</li>)}</ul></div>)}</div>
     <details className="analysis-input"><summary>本次实际读取与引用</summary><p>已送入模型 {array(usage.documents).length || documents.length} 篇文档 · 模型引用 {model.evidence_document_ids?.length || 0} 篇 · {usage.relations ?? 0} 条图谱关系 · {usage.related_security_documents ?? 0} 篇关联证券资料。引用表示模型使用了该材料，不等于事实已核验。</p>{array(analysis.skill_chain).map(row => <small key={String(row.skill_code)}>Skill {row.skill_code} · {row.skill_version}</small>)}{array(usage.selected_scope?.knowledge_bases).map(row => <small key={row.id}>知识库 #{row.id} · {row.code} · {row.version}</small>)}{array(usage.selected_scope?.graphs).map(row => <small key={row.id}>图谱 #{row.id} · {row.code} · {row.version}</small>)}</details>
+    </details>
     </details>
   </section>;
 }

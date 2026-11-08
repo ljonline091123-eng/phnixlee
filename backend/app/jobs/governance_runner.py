@@ -12,6 +12,7 @@ class GovernanceRunner:
             "stock_batch_governance", "document_specialist_skill_test",
             "selection_analysis", "selection_retry_failed",
             "selection_data_backfill", "selection_hypothesis_research",
+            "selection_ai_directed_research",
             "model_health_test",
         ), lease_seconds=120)
         self.stop_event = threading.Event()
