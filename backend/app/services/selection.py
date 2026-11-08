@@ -1904,7 +1904,14 @@ def record_selection_hypothesis_direction(
     guardrail_additions: list[str] = []
     model = analysis.get("model") if isinstance(analysis.get("model"), dict) else {}
     thesis = model.get("investment_thesis") if isinstance(model.get("investment_thesis"), dict) else {}
-    research_questions = [row for row in thesis.get("research_questions") or [] if isinstance(row, dict)]
+    model_research_questions = [
+        row for row in thesis.get("research_questions") or [] if isinstance(row, dict)
+    ]
+    # Failed full recommendations can still yield independently validated
+    # question snapshots. User edits must update that snapshot as the source
+    # for the subsequent controlled research job, not only a successful model
+    # object that may not exist for this candidate.
+    research_questions = deepcopy(model_research_questions or _research_questions(candidate))
     actual_hypotheses = {
         (str(question.get("research_code") or ""), _hypothesis_key(str(question.get("research_code") or ""), row)): row
         for question in research_questions
@@ -2028,7 +2035,10 @@ def record_selection_hypothesis_direction(
     })
     if research_questions:
         state["research_question_snapshot"] = deepcopy(research_questions)
-    analysis["model"] = model
+        if model_research_questions:
+            thesis["research_questions"] = deepcopy(research_questions)
+            model["investment_thesis"] = thesis
+            analysis["model"] = model
     analysis["hypothesis_research"] = state
     candidate.analysis_json = analysis
     db.commit()

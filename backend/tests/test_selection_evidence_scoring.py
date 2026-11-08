@@ -572,6 +572,49 @@ def test_failed_full_model_contract_recovers_only_valid_questions_for_user_direc
     assert run.criteria_json["result_counts"]["research_pending_count"] == 1
     assert run.criteria_json["result_counts"]["failed_count"] == 0
 
+    review = state["direction_review"]
+    first_question = review["questions"][0]
+    first_hypothesis = first_question["hypotheses"][0]
+    revised_thesis = "用户确认后，优先验证主营收入与现金流是否支持该解释。"
+    with patch("app.jobs.governance_runner.wake_governance_runner"):
+        response = TestClient(app)
+        app.dependency_overrides[get_db] = lambda: db
+        try:
+            confirmed = response.post(
+                f"/api/v1/selection/candidates/{candidate.id}/hypothesis-direction",
+                json={
+                    "action": "CONFIRM_AND_RESEARCH",
+                    "directions": [{
+                        "research_code": first_question["research_code"],
+                        "hypothesis_key": first_hypothesis["hypothesis_key"],
+                        "decision": "PRIORITY",
+                        "revised_thesis": revised_thesis,
+                    }],
+                    "new_hypotheses": [{
+                        "research_code": first_question["research_code"],
+                        "title": "用户补充的竞争性解释",
+                        "thesis": "该变化也可能由客户结构和交付节奏共同造成。",
+                        "direction": "MIXED",
+                        "horizon": "MEDIUM",
+                    }],
+                    "max_rounds": 3,
+                },
+            )
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+    assert confirmed.status_code == 202
+    queued_state = confirmed.json()["analysis_json"]["hypothesis_research"]
+    assert queued_state["status"] == "QUEUED"
+    queued_question = next(
+        row for row in queued_state["research_question_snapshot"]
+        if row["research_code"] == first_question["research_code"]
+    )
+    assert queued_question["hypotheses"][0]["thesis"] == revised_thesis
+    assert any(row["title"] == "用户补充的竞争性解释" for row in queued_question["hypotheses"])
+    job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == "selection_hypothesis_research"))
+    assert job is not None and job.payload_json["candidate_ids"] == [candidate.id]
+    assert db.scalars(select(FoundationFact)).all() == []
+
 
 def test_fresh_successful_analysis_drops_stale_failed_research_runtime(isolated):
     db = isolated
