@@ -40,8 +40,13 @@ test("真实候选展示八维雷达图和证据下钻", async ({ page }) => {
   if (await directionReview.count()) {
     await expect(directionReview).toBeVisible();
     await expect(page.getByText(/这些内容不是事实或投资结论/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "确认并开始补证" })).toBeVisible();
-    await expect(page.locator(".human-hypothesis-list article")).toHaveCount(8);
+    await expect(page.getByText("优先补证", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("常规补证", { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".human-question-card")).toHaveCount(4);
+    await expect(page.locator(".human-hypothesis-option")).toHaveCount(8);
+    await expect(page.locator(".human-hypothesis-option input[type=checkbox]")).toHaveCount(8);
+    await expect(page.getByText("AI 当前分析", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /确认 \d+ 个方向并开始补证/ })).toBeVisible();
   } else {
     await expect(page.locator(".score-radar svg")).toBeVisible();
     await expect(page.getByText(/可信综合分/)).toBeVisible();

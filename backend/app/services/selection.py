@@ -1690,7 +1690,12 @@ def _research_skill_version(db: Session) -> str:
 
 
 def _build_hypothesis_direction_review(candidate: SelectionCandidate, *, max_rounds: int = 3) -> dict[str, Any]:
-    """Project model hypotheses into a concise human decision contract."""
+    """Project model hypotheses into an explainable human decision contract.
+
+    This is a read-only projection of the validated research contract. Facts,
+    gaps and the bounded source plan are included so the UI never asks the user
+    to choose between unexplained hypothesis titles.
+    """
     questions = []
     for question in _research_questions(candidate):
         code = str(question.get("research_code") or "")
@@ -1712,21 +1717,40 @@ def _build_hypothesis_direction_review(candidate: SelectionCandidate, *, max_rou
             key = _hypothesis_key(code, hypothesis)
             supporting = len(hypothesis.get("supporting_document_ids") or []) + len(hypothesis.get("supporting_fact_ids") or [])
             counter = len(hypothesis.get("counter_document_ids") or []) + len(hypothesis.get("counter_fact_ids") or [])
+            confidence = float(hypothesis.get("confidence") or 0)
+            if supporting or counter:
+                recommendation_reason = (
+                    f"当前已有{supporting}项支持证据、{counter}项反向证据，建议先验证会改变投资逻辑的关键环节"
+                    if key in priority_keys else "保留为竞争性解释，用于检验相反证据，避免只沿单一叙事补证"
+                )
+            elif confidence > 0:
+                recommendation_reason = "模型认为该方向与当前事件相关，但尚缺可核验依据，建议按计划补齐来源"
+            else:
+                recommendation_reason = "当前仅形成待验证假设，尚未形成结论；请结合证据缺口和补证计划判断"
             projected.append({
                 "hypothesis_key": key,
                 "title": hypothesis.get("title"),
                 "thesis": hypothesis.get("thesis"),
                 "status": hypothesis.get("status"),
                 "direction": hypothesis.get("direction"),
-                "confidence": hypothesis.get("confidence"),
+                "horizon": hypothesis.get("horizon"),
+                "confidence": confidence,
                 "supporting_evidence_count": supporting,
                 "counter_evidence_count": counter,
+                "supporting_document_ids": list(hypothesis.get("supporting_document_ids") or [])[:20],
+                "supporting_fact_ids": list(hypothesis.get("supporting_fact_ids") or [])[:20],
+                "supporting_relation_ids": list(hypothesis.get("supporting_relation_ids") or [])[:12],
+                "counter_document_ids": list(hypothesis.get("counter_document_ids") or [])[:20],
+                "counter_fact_ids": list(hypothesis.get("counter_fact_ids") or [])[:20],
+                "counter_relation_ids": list(hypothesis.get("counter_relation_ids") or [])[:12],
+                "evidence_items": [
+                    row for row in hypothesis.get("evidence_items") or [] if isinstance(row, dict)
+                ][:12],
+                "invalidation_conditions": list(hypothesis.get("invalidation_conditions") or [])[:6],
+                "watch_conditions": list(hypothesis.get("watch_conditions") or [])[:6],
                 "system_recommendation": "PRIORITY" if key in priority_keys else "NORMAL",
                 "decision": "PRIORITY" if key in priority_keys else "NORMAL",
-                "recommendation_reason": (
-                    "该方向可能显著改变投资逻辑，建议优先补证"
-                    if key in priority_keys else "保留为竞争性解释，用于防止单向确认偏误"
-                ),
+                "recommendation_reason": recommendation_reason,
             })
         if projected:
             questions.append({
@@ -1735,6 +1759,17 @@ def _build_hypothesis_direction_review(candidate: SelectionCandidate, *, max_rou
                 "status": status,
                 "conclusion": question.get("conclusion"),
                 "confidence": question.get("confidence"),
+                "known_facts": [
+                    row for row in question.get("known_facts") or [] if isinstance(row, dict)
+                ][:12],
+                "missing_evidence": [
+                    row for row in question.get("missing_evidence") or [] if isinstance(row, dict)
+                ][:8],
+                "external_research_plan": [str(row) for row in question.get("external_research_plan") or []][:8],
+                "tracking_metrics": [str(row) for row in question.get("tracking_metrics") or []][:8],
+                "evidence_document_ids": list(question.get("evidence_document_ids") or [])[:40],
+                "evidence_fact_ids": list(question.get("evidence_fact_ids") or [])[:40],
+                "evidence_relation_ids": list(question.get("evidence_relation_ids") or [])[:24],
                 "hypotheses": projected,
             })
     return {
@@ -1788,7 +1823,32 @@ def prepare_selection_hypothesis_review(
         state = seed_metadata
     if previous_review.get("questions"):
         review["revision"] = int(previous_review.get("revision") or 1)
-        review["questions"] = previous_review["questions"]
+        # Keep user selections and wording edits, but refresh the explanatory
+        # projection from the current question snapshot. Older candidates
+        # persisted only title/count fields and should gain facts, gaps and
+        # evidence details without losing a saved draft.
+        previous_by_code = {
+            str(row.get("research_code") or ""): row
+            for row in previous_review["questions"] if isinstance(row, dict)
+        }
+        merged_questions = []
+        for question in review["questions"]:
+            code = str(question.get("research_code") or "")
+            previous = previous_by_code.get(code) or {}
+            previous_hypotheses = {
+                str(row.get("hypothesis_key") or ""): row
+                for row in previous.get("hypotheses") or [] if isinstance(row, dict)
+            }
+            merged_hypotheses = []
+            for hypothesis in question.get("hypotheses") or []:
+                old = previous_hypotheses.get(str(hypothesis.get("hypothesis_key") or "")) or {}
+                merged = dict(hypothesis)
+                for key in ("decision", "thesis", "user_comment", "guardrail_retained", "user_created"):
+                    if old.get(key) is not None:
+                        merged[key] = old[key]
+                merged_hypotheses.append(merged)
+            merged_questions.append({**question, "hypotheses": merged_hypotheses})
+        review["questions"] = merged_questions
     source_questions = _research_questions(candidate)
     state.update({
         "status": "WAITING_USER_DIRECTION",

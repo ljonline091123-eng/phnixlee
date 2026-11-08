@@ -575,6 +575,11 @@ def test_failed_full_model_contract_recovers_only_valid_questions_for_user_direc
     review = state["direction_review"]
     first_question = review["questions"][0]
     first_hypothesis = first_question["hypotheses"][0]
+    assert first_question["known_facts"]
+    assert first_question["missing_evidence"]
+    assert first_question["external_research_plan"]
+    assert "invalidation_conditions" in first_hypothesis
+    assert "evidence_items" in first_hypothesis
     revised_thesis = "用户确认后，优先验证主营收入与现金流是否支持该解释。"
     with patch("app.jobs.governance_runner.wake_governance_runner"):
         response = TestClient(app)
@@ -636,6 +641,37 @@ def test_fresh_successful_analysis_drops_stale_failed_research_runtime(isolated)
     assert state["status"] == "WAITING_USER_DIRECTION"
     assert state["review_phase"] == "DIRECTION"
     assert "last_error" not in state and "current_plan" not in state and "round" not in state
+
+
+def test_repreparing_old_direction_review_enriches_context_without_losing_user_draft(isolated):
+    db = isolated
+    _run, candidate = add_collaborative_candidate(db, hypothesis_count=2, symbol="02540")
+    analysis = deepcopy(candidate.analysis_json)
+    management = next(
+        row for row in analysis["model"]["investment_thesis"]["research_questions"]
+        if row["research_code"] == "MANAGEMENT_CHANGE"
+    )
+    management["known_facts"] = [{
+        "reference_type": "DOCUMENT", "reference_id": "11", "verification_status": "VERIFIED",
+        "fact": "公司公告披露管理层职责调整。", "significance": "需要验证调整原因及经营影响。",
+    }]
+    candidate.analysis_json = analysis
+    db.commit()
+    prepare_selection_hypothesis_review(db, candidate.id)
+
+    analysis = deepcopy(candidate.analysis_json)
+    question = analysis["hypothesis_research"]["direction_review"]["questions"][0]
+    question.pop("known_facts", None)  # Simulate the older compact projection.
+    question["hypotheses"][0]["decision"] = "PAUSED"
+    question["hypotheses"][0]["thesis"] = "用户保存但尚未确认的修订方向。"
+    candidate.analysis_json = analysis
+    db.commit()
+
+    prepare_selection_hypothesis_review(db, candidate.id)
+    refreshed = candidate.analysis_json["hypothesis_research"]["direction_review"]["questions"][0]
+    assert refreshed["known_facts"][0]["fact"] == "公司公告披露管理层职责调整。"
+    assert refreshed["hypotheses"][0]["decision"] == "PAUSED"
+    assert refreshed["hypotheses"][0]["thesis"] == "用户保存但尚未确认的修订方向。"
 
 
 def test_paused_hypothesis_is_excluded_from_research_plan_when_other_challenger_remains(isolated):

@@ -628,15 +628,50 @@
 .analysis-human-review > header span { color: #8a6110; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
 .analysis-human-review > header h4 { margin: 4px 0 0; font-size: 19px; color: #273442; }
 .analysis-human-review > p { color: #4f5c67; line-height: 1.7; }
-.human-hypothesis-list { display: grid; gap: 12px; margin: 14px 0; }
-.human-hypothesis-list article { padding: 14px; border: 1px solid #eadfbf; border-radius: 12px; background: rgba(255,255,255,.84); }
-.human-hypothesis-list article > div:first-child { display: grid; grid-template-columns: minmax(120px, .7fr) minmax(220px, 1.8fr) auto; gap: 10px; align-items: center; }
-.human-hypothesis-list article small { color: #6b7680; }
-.human-hypothesis-list article em { color: #8a6110; font-size: 12px; font-style: normal; }
-.human-hypothesis-list textarea, .analysis-human-review > label textarea, .human-new-hypothesis textarea, .human-new-hypothesis input, .human-new-hypothesis select { width: 100%; box-sizing: border-box; margin-top: 8px; }
-.human-direction-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
-.human-direction-actions button { padding: 7px 12px; border: 1px solid #ccd6df; border-radius: 999px; background: #fff; color: #40505d; }
-.human-direction-actions button.active { border-color: #a87510; background: #f7e4ae; color: #654500; font-weight: 700; }
+.human-priority-guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 16px; }
+.human-priority-guide > div { display: grid; gap: 4px; padding: 10px 11px; border: 1px solid #eadfbf; border-radius: 9px; background: rgba(255,255,255,.72); }
+.human-priority-guide strong { color: #76530e; font-size: 12px; }
+.human-priority-guide span { color: #5e625d; font-size: 11px; line-height: 1.55; }
+.human-question-list { display: grid; gap: 14px; margin: 14px 0; }
+.human-question-card { padding: 14px; border: 1px solid #eadfbf; border-radius: 12px; background: rgba(255,255,255,.84); }
+.human-question-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #f0e7cf; }
+.human-question-card > header > div { min-width: 0; }
+.human-question-card > header small { color: #7c6b43; font-size: 11px; }
+.human-question-card > header h5 { margin: 4px 0 0; color: #273442; font-size: 15px; line-height: 1.55; }
+.human-question-card > header > span { flex: 0 0 auto; padding: 4px 7px; border-radius: 5px; background: #fff3cf; color: #805a12; font-size: 11px; }
+.human-ai-summary { margin: 12px 0; padding: 11px 12px; border-left: 3px solid #c18b18; background: #fffaf0; }
+.human-ai-summary strong { color: #76530e; font-size: 12px; }
+.human-ai-summary p { margin: 5px 0; color: #3f4b43; font-size: 13px; line-height: 1.7; }
+.human-ai-summary small, .human-question-context small, .human-hypothesis-option small { color: #68756d; font-size: 11px; line-height: 1.55; }
+.human-question-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 10px 0 12px; }
+.human-question-context > div { padding: 9px 10px; border: 1px solid #e2e9e1; border-radius: 8px; background: #fbfdfb; }
+.human-question-context strong { display: block; margin-bottom: 5px; color: #45604e; font-size: 12px; }
+.human-question-context ul, .human-hypothesis-basis ul { margin: 4px 0 0; padding-left: 16px; }
+.human-question-context li, .human-hypothesis-basis li { color: #4f5c54; font-size: 11px; line-height: 1.6; }
+.human-question-context li b { margin-right: 4px; color: #49735a; }
+.human-question-context li small { display: block; }
+.human-question-context p { margin: 5px 0 0; color: #637166; font-size: 11px; line-height: 1.55; }
+.human-hypothesis-group { display: grid; gap: 8px; margin: 12px 0 0; padding: 10px; border: 1px solid #e2e9e1; border-radius: 9px; }
+.human-hypothesis-group legend { padding: 0 5px; color: #45604e; font-size: 12px; font-weight: 700; }
+.human-hypothesis-option { display: grid; gap: 7px; padding: 10px; border: 1px solid #e0e7e1; border-radius: 8px; background: #fff; }
+.human-hypothesis-option.selected { border-color: #77a286; background: #f5fbf6; }
+.human-hypothesis-select { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.human-hypothesis-select input { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; accent-color: #2e7551; }
+.human-hypothesis-select span { display: grid; gap: 3px; min-width: 0; }
+.human-hypothesis-select strong { color: #2b4134; font-size: 13px; line-height: 1.5; }
+.human-hypothesis-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 24px; }
+.human-hypothesis-meta span { padding: 3px 6px; border-radius: 4px; background: #eef4ef; color: #607368; font-size: 10px; }
+.human-recommendation { margin: 0 0 0 24px; color: #59685e; font-size: 11px; line-height: 1.6; }
+.human-direction-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 0 24px; }
+.human-direction-actions button { padding: 6px 11px; border: 1px solid #ccd6df; border-radius: 999px; background: #fff; color: #40505d; font-size: 12px; }
+.human-direction-actions button.active { border-color: #4b8a63; background: #e2f2e7; color: #235d3b; font-weight: 700; }
+.human-hypothesis-basis, .human-revise-thesis { margin-left: 24px; color: #4d6054; font-size: 11px; }
+.human-hypothesis-basis summary, .human-revise-thesis summary { cursor: pointer; color: #38634a; }
+.human-hypothesis-basis p { margin: 6px 0; line-height: 1.6; }
+.human-revise-thesis textarea, .analysis-human-review > label textarea, .human-new-hypothesis textarea, .human-new-hypothesis input, .human-new-hypothesis select { width: 100%; box-sizing: border-box; margin-top: 8px; }
+.human-tracking { margin: 10px 0 0; color: #66756b; font-size: 11px; line-height: 1.6; }
+.human-selection-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-top: 14px; padding: 9px 11px; border-radius: 7px; background: #eef5ef; color: #4f6556; font-size: 12px; }
+.human-selection-summary strong { color: #245d3e; }
 .human-new-hypothesis { margin: 12px 0; padding: 12px; border-radius: 10px; background: #fff; }
 .human-new-hypothesis label, .analysis-human-review > label { display: block; margin-top: 10px; color: #40505d; font-size: 13px; font-weight: 600; }
 .analysis-human-review footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 14px; }
@@ -647,7 +682,7 @@
 .analysis-learning-summary > div span { padding: 5px 9px; border-radius: 999px; background: #e9f0f5; color: #40505d; font-size: 12px; }
 .analysis-learning-summary table { width: 100%; margin: 10px 0; border-collapse: collapse; }
 .analysis-learning-summary th, .analysis-learning-summary td { padding: 7px 9px; border-bottom: 1px solid #dfe7ed; text-align: left; font-size: 12px; }
-@media (max-width: 760px) { .human-hypothesis-list article > div:first-child { grid-template-columns: 1fr; } .analysis-human-review footer { justify-content: stretch; } .analysis-human-review footer button { flex: 1 1 140px; } }
+@media (max-width: 760px) { .human-priority-guide, .human-question-context { grid-template-columns: 1fr; } .analysis-human-review footer { justify-content: stretch; } .analysis-human-review footer button { flex: 1 1 140px; } }
 .analysis-hypotheses { display: grid; gap: 10px; }
 .analysis-hypotheses > h4 { margin: 2px 0; color: #233e30; }
 .analysis-hypotheses > article { padding: 14px 0; border-top: 1px solid #dce4df; }

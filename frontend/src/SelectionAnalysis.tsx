@@ -28,10 +28,10 @@ function HypothesisDirectionReview({review, busy, onSubmit}: {
   busy?: boolean;
   onSubmit: (payload: SelectionHypothesisDirectionRequest) => void;
 }) {
-  const rows: Array<SelectionRecord & {research_code: SelectionHypothesisDirectionRequest["directions"][number]["research_code"]; research_name: string}> = array(review.questions).flatMap(question => array(question.hypotheses).map(hypothesis => ({
+  const questions = array(review.questions);
+  const rows: Array<SelectionRecord & {research_code: SelectionHypothesisDirectionRequest["directions"][number]["research_code"]}> = questions.flatMap(question => array(question.hypotheses).map(hypothesis => ({
     ...hypothesis,
     research_code: String(question.research_code || "") as SelectionHypothesisDirectionRequest["directions"][number]["research_code"],
-    research_name: researchNames[String(question.research_code)] || String(question.research_code || "专项研究"),
   })));
   const revision = `${String(review.revision || 1)}:${rows.map(row => String(row.hypothesis_key)).join("|")}`;
   const [decisions, setDecisions] = useState<Record<string, "PRIORITY" | "NORMAL" | "PAUSED">>({});
@@ -43,6 +43,15 @@ function HypothesisDirectionReview({review, busy, onSubmit}: {
     setTheses(Object.fromEntries(rows.map(row => [String(row.hypothesis_key), String(row.thesis || "")])));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision]);
+  const selectedCount = rows.filter(row => decisions[String(row.hypothesis_key)] !== "PAUSED").length;
+  const priorityCount = rows.filter(row => decisions[String(row.hypothesis_key)] === "PRIORITY").length;
+  function toggleDirection(row: SelectionRecord) {
+    const key = String(row.hypothesis_key);
+    setDecisions(current => ({
+      ...current,
+      [key]: current[key] === "PAUSED" ? (String(row.system_recommendation) === "PRIORITY" ? "PRIORITY" : "NORMAL") : "PAUSED",
+    }));
+  }
   function submit(action: SelectionHypothesisDirectionRequest["action"]) {
     const additions = newHypothesis.title.trim() && newHypothesis.thesis.trim() ? [{
       research_code: newHypothesis.research_code as "BUSINESS_MODEL" | "MANAGEMENT_CHANGE" | "ACQUISITION_SECOND_CURVE" | "CAPITAL_ACTION_INTENT",
@@ -62,17 +71,46 @@ function HypothesisDirectionReview({review, busy, onSubmit}: {
     });
   }
   return <section className="analysis-human-review" aria-label="研究方向确认">
-    <header><div><span>需要你的判断</span><h4>确认优先研究方向</h4></div><strong>{rows.length} 条竞争性假设</strong></header>
-    <p>请选择优先验证、正常验证或暂缓。选择只调整研究顺序，不代表结论成立；系统会自动保留至少一个竞争性反向解释。</p>
-    <div className="human-hypothesis-list">{rows.map(row => <article key={String(row.hypothesis_key)}>
-      <div><small>{row.research_name}</small><strong>{String(row.title || "未命名假设")}</strong><em>模型初始置信度 {Math.round(Number(row.confidence || 0) * 100)}%</em></div>
-      <textarea aria-label={`${String(row.title)}假设内容`} rows={3} value={theses[String(row.hypothesis_key)] ?? String(row.thesis || "")} onChange={event => setTheses(current => ({...current, [String(row.hypothesis_key)]: event.target.value}))} />
-      <div className="human-direction-actions">{(["PRIORITY", "NORMAL", "PAUSED"] as const).map(value => <button type="button" key={value} className={decisions[String(row.hypothesis_key)] === value ? "active" : ""} onClick={() => setDecisions(current => ({...current, [String(row.hypothesis_key)]: value}))}>{value === "PRIORITY" ? "优先验证" : value === "NORMAL" ? "正常验证" : "暂缓"}</button>)}</div>
-      <small>{String(row.recommendation_reason || "等待用户设置研究优先级")}</small>
-    </article>)}</div>
+    <header><div><span>AI 已提出研究方向</span><h4>先看判断依据，再选择本轮验证方向</h4></div><strong>{questions.length} 个问题 · {rows.length} 个方向</strong></header>
+    <div className="human-priority-guide" aria-label="研究优先级说明">
+      <div><strong>勾选方向</strong><span>表示本轮要求系统继续采集数据并验证，不代表你认同该结论。</span></div>
+      <div><strong>优先补证</strong><span>首轮优先调用匹配数据源和研究预算，适合可能显著改变判断的方向。</span></div>
+      <div><strong>常规补证</strong><span>仍进入研究循环，但按普通顺序验证；未勾选即本轮不验证。</span></div>
+    </div>
+    <div className="human-question-list">{questions.map((question, questionIndex) => {
+      const code = String(question.research_code || "");
+      const hypotheses = array(question.hypotheses);
+      const facts = array(question.known_facts);
+      const gaps = array(question.missing_evidence);
+      const plan = strings(question.external_research_plan);
+      const tracking = strings(question.tracking_metrics);
+      return <article className="human-question-card" key={`${code}-${questionIndex}`}>
+        <header><div><small>{questionIndex + 1} · {researchNames[code] || "专项研究"}</small><h5>{String(question.question || "待确认的研究问题")}</h5></div><span>{researchStatusNames[String(question.status)] || "待核验"}</span></header>
+        <div className="human-ai-summary"><strong>AI 当前分析</strong><p>{String(question.conclusion || "AI 已识别到需要验证的问题，但尚未形成可发布结论。")}</p><small>{Number(question.confidence || 0) > 0 ? `当前问题置信度 ${Math.round(Number(question.confidence) * 100)}%，仍需补证` : "当前尚未形成可用置信度，以下均为待验证方向"}</small></div>
+        {(facts.length > 0 || gaps.length > 0 || plan.length > 0) && <div className="human-question-context">
+          {facts.length > 0 && <div><strong>AI 已看到的依据</strong><ul>{facts.slice(0, 4).map((fact, index) => <li key={index}><b>{fact.verification_status === "VERIFIED" ? "已核验" : "待核验"}</b>{String(fact.fact || "")}{fact.significance && <small>{String(fact.significance)}</small>}</li>)}</ul>{facts.length > 4 && <small>另有 {facts.length - 4} 条依据，提交后仍会完整保留。</small>}</div>}
+          {(gaps.length > 0 || plan.length > 0) && <div><strong>还需要查什么</strong>{gaps.length > 0 && <ul>{gaps.slice(0, 4).map((gap, index) => <li key={index}>{String(gap.description || "证据缺口")}<small>{String(gap.impact_on_conclusion || "将影响该方向能否成立")}</small></li>)}</ul>}{plan.length > 0 && <p>补证计划：{plan.join("；")}</p>}</div>}
+        </div>}
+        <fieldset className="human-hypothesis-group"><legend>可多选的待验证方向</legend>{hypotheses.map(row => {
+          const key = String(row.hypothesis_key);
+          const selected = decisions[key] !== "PAUSED";
+          const evidenceItems = array(row.evidence_items);
+          return <div className={`human-hypothesis-option ${selected ? "selected" : ""}`} key={key}>
+            <label className="human-hypothesis-select"><input type="checkbox" checked={selected} onChange={() => toggleDirection(row)} /><span><strong>{String(row.title || "未命名方向")}</strong><small>{String(row.thesis || "AI 尚未给出完整解释")}</small></span></label>
+            <div className="human-hypothesis-meta"><span>支持 {Number(row.supporting_evidence_count || 0)}</span><span>反证 {Number(row.counter_evidence_count || 0)}</span><span>{Number(row.confidence || 0) > 0 ? `初始置信度 ${Math.round(Number(row.confidence) * 100)}%` : "置信度待补证"}</span></div>
+            <p className="human-recommendation"><b>AI 建议：</b>{String(row.recommendation_reason || "建议保留为竞争性解释，等待证据验证")}</p>
+            {selected && <div className="human-direction-actions" role="group" aria-label={`${String(row.title)}补证顺序`}><button type="button" className={decisions[key] === "PRIORITY" ? "active" : ""} onClick={() => setDecisions(current => ({...current, [key]: "PRIORITY"}))}>优先补证</button><button type="button" className={decisions[key] === "NORMAL" ? "active" : ""} onClick={() => setDecisions(current => ({...current, [key]: "NORMAL"}))}>常规补证</button></div>}
+            {(evidenceItems.length > 0 || strings(row.invalidation_conditions).length > 0 || strings(row.watch_conditions).length > 0) && <details className="human-hypothesis-basis"><summary>查看AI的证据判断与失效条件</summary>{evidenceItems.length > 0 && <ul>{evidenceItems.slice(0, 4).map((item, index) => <li key={index}><b>{item.stance === "SUPPORT" ? "支持" : item.stance === "COUNTER" ? "反证" : "正反交织"}</b>{String(item.claim || item.company_specific_effect || "证据判断")}</li>)}</ul>}{strings(row.invalidation_conditions).length > 0 && <p><b>何时该方向不成立：</b>{strings(row.invalidation_conditions).join("；")}</p>}{strings(row.watch_conditions).length > 0 && <p><b>后续观察：</b>{strings(row.watch_conditions).join("；")}</p>}</details>}
+            <details className="human-revise-thesis"><summary>调整AI提出的方向</summary><textarea aria-label={`${String(row.title)}假设内容`} rows={3} value={theses[key] ?? String(row.thesis || "")} onChange={event => setTheses(current => ({...current, [key]: event.target.value}))} /></details>
+          </div>;
+        })}</fieldset>
+        {tracking.length > 0 && <p className="human-tracking"><b>后续持续观察：</b>{tracking.join("；")}</p>}
+      </article>;
+    })}</div>
     <details className="human-new-hypothesis"><summary>增加一个模型没有考虑的方向</summary><label>所属问题<select value={newHypothesis.research_code} onChange={event => setNewHypothesis(current => ({...current, research_code: event.target.value}))}>{Object.entries(researchNames).map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select></label><label>假设标题<input value={newHypothesis.title} maxLength={120} onChange={event => setNewHypothesis(current => ({...current, title: event.target.value}))} /></label><label>为什么值得验证<textarea rows={3} maxLength={800} value={newHypothesis.thesis} onChange={event => setNewHypothesis(current => ({...current, thesis: event.target.value}))} /></label></details>
     <label>整体意见（选填）<textarea rows={2} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} /></label>
-    <footer><button type="button" disabled={busy} onClick={() => submit("SAVE_DRAFT")}>保存稍后处理</button><button type="button" disabled={busy} onClick={() => submit("DELEGATE_TO_SYSTEM")}>全部交给系统</button><button type="button" className="primary-button" disabled={busy || !rows.length} onClick={() => submit("CONFIRM_AND_RESEARCH")}>{busy ? "正在提交…" : "确认并开始补证"}</button></footer>
+    <div className="human-selection-summary"><strong>已选 {selectedCount} 个方向</strong><span>其中 {priorityCount} 个优先补证 · 用户选择只决定研究顺序，不会写成事实或投资结论</span></div>
+    <footer><button type="button" disabled={busy} onClick={() => submit("SAVE_DRAFT")}>保存稍后处理</button><button type="button" disabled={busy} onClick={() => submit("DELEGATE_TO_SYSTEM")}>由AI按建议执行</button><button type="button" className="primary-button" disabled={busy || !selectedCount} onClick={() => submit("CONFIRM_AND_RESEARCH")}>{busy ? "正在提交…" : `确认 ${selectedCount} 个方向并开始补证`}</button></footer>
   </section>;
 }
 
@@ -209,6 +247,38 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   const researchLoop = (analysis.hypothesis_research || {}) as SelectionRecord;
   const researchHistory = array(researchLoop.history);
   const directionReview = (researchLoop.direction_review || {}) as SelectionRecord;
+  // Older pending reviews persisted only titles and counts. Enrich them from
+  // the immutable research-question snapshot when available so an existing
+  // candidate immediately gets the same explanatory UI as a new one.
+  const directionSourceQuestions = [
+    ...researchQuestions,
+    ...array(researchLoop.research_question_snapshot),
+  ];
+  const directionReviewForDisplay = directionReview.questions ? {
+    ...directionReview,
+    questions: array(directionReview.questions).map(reviewQuestion => {
+      const source = directionSourceQuestions.find(item => String(item.research_code || "") === String(reviewQuestion.research_code || "")) || {};
+      const sourceHypotheses = array(source.hypotheses);
+      return {
+        ...source,
+        ...reviewQuestion,
+        known_facts: Array.isArray(reviewQuestion.known_facts) ? reviewQuestion.known_facts : source.known_facts,
+        missing_evidence: Array.isArray(reviewQuestion.missing_evidence) ? reviewQuestion.missing_evidence : source.missing_evidence,
+        external_research_plan: Array.isArray(reviewQuestion.external_research_plan) ? reviewQuestion.external_research_plan : source.external_research_plan,
+        tracking_metrics: Array.isArray(reviewQuestion.tracking_metrics) ? reviewQuestion.tracking_metrics : source.tracking_metrics,
+        hypotheses: array(reviewQuestion.hypotheses).map(reviewHypothesis => {
+          const sourceHypothesis = sourceHypotheses.find(item => String(item.title || "") === String(reviewHypothesis.title || "")) || {};
+          return {
+            ...sourceHypothesis,
+            ...reviewHypothesis,
+            evidence_items: Array.isArray(reviewHypothesis.evidence_items) ? reviewHypothesis.evidence_items : sourceHypothesis.evidence_items,
+            invalidation_conditions: Array.isArray(reviewHypothesis.invalidation_conditions) ? reviewHypothesis.invalidation_conditions : sourceHypothesis.invalidation_conditions,
+            watch_conditions: Array.isArray(reviewHypothesis.watch_conditions) ? reviewHypothesis.watch_conditions : sourceHypothesis.watch_conditions,
+          };
+        }),
+      };
+    }),
+  } : directionReview;
   const period = (candidate.evidence_json.analysis_period || usage.analysis_period || {}) as SelectionRecord;
   const scoring = (analysis.scoring || null) as SelectionScorecard | null;
   const waitingDirection = researchLoop.status === "WAITING_USER_DIRECTION";
@@ -230,9 +300,9 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
   if (dataBlocked) return <section className="selection-analysis">
     <div className="analysis-empty-conclusion"><strong>尚未形成可用投资结论</strong><p>本轮没有达到最低证据门槛。具体缺失项和补齐入口请查看“数据事实”页签。</p></div>
   </section>;
-  if (waitingDirection && directionReview.questions && onConfirmDirection) return <section className="selection-analysis">
+  if (waitingDirection && directionReviewForDisplay.questions && onConfirmDirection) return <section className="selection-analysis">
     <div className="analysis-empty-conclusion"><strong>已生成竞争性推理方向，等待你的确认</strong><p>系统从真实模型调用中恢复并独立校验了以下研究问题。它们只是待验证方向，不是事实或投资结论；确认后系统才会调用已接入数据源补数、重验并形成阶段结论。</p>{researchLoop.direction_seed_model_call_log_id ? <small>方向来源：模型调用 #{String(researchLoop.direction_seed_model_call_log_id)} · 未写入事实库</small> : null}</div>
-    <HypothesisDirectionReview review={directionReview} busy={backfillDisabled} onSubmit={onConfirmDirection} />
+    <HypothesisDirectionReview review={directionReviewForDisplay} busy={backfillDisabled} onSubmit={onConfirmDirection} />
   </section>;
   if (modelFailed) return <section className="selection-analysis">
     <div className="analysis-empty-conclusion"><strong>本轮模型未形成可校验结论</strong><p>本地证据仍然保留。可以先生成竞争性推理方向，由你确认后再让系统按方向补数验证；失败原因和模型调用请查看“数据事实”页签。</p>{onPrepareDirection && <button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button>}</div>
@@ -254,7 +324,7 @@ export function SelectionAnalysis({candidate, onDocument, onBackfillDimension, o
         <article><small>机构预期</small><p>{String(thesis.institution_view_summary || "证据不足")}</p></article>
         <article><small>量价与资金状态</small><p>{String(thesis.market_timing_summary || "证据不足")}</p></article>
       </div>
-      {researchLoop.status === "WAITING_USER_DIRECTION" && directionReview.questions && onConfirmDirection && <HypothesisDirectionReview review={directionReview} busy={backfillDisabled} onSubmit={onConfirmDirection} />}
+      {researchLoop.status === "WAITING_USER_DIRECTION" && directionReviewForDisplay.questions && onConfirmDirection && <HypothesisDirectionReview review={directionReviewForDisplay} busy={backfillDisabled} onSubmit={onConfirmDirection} />}
       {!researchLoop.status && (modelFailed || researchQuestions.some(item => ["PARTIAL", "INSUFFICIENT"].includes(String(item.status)))) && onPrepareDirection && <section className="analysis-human-review"><header><div><span>协同研究</span><h4>先确认研究方向，再自动补数</h4></div></header><p>系统已经识别尚未闭环的重大事件。请先生成竞争性假设，确认哪些方向值得优先验证。</p><button type="button" className="primary-button" disabled={backfillDisabled} onClick={onPrepareDirection}>生成方向确认方案</button></section>}
       {researchLoop.status === "WAITING_EVIDENCE_REVIEW" && onReviewResearch && <ResearchHumanReview phase="EVIDENCE" busy={backfillDisabled} onSubmit={onReviewResearch} />}
       {researchLoop.status === "WAITING_CONCLUSION_REVIEW" && onReviewResearch && <ResearchHumanReview phase="CONCLUSION" busy={backfillDisabled} onSubmit={onReviewResearch} />}
