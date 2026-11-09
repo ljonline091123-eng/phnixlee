@@ -75,6 +75,7 @@ from app.models.governance import (
     StockGovernanceDetail,
     DocumentSemanticReview,
 )
+from app.models.stock_analyst import AiStockAnalysisRecord
 from app.db.table_comments import apply_table_comments
 
 apply_table_comments(Base.metadata)
@@ -146,4 +147,5 @@ __all__ = [
     "SkillExecutionRun",
     "StockGovernanceDetail",
     "DocumentSemanticReview",
+    "AiStockAnalysisRecord",
 ]

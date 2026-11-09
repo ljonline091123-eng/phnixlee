@@ -111,6 +111,7 @@ class OpenAICompatAdapter(ModelAdapter):
                 "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                 "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
                 "STOCK_SELECTION_PER_STOCK_RETRY",
+                "STANDALONE_STOCK_ANALYST",
             }
             and metadata.get("require_real_model")
         )

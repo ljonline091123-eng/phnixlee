@@ -36,6 +36,7 @@ import {
   type WatchlistItem,
 } from "./api";
 import { StockDetailDrawer } from "./StockDetailDrawer";
+import { AiStockAnalyst } from "./AiStockAnalyst";
 import { StockBatchWorkbench as SelectionWorkbench } from "./StockBatchWorkbench";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 import { DataFoundation } from "./DataFoundation";
@@ -65,7 +66,7 @@ type ModelHubTab = "models" | "agents" | "skills" | "scoring" | "evaluation" | "
 type DataView = "access" | "master" | "business" | "lakehouse" | "knowledge" | "graphs" | "pipeline";
 type AccessView = "sources" | "interfaces" | "sync";
 type MasterView = "securities" | "entities";
-type ResearchView = "objects" | "selection" | "research";
+type ResearchView = "objects" | "analyst" | "selection" | "research";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -3057,10 +3058,12 @@ function InvestmentWorkbench({ tab, setTab }: { tab: ResearchView; setTab: (tab:
     <PageHeader eyebrow="INVESTMENT RESEARCH" title="投研工作台" detail="股票与公司对象分析 · 知识选股 · 跟踪复盘 · 研究问答" />
     <div className="resource-tabs platform-section-tabs">
       <button type="button" className={tab === "objects" ? "active" : ""} onClick={() => setTab("objects")}>股票与公司工作台</button>
+      <button type="button" className={tab === "analyst" ? "active" : ""} onClick={() => setTab("analyst")}>AI证券分析师</button>
       <button type="button" className={tab === "selection" ? "active" : ""} onClick={() => setTab("selection")}>选股、跟踪与复盘</button>
       <button type="button" className={tab === "research" ? "active" : ""} onClick={() => setTab("research")}>研究问答与研报</button>
     </div>
     {tab === "objects" && <CompanyGraphWorkbench />}
+    {tab === "analyst" && <AiStockAnalyst />}
     {tab === "selection" && <AutoWatchPage embedded />}
     {tab === "research" && <ResearchPage embedded />}
   </>;
