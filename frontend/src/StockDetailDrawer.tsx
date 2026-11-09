@@ -2987,10 +2987,12 @@ export function StockDetailDrawer({
   stock,
   onOpenStock,
   onClose,
+  embedded = false,
 }: {
   stock: StockNavigationTarget;
   onOpenStock?: (stock: StockNavigationTarget) => void;
   onClose: () => void;
+  embedded?: boolean;
 }) {
   const requestId = useRef(0);
   const drawerRef = useRef<HTMLElement | null>(null);
@@ -3466,8 +3468,8 @@ export function StockDetailDrawer({
   };
 
   return (
-    <div className="drawer-mask" onClick={onClose}>
-      <aside ref={drawerRef} className="stock-drawer stock-detail-drawer restored-stock-detail" onClick={(event) => event.stopPropagation()}>
+    <div className={embedded ? "analyst-stock-embedded" : "drawer-mask"} onClick={embedded ? undefined : onClose}>
+      <aside ref={drawerRef} className={`stock-drawer stock-detail-drawer restored-stock-detail${embedded ? " embedded" : ""}`} onClick={(event) => event.stopPropagation()}>
         <header className="detail-market-header">
           <div>
             <span className={`market-chip ${marketClass[stock.market] || ""}`}>{marketLabel[stock.market] || stock.market}</span>
@@ -3483,7 +3485,7 @@ export function StockDetailDrawer({
             <button type="button" onClick={() => setCompanyGraphOpen(true)}><Building2 size={15} /> 公司关联</button>
             <button type="button" onClick={() => setKnowledgeGraphOpen(true)}>知识图谱</button>
             <button type="button" onClick={() => void refreshRemote()} disabled={refreshing}>{refreshing ? "更新中" : "手动更新"}</button>
-            <button type="button" onClick={onClose}>关闭</button>
+            <button type="button" onClick={onClose}>{embedded ? "返回报告" : "关闭"}</button>
           </div>
         </header>
 

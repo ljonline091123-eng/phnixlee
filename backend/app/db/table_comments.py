@@ -16,6 +16,13 @@ class TableDescription:
 
 
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "ai_analyst_dialogue": TableDescription("分析师对话", "智能投研", "保存围绕原分析的用户问题、AI答复、证据引用、模型与Skill版本，未确认建议不修改报告。"),
+    "ai_analyst_report_revision": TableDescription("分析报告确认版本", "智能投研", "追加保存用户确认判断与关注点，保留原分析及历次报告，不将用户观点提升为已验证事实。"),
+    "ai_analyst_watch": TableDescription("分析师关注条件", "智能投研", "保存股价上下限、量能阈值、新闻公告关键词、每日执行时间及启停配置。"),
+    "ai_analyst_watch_suggestion": TableDescription("AI关注条件建议", "智能投研", "保留AI建议草稿、价格量能与事件依据、证据快照及模型版本；建议不直接启用每日监控。"),
+    "ai_analyst_daily_review": TableDescription("分析师每日跟踪", "智能投研", "逐日追加采集结果、条件比对、证据快照及AI判断修正，失败重试也保留历史。"),
+    "ai_analyst_forecast": TableDescription("分析师目标价约定", "智能投研", "关联统一预测台账，冻结观察触发项、目标价、期限、失效条件、证据与分析逻辑链。"),
+    "ai_analyst_forecast_check": TableDescription("分析师预测验证历程", "智能投研", "逐次追加预测发布后的真实行情验证、通过或未通过结果和逻辑经验候选，不将价格命中视为因果验证。"),
     "data_quality_rule": TableDescription("数据质量规则", "数据治理", "保存版本化质量规则、适用资产范围、严重程度、阈值和生命周期状态。"),
     "data_quality_run": TableDescription("数据质量运行", "数据治理", "记录针对数据资产、数据集版本或知识对象的一次质量检查批次及质量门禁结果。"),
     "data_quality_issue": TableDescription("数据质量问题", "数据治理", "保存质量规则发现的缺失、错误或风险问题、证据、处置状态与解决说明。"),
@@ -64,6 +71,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "model_skill_revision": TableDescription("Skill 历史版本", "模型实验室", "保存 Skill 每个版本的指令正文、治理契约、内容哈希和变更来源，支持完整回滚。"),
     "prediction_ledger": TableDescription("预测账本", "研究复盘", "保存选股或买卖建议、依据与使用的 Skill 版本，并记录后续实际走势和评估。"),
     "research_report": TableDescription("研究报告", "研究复盘", "保存单只股票的 AI 研报、结论、评分、数据来源及历史报告评估。"),
+    "ai_stock_analysis": TableDescription("AI证券分析记录", "智能投研", "独立保存资深AI证券分析师对单只股票已有数据的条件化趋势判断、证据快照、模型版本和错误；不与八维评分混用。"),
     "stock_broker_research_report": TableDescription("券商研报资料", "股票研究", "按股票、公开来源和外部报告编号保存券商研报标题、评级、原文正文及来源证据。"),
     "stock_earnings_consensus": TableDescription("盈利预测共识", "股票研究", "按股票、预测年度和指标保存机构一致预期统计，保留来源及更新时间。"),
     "stock_institution_forecast": TableDescription("机构盈利预测", "股票研究", "保存单家机构按报告日披露的未来年度盈利预测，不与普通研报列表混为同一对象。"),
@@ -414,6 +422,30 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "ai_analyst_forecast": {"analysis_id": "预测所属的独立分析报告。", "review_id": "触发本次目标价研判的每日复核记录。",
+        "ledger_id": "统一预测台账编号，保存基准价和后续行情验证结果。", "ordinal": "同次研判内的预测顺序。",
+        "contract_json": "冻结的目标价、原币口径、观察项、期限、失效条件、逻辑链、证据及模型版本。"},
+    "ai_analyst_forecast_check": {"forecast_id": "本次核验的目标价约定。", "review_id": "执行核验的每日复核记录。",
+        "result_json": "发布后真实行情、核验时间、通过或未通过结论，以及待继续验证的逻辑经验。"},
+    "ai_analyst_watch_suggestion": {"analysis_id": "建议所属的独立分析报告。", "result_json": "AI建议草稿，包含可调整关注条件、逐项依据及限制，不直接改变监控。",
+        "evidence_snapshot_json": "生成建议时实际使用的股票资料、近期日线及证据白名单。"},
+    "ai_analyst_dialogue": {"analysis_id": "所讨论的独立分析记录。", "question": "用户提出的问题。", "context_snapshot_json": "本次讨论实际输入的资料快照与用户指定证据；旧对话为空，不反推历史输入。",
+        "reply_json": "AI答复、待确认判断、关注点及证据引用。", "base_revision_id": "本次讨论基于的报告确认版本。"},
+    "ai_analyst_report_revision": {"analysis_id": "原始分析记录。", "dialogue_id": "用户确认所依据的对话。",
+        "judgment": "用户最终确认的研究判断，属于观点。", "focus_points_json": "用户确认的后续关注点。",
+        "report_json": "含原报告与用户确认内容的完整报告快照。"},
+    "ai_analyst_watch": {"analysis_id": "关联的独立分析记录。", "config_version": "关注条件版本，每次修改递增。"},
+    "ai_analyst_daily_review": {"watch_id": "关联的关注条件。", "business_date": "上海时区的每日跟踪日期。",
+        "config_snapshot_json": "本次关注条件及其版本的快照。", "report_revision_id": "本次核对所基于的用户确认报告版本。",
+        "evidence_snapshot_json": "本次每日复核实际使用的证据与白名单。", "conditions_json": "价格、成交量及新闻公告条件比对结果。",
+        "progress_json": "真实采集、比对、模型复核阶段和采集日志。", "result_json": "AI对当前判断的复核、修正、置信度及下一步观察。"},
+    "ai_stock_analysis": {
+        "coverage_json": "本次分析输入覆盖、来源日期及资料限制。",
+        "evidence_snapshot_json": "模型实际读取的证据快照与证据白名单。",
+        "period_months": "新闻公告与行情回看月数，历史财务和公司背景作为补充。",
+        "progress_json": "后台执行阶段、状态和时间记录。",
+        "result_json": "模型形成的条件化趋势分析，不作为已验证事实。",
+    },
     "stock_broker_research_report": {
         "external_id": "公开来源中的稳定研报编号。", "report_date": "来源页面披露的研报日期。",
         "institution": "发布研报的券商或研究机构。", "analysts_json": "来源披露的分析师姓名列表。",
