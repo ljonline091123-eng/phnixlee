@@ -69,7 +69,8 @@ def enqueue_due_jobs(now: datetime | None = None) -> int:
                 payload={"business_date": day},
             )
             scheduled += 1
-    return scheduled
+    from app.services.analyst_followup import enqueue_due_reviews
+    return scheduled + enqueue_due_reviews(local_now)
 
 
 def main() -> None:

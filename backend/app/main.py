@@ -13,6 +13,7 @@ from app.api import skill_evaluation, knowledge_pipeline, stock_batch
 from app.api import document_governance
 from app.api import change_events
 from app.api import watch_pool
+from app.api import stock_analyst
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
 from app.db.session import engine
@@ -23,6 +24,12 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     initialize_database(seed_defaults=settings.seed_defaults_on_startup)
+    from app.db.session import SessionLocal
+    from app.services.stock_analyst import recover_interrupted_analyses
+    with SessionLocal() as db:
+        recover_interrupted_analyses(db)
+        from app.services.analyst_followup import recover_dialogues
+        recover_dialogues(db)
     from app.jobs.governance_runner import start_governance_runner
     runner = start_governance_runner() if settings.governance_worker_enabled else None
     try:
@@ -72,6 +79,7 @@ app.include_router(knowledge_governance.router, prefix=settings.api_v1_prefix)
 app.include_router(governance_control.router, prefix=settings.api_v1_prefix)
 app.include_router(skill_evaluation.router, prefix=settings.api_v1_prefix)
 app.include_router(knowledge_pipeline.router, prefix=settings.api_v1_prefix)
+app.include_router(stock_analyst.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["System"])

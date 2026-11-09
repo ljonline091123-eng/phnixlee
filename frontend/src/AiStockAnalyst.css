@@ -1,0 +1,181 @@
+.ai-stock-analyst { --analyst-blue: #2563eb; color: #26364d; min-width: 0; }
+.ai-stock-analyst * { box-sizing: border-box; }
+.ai-stock-analyst button { cursor: pointer; }
+.ai-stock-analyst button:disabled { opacity: .5; cursor: not-allowed; }
+.analyst-intro { display: flex; align-items: center; gap: 14px; margin: 12px 0 22px; }
+.analyst-intro h2 { margin: 0 0 6px; font-size: 25px; }
+.analyst-intro p, .analyst-run-header p { margin: 0; color: #64748b; font-size: 13px; }
+.analyst-logo { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 15px; background: #e8efff; color: var(--analyst-blue); }
+.analyst-tag { display: inline-block; background: #eef3fa; color: #546782; font-size: 11px; padding: 4px 7px; border-radius: 5px; white-space: nowrap; }
+.analyst-intro > .analyst-tag { margin-left: auto; }
+.analyst-box { border: 1px solid #e1e8f1; background: #fff; border-radius: 13px; padding: 20px; min-width: 0; }
+.analyst-fields { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.analyst-fields label { display: grid; gap: 7px; font-size: 12px; color: #52637b; }
+.analyst-fields input, .analyst-fields select { width: 100%; height: 40px; border: 1px solid #d7e0ed; border-radius: 7px; padding: 0 10px; background: #fff; color: #24374f; font-size: 13px; min-width: 0; }
+.analyst-search { flex: 1 1 220px; position: relative; min-width: 170px; }
+.analyst-model { flex: 1 1 240px; min-width: 190px; max-width: 370px; }
+.analyst-search-input { display: flex; align-items: center; position: relative; }
+.analyst-search-input svg { position: absolute; left: 10px; color: #7a8ba5; }
+.analyst-search-input input { padding-left: 33px; }
+.analyst-primary, .analyst-secondary { display: flex; align-items: center; justify-content: center; gap: 7px; height: 40px; border-radius: 7px; padding: 0 14px; font-size: 13px; white-space: nowrap; }
+.analyst-primary { border: 1px solid var(--analyst-blue); background: var(--analyst-blue); color: #fff; }
+.analyst-secondary { border: 1px solid #d7e0ed; background: #f8fafc; color: #405571; }
+.analyst-config-note { display: flex; justify-content: space-between; gap: 14px; color: #64748b; font-size: 12px; margin-top: 12px; overflow-wrap: anywhere; }
+.analyst-matches { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; max-height: 340px; overflow: auto; background: white; box-shadow: 0 10px 32px #15325a26; border: 1px solid #e2e8f0; border-radius: 8px; }
+.analyst-matches button { display: flex; justify-content: space-between; width: 100%; border: none; background: white; padding: 13px; font-size: 13px; gap: 10px; }
+.analyst-matches button:hover { background: #eff6ff; }
+.analyst-matches span { color: #789; font-size: 11px; }
+.analyst-preview { margin-top: 16px; border-top: 1px solid #eef2f8; padding-top: 14px; }
+.analyst-preview > div:first-child { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: #77869c; }
+.analyst-preview strong { color: #435e80; }
+.analyst-coverage-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.analyst-coverage-pills span { border-radius: 6px; padding: 5px 8px; font-size: 11px; }
+.analyst-coverage-pills .has-data { background: #eef7f4; color: #28785e; }
+.analyst-coverage-pills .no-data { background: #f3f4f6; color: #8b96a5; }
+.analyst-notice { display: flex; align-items: center; gap: 15px; margin: 14px 0; padding: 12px 16px; background: #fff8e9; border: 1px solid #f1dfb5; border-radius: 8px; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.analyst-notice button { margin-left: auto; border: none; background: transparent; font-size: 20px; }
+.analyst-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; margin-top: 20px; align-items: start; }
+.analyst-main { min-height: 440px; }
+.analyst-run-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding-bottom: 17px; }
+.analyst-stock-link { display: flex; align-items: center; gap: 8px; border: none; background: none; color: #1d385e; font-size: 21px; padding: 0; font-weight: 700; margin-bottom: 8px; }
+.analyst-stock-link small { font-size: 13px; color: #8090a6; font-weight: 400; }
+.analyst-status { display: inline-block; border-radius: 5px; font-size: 11px; padding: 4px 7px; background: #edf0f4; color: #63738a; white-space: nowrap; }
+.analyst-status.completed { background: #e5f5ec; color: #1a7c48; }
+.analyst-status.running { background: #e9f0ff; color: #245dc1; }
+.analyst-status.failed { background: #feeeee; color: #be3d45; }
+.analyst-tabs { display: flex; gap: 20px; border-bottom: 1px solid #e6edf5; }
+.analyst-tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 12px 0; font-size: 13px; color: #70819a; }
+.analyst-tabs button[aria-selected=true] { color: var(--analyst-blue); border-bottom-color: var(--analyst-blue); font-weight: 600; }
+.analyst-tabs small { background: #edf2f9; padding: 1px 5px; border-radius: 4px; }
+.analyst-live { display: flex; align-items: center; gap: 10px; background: #f0f6ff; border-radius: 8px; padding: 14px; font-size: 12px; color: #42628e; margin-top: 16px; flex-wrap: wrap; }
+.analyst-live strong { flex: 1; min-width: 150px; }
+.analyst-live button { border: none; background: transparent; color: #627996; text-decoration: underline; }
+.analyst-spin { animation: analyst-spin 2s linear infinite; }
+@keyframes analyst-spin { to { transform: rotate(360deg); } }
+.analyst-empty { display: grid; justify-items: center; align-content: center; text-align: center; padding: 65px 30px; color: #8293aa; }
+.analyst-empty h3 { color: #48617f; margin-bottom: 0; }
+.analyst-empty p { max-width: 500px; line-height: 1.9; font-size: 13px; }
+.analyst-result { padding-top: 20px; }
+.analyst-verdict { background: linear-gradient(120deg, #eff5ff, #f7faff); border: 1px solid #e0eafb; border-radius: 10px; padding: 20px; }
+.analyst-verdict > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.analyst-verdict strong { font-size: 22px; }
+.analyst-verdict small, .analyst-muted { font-size: 12px; color: #8290a4; }
+.analyst-verdict p, .analyst-narrative p { line-height: 1.95; font-size: 14px; white-space: pre-line; }
+.analyst-narrative { margin: 22px 0; }
+.ai-stock-analyst h3 { font-size: 15px; margin: 0 0 13px; }
+.analyst-scenarios { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.analyst-scenario { border: 1px solid #e0e8f2; border-radius: 10px; padding: 16px; overflow-wrap: anywhere; }
+.analyst-scenario > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+.analyst-scenario > div span { font-size: 12px; }
+.analyst-scenario h4 { font-size: 12px; color: #506783; margin: 18px 0 8px; }
+.analyst-scenario p, .analyst-scenario li { font-size: 12px; line-height: 1.85; }
+.analyst-scenario > small { color: #8390a1; font-size: 11px; }
+.ai-stock-analyst ul { padding-left: 17px; margin: 7px 0; }
+.analyst-two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+.analyst-two-cols .analyst-box { background: #fafcfe; }
+.analyst-box li { margin: 7px 0; font-size: 13px; line-height: 1.8; }
+.analyst-disclaimer { font-size: 11px; line-height: 1.8; color: #8a97a9; }
+.direction-BULLISH { color: #c34c43; }
+.direction-BEARISH { color: #208b67; }
+.direction-SIDEWAYS { color: #ac7a20; }
+.direction-UNCERTAIN { color: #727d92; }
+.analyst-text-button { border: none; background: transparent; color: #3974cb; font-size: 12px; padding: 12px 0 0; }
+.analyst-history { padding: 16px; }
+.analyst-history > header { display: flex; justify-content: space-between; align-items: center; }
+.analyst-history h3 { display: flex; align-items: center; gap: 7px; margin: 0; }
+.analyst-history header button { border: none; background: transparent; color: #789; padding: 0; }
+.analyst-history-row { width: 100%; text-align: left; background: #fff; border: 1px solid #e6ecf4; border-radius: 8px; margin: 0 0 10px; padding: 12px; }
+.analyst-history-row.selected { border-color: #8fafe8; background: #f4f8ff; }
+.analyst-history-row > div { display: flex; justify-content: space-between; align-items: center; gap: 5px; font-size: 13px; }
+.analyst-history-row > small { display: block; font-size: 10px; color: #91a0b3; margin-top: 6px; }
+.analyst-history-row p { color: #637896; font-size: 11px; margin: 10px 0 0; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.analyst-history-note { font-size: 11px; color: #8c9aae; line-height: 1.8; border-top: 1px solid #edf1f7; padding-top: 14px; }
+.analyst-evidence, .analyst-process { padding: 20px 0 0; }
+.analyst-coverage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+.analyst-coverage-grid > div { background: #f6f9fc; border-radius: 7px; padding: 10px; display: grid; gap: 5px; font-size: 12px; }
+.analyst-coverage-grid strong { font-size: 18px; color: #486482; }
+.analyst-coverage-grid small { font-size: 10px; color: #8b9aad; font-weight: 400; }
+.analyst-evidence details { margin: 12px 0; font-size: 12px; line-height: 1.8; }
+.analyst-evidence summary, .analyst-process summary { cursor: pointer; }
+.analyst-evidence-row { border: 1px solid #e6edf4; border-radius: 8px; padding: 12px; }
+.analyst-evidence-row > summary { display: flex; gap: 8px; align-items: start; }
+.analyst-evidence-row summary strong { flex: 1; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.analyst-evidence-row summary > small { flex-shrink: 0; color: #94a0b0; font-size: 10px; }
+.analyst-evidence-row p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.analyst-evidence pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; padding: 14px; background: #f5f7fa; font-size: 11px; }
+.analyst-citation { padding: 10px; background: #eef5ff; border-radius: 6px; }
+.analyst-steps { display: flex; gap: 10px; margin-bottom: 20px; }
+.analyst-steps > div { display: flex; align-items: center; gap: 8px; flex: 1; border-radius: 7px; padding: 12px; font-size: 12px; background: #f1f3f7; color: #95a1b1; }
+.analyst-steps span { border: 1px solid currentColor; border-radius: 50%; padding: 2px 6px; }
+.analyst-steps .done { background: #eaf6f0; color: #3e8c68; }
+.analyst-steps .current { background: #e8f0ff; color: #356ac1; }
+.analyst-steps .failed { background: #ffeded; color: #bd4550; }
+.analyst-process > p { font-size: 12px; line-height: 1.8; }
+.analyst-process ol { list-style: none; padding: 0; }
+.analyst-process li { display: flex; gap: 15px; padding: 12px 0; border-bottom: 1px solid #edf1f5; }
+.analyst-process time { font-size: 11px; white-space: nowrap; color: #91a0b2; }
+.analyst-process details { font-size: 12px; }
+.analyst-error { border-radius: 8px; padding: 16px; background: #fff3f3; color: #9b454c; margin-top: 16px; overflow-wrap: anywhere; font-size: 13px; }
+.analyst-confirmed-report { border: 1px solid #afd3c0; background: #f2faf5; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+.analyst-confirmed-report header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.analyst-confirmed-report p { white-space: pre-wrap; line-height: 1.9; }
+.analyst-confirmed-report small { color: #638673; font-size: 11px; }
+.analyst-daily-current { border-color: #bdd1eb; background: #f1f7ff; }
+.analyst-modal pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; background: #f5f8fc; padding: 10px; max-height: 240px; overflow: auto; }
+.analyst-followup { border-top: 1px solid #e3ebf5; margin-top: 24px; padding-top: 24px; min-width: 0; overflow-wrap: anywhere; }
+.analyst-followup-header, .analyst-watch-overview { display: flex; align-items: start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.analyst-followup-header h3 { display: flex; gap: 8px; align-items: center; }
+.analyst-followup-header p, .analyst-watch-overview p { font-size: 12px; color: #7d8da3; line-height: 1.8; }
+.analyst-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.analyst-actions button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.analyst-chat-log { max-height: 560px; overflow-y: auto; padding: 20px 4px; scroll-behavior: smooth; }
+.analyst-chat-empty { color: #8291a5; padding: 20px 8px; font-size: 13px; }
+.analyst-chat-empty button { background: #f7faff; color: #5475a2; border: 1px solid #e1e9f5; border-radius: 16px; padding: 8px 12px; text-align: left; }
+.analyst-dialogue { display: grid; gap: 12px; margin-bottom: 24px; }
+.analyst-user-bubble, .analyst-ai-bubble { padding: 14px 16px; border-radius: 10px; max-width: 94%; font-size: 13px; line-height: 1.9; }
+.analyst-user-bubble { justify-self: end; background: #eaf2ff; color: #345a8e; }
+.analyst-ai-bubble { justify-self: start; background: #f6f8fb; border: 1px solid #e9eef5; }
+.analyst-dialogue p { white-space: pre-wrap; margin: 8px 0; }
+.analyst-dialogue small { color: #8a98ac; font-size: 11px; }
+.analyst-followup details { margin: 12px 0; font-size: 12px; line-height: 1.85; }
+.analyst-followup summary { cursor: pointer; color: #6382a8; }
+.analyst-chat-compose { border: 1px solid #dce7f5; border-radius: 10px; padding: 12px; background: #fff; }
+.analyst-chat-compose label { display: block; font-size: 12px; color: #6680a1; margin-bottom: 8px; }
+.analyst-chat-compose textarea { width: 100%; border: 0; resize: vertical; font: inherit; font-size: 13px; padding: 5px; box-sizing: border-box; outline: none; }
+.analyst-chat-compose > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.analyst-chat-compose small { color: #8d9bad; font-size: 11px; }
+.analyst-chat-compose button { display: flex; align-items: center; gap: 6px; }
+.analyst-revision-history article { border-left: 2px solid #c2d6f0; padding-left: 12px; margin: 16px 0; }
+.analyst-watch-overview { background: #f5f8fd; padding: 16px; border-radius: 10px; margin-top: 18px; }
+.analyst-watch-overview > div:first-child { flex: 1; min-width: 200px; }
+.analyst-timeline { margin: 20px 0 12px 8px; border-left: 2px solid #dce8f5; padding-left: 20px; }
+.analyst-timeline-item { position: relative; border: 1px solid #e1e9f3; border-radius: 10px; padding: 16px; margin-bottom: 18px; background: #fff; }
+.analyst-timeline-item::before { content: ''; position: absolute; top: 20px; left: -28px; width: 10px; height: 10px; background: #5b87c6; border: 2px solid white; border-radius: 50%; }
+.analyst-timeline-item.failed::before { background: #c45b60; }
+.analyst-timeline-item > header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.analyst-timeline-item h4 { font-size: 14px; color: #3c5e89; margin-bottom: 10px; }
+.analyst-timeline-item small { font-size: 11px; color: #8b9cb0; font-weight: 400; }
+.analyst-timeline-item p { font-size: 13px; line-height: 1.9; white-space: pre-wrap; }
+.analyst-condition-pills { display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0; }
+.analyst-condition-pills span { padding: 5px 8px; border-radius: 5px; background: #f0f3f7; color: #75859b; font-size: 11px; }
+.analyst-condition-pills .hit { color: #ab6129; background: #fff2dc; }
+.analyst-condition-pills .unknown, .analyst-status.partial { color: #a97925; background: #fff5df; }
+.analyst-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 12px; color: #7689a0; }
+.analyst-pagination button { border: 1px solid #dfe7f1; background: white; border-radius: 5px; padding: 6px 12px; color: #55759d; }
+.analyst-modal-backdrop { position: fixed; inset: 0; z-index: 1400; background: #162c4b66; display: grid; place-items: center; padding: 20px; }
+.analyst-modal { width: min(700px, 100%); max-height: 88vh; overflow-y: auto; box-sizing: border-box; background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 18px 70px #0d203433; }
+.analyst-modal > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.analyst-modal header button { border: 0; background: none; color: #7e8d9e; padding: 4px; }
+.analyst-modal p { font-size: 12px; line-height: 1.85; color: #7b8b9e; white-space: pre-wrap; overflow-wrap: anywhere; }
+.analyst-modal label { display: grid; gap: 8px; margin: 12px 0; font-size: 13px; color: #4c6786; }
+.analyst-modal textarea, .analyst-modal input:not([type=checkbox]), .analyst-modal select { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #d7e3f1; border-radius: 7px; padding: 10px; font: inherit; font-size: 13px; color: #38516f; background: white; }
+.analyst-modal textarea { resize: vertical; }
+.analyst-modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.analyst-monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.analyst-event-rule { display: grid; grid-template-columns: 115px minmax(0, 1fr) 30px; gap: 8px; margin: 8px 0; }
+.analyst-event-rule button { border: 0; background: none; color: #8395ac; }
+.analyst-modal .analyst-checkbox { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 600px) { .analyst-followup-header { display: grid; } .analyst-monitor-grid { grid-template-columns: 1fr; } .analyst-modal { padding: 16px; } .analyst-event-rule { grid-template-columns: 92px minmax(0, 1fr) 24px; gap: 4px; } .analyst-modal-backdrop { padding: 10px; } .analyst-user-bubble, .analyst-ai-bubble { max-width: 100%; } }
+@media (max-width: 1250px) { .analyst-layout { grid-template-columns: minmax(0, 1fr) 235px; } .analyst-scenarios { grid-template-columns: 1fr; } }
+@media (max-width: 950px) { .analyst-layout { grid-template-columns: 1fr; } .analyst-history { max-height: 450px; overflow: auto; } .analyst-two-cols { grid-template-columns: 1fr; } .analyst-steps { flex-wrap: wrap; } .analyst-config-note { flex-wrap: wrap; } }
+@media (max-width: 600px) { .analyst-box { padding: 14px; } .analyst-coverage-grid { grid-template-columns: repeat(2, 1fr); } .analyst-process li { display: grid; gap: 3px; } .analyst-evidence-row summary > small { display: none; } }
