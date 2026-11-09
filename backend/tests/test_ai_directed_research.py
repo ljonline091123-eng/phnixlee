@@ -12,6 +12,8 @@ from app.schemas.selection import SelectionAiDirectedResearchOutput, SelectionAi
 from app.services.ai_directed_research import (
     _adapt_provider_direction_format,
     _adapt_verification_format,
+    _ensure_inference_candidates,
+    _inference_candidates_from_directions,
     _validate_references,
     confirm_ai_directed_research,
 )
@@ -45,6 +47,41 @@ def test_provider_direction_shape_keeps_only_visible_evidence_ids():
     assert {row["reference_id"] for row in cleaned["directions"][0]["supporting_evidence"]} == {"7", "fact:1"}
     assert cleaned["directions"][0]["counter_evidence"] == []
     assert any("未返回原文引句" in warning for warning in warnings)
+    assert len(adapted["inference_candidates"]) == 3
+    assert all(row["status"] == "NEEDS_VERIFICATION" for row in adapted["inference_candidates"])
+    assert all(row["confidence"] <= 0.6 for row in adapted["inference_candidates"])
+
+
+def test_preliminary_inferences_are_derived_and_capped_without_inventing_evidence():
+    directions = [{
+        "direction_id": "management_change", "title": "管理层变化",
+        "hypothesis": "管理层调整可能影响战略执行", "why_it_matters": "需要观察交接",
+        "current_judgment": "现有公告显示发生调整，但原因仍需验证", "confidence": 0.97,
+        "supporting_evidence": [{"reference_type": "DOCUMENT", "reference_id": "9", "stance": "SUPPORT", "claim": "公告披露职务调整"}],
+        "counter_evidence": [], "suggested_sources": ["后续公告"],
+    }]
+    result = _inference_candidates_from_directions(directions)
+    assert len(result) == 1
+    assert result[0]["direction_id"] == "management_change"
+    assert result[0]["confidence"] == 0.6
+    assert result[0]["status"] == "NEEDS_VERIFICATION"
+    assert result[0]["supporting_evidence"][0]["reference_id"] == "9"
+
+
+def test_existing_inferences_survive_failed_second_pass_and_are_bounded():
+    state = _ensure_inference_candidates({
+        "directions": [{"direction_id": "business", "current_judgment": "主营可能受益"}],
+        "inference_candidates": [{
+            "inference_id": "inference_business", "direction_id": "business", "title": "主营判断",
+            "conclusion": "主营可能受益，但仍需验证", "conclusion_type": "POSITIVE",
+            "rationale": "已有业务事实", "confidence": 0.95,
+            "supporting_evidence": [], "counter_evidence": [], "implications": [],
+            "suggested_followups": [], "status": "PRELIMINARY",
+        }],
+    })
+    assert state["inference_candidates"][0]["conclusion"] == "主营可能受益，但仍需验证"
+    assert state["inference_candidates"][0]["confidence"] == 0.6
+    assert state["inference_candidates"][0]["status"] == "PRELIMINARY"
 
 
 def test_direction_confirmation_writes_audit_but_not_foundation_fact():

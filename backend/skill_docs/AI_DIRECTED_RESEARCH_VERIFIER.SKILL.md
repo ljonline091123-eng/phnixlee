@@ -16,6 +16,7 @@
 - 每个方向的 `SUPPORTED`、`CONTRADICTED`、`MIXED` 或 `INSUFFICIENT`
 - 当前结论、置信度、支持证据、反证、剩余缺口和下一步来源
 - 总体阶段摘要与风险提醒
+- 复核失败时必须保留规划阶段的 `inference_candidates`；失败只影响二次复核状态，不得覆盖初步推理。
 
 ## 约束
 

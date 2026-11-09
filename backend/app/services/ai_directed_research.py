@@ -21,6 +21,7 @@ from app.models.selection import SelectionCandidate, SelectionResearchFeedback, 
 from app.schemas.selection import (
     SelectionAiDirectedResearchOutput,
     SelectionAiDirectedResearchVerificationOutput,
+    SelectionAiResearchInference,
     SelectionAiResearchConfirmRequest,
 )
 from app.services.model_hub import ModelHubService
@@ -151,10 +152,91 @@ def _validate_references(payload: dict[str, Any], pack: dict[str, Any]) -> tuple
     for direction in output.get("directions") or []:
         direction["supporting_evidence"] = clean(direction.get("supporting_evidence"), f"方向{direction.get('direction_id')}支持证据")
         direction["counter_evidence"] = clean(direction.get("counter_evidence"), f"方向{direction.get('direction_id')}反证")
+    for inference in output.get("inference_candidates") or []:
+        inference["supporting_evidence"] = clean(
+            inference.get("supporting_evidence"), f"推理{inference.get('inference_id')}支持证据",
+        )
+        inference["counter_evidence"] = clean(
+            inference.get("counter_evidence"), f"推理{inference.get('inference_id')}反证",
+        )
     output["data_quality_notes"] = list(dict.fromkeys([
         *[_text(value, 400) for value in output.get("data_quality_notes") or []], *warnings,
     ]))[:10]
     return output, warnings
+
+
+def _inference_candidates_from_directions(
+    directions: list[dict[str, Any]], existing: Any = None,
+) -> list[dict[str, Any]]:
+    """Expose the model's current judgments as selectable preliminary conclusions.
+
+    This is a shape conversion, not a new inference: the conclusion text comes
+    from the model direction itself, and its confidence is capped until the
+    user-approved evidence review completes. It prevents a failed second model
+    call from erasing useful first-pass reasoning.
+    """
+    if isinstance(existing, list) and existing:
+        # Keep model-authored conclusions, but enforce the planner contract at
+        # the boundary.  A preliminary inference is never allowed to exceed
+        # the confidence ceiling before the user selects a direction and the
+        # verifier has checked the evidence again.
+        direction_ids = {
+            str(row.get("direction_id")) for row in directions
+            if isinstance(row, dict) and row.get("direction_id")
+        }
+        result: list[dict[str, Any]] = []
+        for row in existing[:8]:
+            if not isinstance(row, dict):
+                continue
+            item = dict(row)
+            if direction_ids and str(item.get("direction_id")) not in direction_ids:
+                continue
+            try:
+                item["confidence"] = min(0.6, max(0.0, float(item.get("confidence") or 0.0)))
+            except (TypeError, ValueError):
+                item["confidence"] = 0.0
+            if item.get("status") not in {"PRELIMINARY", "NEEDS_VERIFICATION", "LOW_CONFIDENCE"}:
+                item["status"] = "NEEDS_VERIFICATION"
+            result.append(item)
+        if result:
+            return result
+    result: list[dict[str, Any]] = []
+    for row in directions[:8]:
+        if not isinstance(row, dict):
+            continue
+        direction_id = _text(row.get("direction_id"), 80)
+        if not direction_id:
+            continue
+        conclusion = _text(row.get("current_judgment") or row.get("hypothesis"), 1200)
+        if len(conclusion) < 2:
+            continue
+        supporting = list(row.get("supporting_evidence") or [])[:8]
+        counter = list(row.get("counter_evidence") or [])[:8]
+        result.append({
+            "inference_id": f"inference_{direction_id}",
+            "direction_id": direction_id,
+            "title": _text(row.get("title") or row.get("hypothesis"), 180) or "AI初步推理",
+            "conclusion": conclusion,
+            "conclusion_type": "MIXED" if supporting and counter else "UNKNOWN",
+            "rationale": _text(row.get("why_it_matters") or "模型已结合现有证据形成初步判断", 1200),
+            "confidence": min(0.6, max(0.0, float(row.get("confidence") or 0.0))),
+            "supporting_evidence": supporting,
+            "counter_evidence": counter,
+            "implications": ["这是基于当前数据的初步推理，不等同于已验证事实或投资建议。"],
+            "suggested_followups": [
+                _text(value, 300) for value in row.get("suggested_sources") or [] if _text(value, 300)
+            ][:8],
+            "status": "NEEDS_VERIFICATION",
+        })
+    return result
+
+
+def _ensure_inference_candidates(state: dict[str, Any]) -> dict[str, Any]:
+    state = deepcopy(state)
+    state["inference_candidates"] = _inference_candidates_from_directions(
+        list(state.get("directions") or []), state.get("inference_candidates"),
+    )
+    return state
 
 
 def _adapt_provider_direction_format(payload: dict[str, Any], pack: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -167,6 +249,14 @@ def _adapt_provider_direction_format(payload: dict[str, Any], pack: dict[str, An
     review when the provider omits continuous source quotes.
     """
     if isinstance(payload.get("directions"), list):
+        # Some providers return the old planner shape while still satisfying
+        # the direction contract.  Fill the new user-facing inference section
+        # from those judgments without inventing facts.
+        if not isinstance(payload.get("inference_candidates"), list) or not payload.get("inference_candidates"):
+            payload = dict(payload)
+            payload["inference_candidates"] = _inference_candidates_from_directions(
+                list(payload.get("directions") or []),
+            )
         return payload, False
     rows = payload.get("research_directions")
     if not isinstance(rows, list):
@@ -255,7 +345,7 @@ def _adapt_provider_direction_format(payload: dict[str, Any], pack: dict[str, An
             "claim": f"利润：{profit_text}", "quote": None,
         })
     summary = "；".join(value for value in [profile_text, revenue_text, profit_text] if value)
-    return {
+    adapted = {
         "mode": "AI_DIRECTED_RESEARCH_V1",
         "summary": summary or "模型已读取现有证据，但只返回了方向规划文本。",
         "business_profile": business_profile or "模型未返回可核验的主营画像。",
@@ -263,7 +353,9 @@ def _adapt_provider_direction_format(payload: dict[str, Any], pack: dict[str, An
         "preliminary_conclusion": "；".join(_text(row.get("current_judgment"), 300) for row in rows[:5] if isinstance(row, dict)),
         "conclusion_status": "PARTIAL",
         "data_quality_notes": ["模型未遵循本次证据引用契约；已保留规划文本，但未把无ID的描述当作可验证证据。"],
-    }, True
+    }
+    adapted["inference_candidates"] = _inference_candidates_from_directions(directions)
+    return adapted, True
 
 
 def _state(candidate: SelectionCandidate) -> dict[str, Any]:
@@ -293,14 +385,16 @@ def prepare_ai_directed_research(
     }
     prompt = (
         "请先阅读下列单股证据包，为用户准备AI主动研究方向。\n"
-        "你必须先给出主营/收入/利润/行业与产业链/公司行为/量价资金的公司画像，再列出3至5个最可能改变判断的研究方向。\n"
+        "你必须先给出主营/收入/利润/行业与产业链/公司行为/量价资金的公司画像，先形成3至6个可供用户参考的AI初步推理结论，再为每条结论关联一个可验证研究方向。\n"
+        "每条初步推理必须包含明确结论、推理依据、支持证据、反证或不确定性、当前置信度、可能影响和建议深入研究内容；它是基于现有证据的临时判断，不是事实、最终结论或买卖建议。\n"
+        "即使当前证据不完整，也要先给出合理的竞争性解释；‘证据不足’只能作为状态和置信度说明，不能抹掉初步推理。\n"
         "不要直接输出买卖建议，不得补造缺失数据；把事实、推断、假设、反证和数据缺口分开。\n"
         "严格只引用citation_allowlist中的DOCUMENT、FACT、RELATION ID。\n"
         "输出必须是调用方提供的JSON Schema对象。\n\n"
         + json.dumps(prompt_context, ensure_ascii=False, separators=(",", ":"))
     )
     analysis = deepcopy(candidate.analysis_json or {})
-    previous = _state(candidate)
+    previous = _ensure_inference_candidates(_state(candidate))
     log: ModelCallLog | None = None
     try:
         service = ModelHubService(db)
@@ -326,6 +420,7 @@ def prepare_ai_directed_research(
         payload, contract_repaired = _adapt_provider_direction_format(payload, pack)
         validated = SelectionAiDirectedResearchOutput.model_validate(payload)
         cleaned, citation_warnings = _validate_references(validated.model_dump(mode="json"), pack)
+        cleaned = _ensure_inference_candidates(cleaned)
         state = {
             **cleaned,
             "status": "WAITING_USER_DIRECTION",
@@ -387,7 +482,7 @@ def confirm_ai_directed_research(
     if candidate is None:
         raise LookupError("选股候选不存在")
     analysis = deepcopy(candidate.analysis_json or {})
-    state = _state(candidate)
+    state = _ensure_inference_candidates(_state(candidate))
     directions = [row for row in state.get("directions") or [] if isinstance(row, dict)]
     by_id = {str(row.get("direction_id")): row for row in directions}
     selected_direction_ids = list(payload.selected_direction_ids or state.get("selected_direction_ids") or [])
@@ -462,6 +557,17 @@ def ai_directed_research_read(candidate: SelectionCandidate, db: Session | None 
     state = _state(candidate)
     if not state:
         return {"candidate_id": candidate.id, "status": "NOT_STARTED", "message": "尚未读取现有证据并提出研究方向"}
+    # Older candidates were created before inference_candidates existed.  Make
+    # the migration lazy and durable so reopening a historical candidate has
+    # the same first-pass conclusions as a newly prepared one.
+    enriched = _ensure_inference_candidates(state)
+    if enriched.get("inference_candidates") != state.get("inference_candidates"):
+        state = enriched
+        if db is not None:
+            analysis = deepcopy(candidate.analysis_json or {})
+            analysis["ai_directed_research"] = state
+            candidate.analysis_json = analysis
+            db.commit()
     if db is not None and str(state.get("status") or "").upper() in {"QUEUED", "RUNNING"}:
         state = deepcopy(state)
         run = db.get(SelectionRun, candidate.run_id)
@@ -691,7 +797,7 @@ def execute_ai_directed_research(payload: dict[str, Any]) -> dict[str, Any]:
         run = db.get(SelectionRun, run_id)
         if candidate is None or run is None or candidate.run_id != run_id:
             raise LookupError("AI主动研究任务引用的候选不存在")
-        state = _state(candidate)
+        state = _ensure_inference_candidates(_state(candidate))
         selected = set(str(value) for value in state.get("selected_direction_ids") or payload.get("selected_direction_ids") or [])
         directions = [row for row in state.get("directions") or [] if str(row.get("direction_id")) in selected]
         if not directions:
@@ -734,7 +840,7 @@ def execute_ai_directed_research(payload: dict[str, Any]) -> dict[str, Any]:
         run = db.get(SelectionRun, run_id)
         if candidate is None or run is None:
             raise LookupError("补证完成后候选不存在")
-        state = _state(candidate)
+        state = _ensure_inference_candidates(_state(candidate))
         after = _research_evidence_state(candidate)
         added = {
             "documents": sorted(set(after["document_ids"]) - set(before["document_ids"])),

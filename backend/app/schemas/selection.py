@@ -696,6 +696,24 @@ class SelectionAiResearchDirection(BaseModel):
     recommended_priority: Literal["PRIORITY", "NORMAL", "PAUSED"] = "NORMAL"
 
 
+class SelectionAiResearchInference(BaseModel):
+    """A preliminary AI inference shown before the user chooses deeper research."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    inference_id: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9_\-]+$")
+    direction_id: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9_\-]+$")
+    title: str = Field(min_length=2, max_length=180)
+    conclusion: str = Field(min_length=2, max_length=1200)
+    conclusion_type: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"] = "UNKNOWN"
+    rationale: str = Field(min_length=2, max_length=1200)
+    confidence: float = Field(ge=0, le=1)
+    supporting_evidence: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=8)
+    counter_evidence: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=8)
+    implications: list[str] = Field(default_factory=list, max_length=8)
+    suggested_followups: list[str] = Field(default_factory=list, max_length=8)
+    status: Literal["PRELIMINARY", "NEEDS_VERIFICATION", "LOW_CONFIDENCE"] = "PRELIMINARY"
+
+
 class SelectionAiDirectedResearchOutput(BaseModel):
     """Strict output contract for the evidence-first AI research planner."""
 
@@ -706,6 +724,7 @@ class SelectionAiDirectedResearchOutput(BaseModel):
     key_findings: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=12)
     major_events: list[SelectionAiResearchEvidence] = Field(default_factory=list, max_length=10)
     directions: list[SelectionAiResearchDirection] = Field(min_length=3, max_length=5)
+    inference_candidates: list[SelectionAiResearchInference] = Field(default_factory=list, max_length=8)
     preliminary_conclusion: str = Field(min_length=2, max_length=1600)
     conclusion_status: Literal["PARTIAL", "INSUFFICIENT", "READY_FOR_DIRECTION_REVIEW"]
     data_quality_notes: list[str] = Field(default_factory=list, max_length=10)

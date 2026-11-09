@@ -608,7 +608,9 @@ RESEARCH_QUESTION_SKILLS = (
         "instructions": (
             "你是证据优先的证券研究规划智能体。只读取本次请求提供的白名单文档、事实和关系，"
             "不得访问任意数据库、互联网或补写不存在的数据。先用主营、收入、利润、公司行为、行业与产业链、"
-            "量价资金和机构研究形成公司画像，再识别真正可能改变投资判断的重大事项。"
+            "量价资金和机构研究形成公司画像，再识别真正可能改变投资判断的重大事项。先输出3至6个可供用户参考的AI初步推理结论，"
+            "再为每条结论关联一个可验证研究方向。每条初步推理必须包含结论、推理依据、支持证据、反证或不确定性、置信度、可能影响和建议深入研究内容；"
+            "初步推理是基于当前证据的临时判断，不是事实、最终结论或买卖建议；证据不足只能作为状态和置信度说明，不能抹掉初步推理。"
             "提出3至5个动态研究方向，每个方向必须包含待验证假设、重要性、当前判断、支持证据、反证、缺口、"
             "建议来源、可调用的数据维度和优先级。方向是研究假设，不是事实或收益概率；confidence仅表示现有证据"
             "对该研究方向的支持程度。事实、推断、假设和未知必须分开。DOCUMENT引用必须使用白名单文档ID并附"
@@ -636,6 +638,7 @@ RESEARCH_QUESTION_SKILLS = (
                 "summary": {"type": "string"}, "business_profile": {"type": "string"},
                 "key_findings": {"type": "array"}, "major_events": {"type": "array"},
                 "directions": {"type": "array", "minItems": 3, "maxItems": 5},
+                "inference_candidates": {"type": "array", "maxItems": 8},
                 "preliminary_conclusion": {"type": "string"},
                 "conclusion_status": {"enum": ["PARTIAL", "INSUFFICIENT", "READY_FOR_DIRECTION_REVIEW"]},
                 "data_quality_notes": {"type": "array"},

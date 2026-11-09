@@ -87,18 +87,50 @@ function AiDirectedResearchPanel({candidate, disabled, onUpdated}: {
     finally { setBusy(false); }
   }
   const directions = array(state.directions);
+  const inferenceCandidates = array(state.inference_candidates);
   const status = String(state.status || "NOT_STARTED");
+  const inferenceStatusNames: Record<string, string> = {
+    PRELIMINARY: "初步推理",
+    NEEDS_VERIFICATION: "待深入验证",
+    LOW_CONFIDENCE: "低置信度",
+  };
+  const inferenceTypeNames: Record<string, string> = {
+    POSITIVE: "偏利好", NEGATIVE: "偏利空", MIXED: "正反交织", NEUTRAL: "中性", UNKNOWN: "待判断",
+  };
+  const toggleSelectedDirection = (directionId: string, checked: boolean) => {
+    setSelected(current => checked
+      ? (current.includes(directionId) ? current : [...current, directionId])
+      : current.filter(value => value !== directionId));
+  };
   return <section className="ai-directed-research-panel" aria-label="AI主动研究试验">
     <header className="ai-directed-research-heading"><div><span>新主流程 · AI主动研究试验</span><h3>先理解现有证据，再由你确认研究方向</h3></div><strong>{aiResearchStatusNames[status] || status}</strong></header>
     {status === "NOT_STARTED" && <div className="ai-directed-empty"><p>系统暂不把八维分数当作主结论。点击后，AI将读取黑芝麻智能已有的主营、财务、新闻、公告、公司行为、量价、研究和图谱证据，提出3至5个可验证方向。</p><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void prepare()}>{busy ? "正在读取证据并分析…" : "读取现有证据并提出研究方向"}</button></div>}
     {status === "MODEL_FAILED" && directions.length === 0 && <div className="ai-directed-empty error"><p>本次没有形成研究结论，系统没有把失败响应写入事实或结论。{String(state.error || "")}</p><button type="button" className="primary-button" disabled={disabled || busy} onClick={() => void prepare()}>{busy ? "正在重试…" : "重试AI主动研究"}</button></div>}
     {status !== "NOT_STARTED" && !(status === "MODEL_FAILED" && directions.length === 0) && <>
       <div className="ai-directed-summary"><div><small>AI当前公司画像</small><p>{String(state.business_profile || "尚未形成公司画像")}</p></div><div><small>初步判断（不等于投资建议）</small><p>{String(state.summary || state.preliminary_conclusion || "尚未形成初步判断")}</p></div></div>
+      {inferenceCandidates.length > 0 && <section className="ai-inference-candidates" aria-label="AI初步推理结论">
+        <header><div><small>AI先读现有数据后形成的判断</small><h4>AI初步推理结论</h4><p>这些是基于当前证据的竞争性解释，不是最终事实或买卖建议。请直接选择你希望系统继续补证和验证的结论。</p></div><strong>{selected.length}/{inferenceCandidates.length} 条已选</strong></header>
+        <div className="ai-inference-list">{inferenceCandidates.map((item, index) => {
+          const directionId = String(item.direction_id || "");
+          const checked = selected.includes(directionId);
+          const supporting = array(item.supporting_evidence);
+          const counter = array(item.counter_evidence);
+          return <article key={String(item.inference_id || `${directionId}-${index}`)} className={checked ? "selected" : ""}>
+            <label className="ai-inference-select"><input type="checkbox" checked={checked} disabled={busy || status === "READY_FOR_EVIDENCE_COLLECTION" || status === "STOPPED_BY_USER"} onChange={event => toggleSelectedDirection(directionId, event.target.checked)} /><span><strong>{String(item.title || "AI初步判断")}</strong><em>{inferenceTypeNames[String(item.conclusion_type || "UNKNOWN")] || "待判断"} · {inferenceStatusNames[String(item.status || "NEEDS_VERIFICATION")] || "待深入验证"}</em></span><b>{Math.round(Number(item.confidence || 0) * 100)}%</b></label>
+            <p className="ai-inference-conclusion">{String(item.conclusion || "尚未形成初步结论")}</p>
+            {item.rationale && <p><b>推理依据：</b>{String(item.rationale)}</p>}
+            {supporting.length > 0 && <details open><summary>支持证据（{supporting.length}）</summary><ul>{supporting.map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}{evidence.quote && <blockquote>{String(evidence.quote)}</blockquote>}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}
+            {counter.length > 0 && <details><summary>反证与不确定性（{counter.length}）</summary><ul>{counter.map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}{evidence.quote && <blockquote>{String(evidence.quote)}</blockquote>}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}
+            {array(item.implications).length > 0 && <p><b>可能影响：</b>{strings(item.implications).join("；")}</p>}
+            {array(item.suggested_followups).length > 0 && <p className="ai-inference-followups"><b>建议深入：</b>{strings(item.suggested_followups).join("；")}</p>}
+          </article>;
+        })}</div>
+      </section>}
       {array(state.key_findings).length > 0 && <details open className="ai-directed-evidence"><summary>关键事实（{array(state.key_findings).length}）</summary><ul>{array(state.key_findings).map((item, index) => <li key={index}><b>{String(item.stance || "FACT") === "FACT" ? "事实" : String(item.stance || "")}</b> {String(item.claim || "")}{item.quote && <blockquote>{String(item.quote)}</blockquote>}<small>{String(item.reference_type || "")} #{String(item.reference_id || "")}</small></li>)}</ul></details>}
       {array(state.major_events).length > 0 && <details className="ai-directed-evidence"><summary>AI识别的重大事项（{array(state.major_events).length}）</summary><ul>{array(state.major_events).map((item, index) => <li key={index}>{String(item.claim || "")}{item.quote && <blockquote>{String(item.quote)}</blockquote>}<small>{String(item.reference_type || "")} #{String(item.reference_id || "")}</small></li>)}</ul></details>}
-      <div className="ai-directed-directions"><div className="ai-directed-directions-title"><div><small>用户确认节点</small><h4>请选择本轮要继续验证的方向</h4></div><span>{selected.length}/{directions.length} 已选</span></div>{directions.map((row, index) => {
+      <div className="ai-directed-directions"><div className="ai-directed-directions-title"><div><small>第二层：研究方向与补证范围</small><h4>选择的初步结论将自动关联以下研究方向</h4></div><span>{selected.length}/{directions.length} 个方向已选</span></div>{directions.map((row, index) => {
         const id = String(row.direction_id || `direction_${index}`); const checked = selected.includes(id);
-        return <article key={id} className={checked ? "selected" : ""}><label><input type="checkbox" checked={checked} disabled={busy || status === "READY_FOR_EVIDENCE_COLLECTION" || status === "STOPPED_BY_USER"} onChange={event => setSelected(current => event.target.checked ? [...current, id] : current.filter(value => value !== id))} /><strong>{String(row.title || "研究方向")}</strong><em>{Math.round(Number(row.confidence || 0) * 100)}% · {String(row.recommended_priority || "NORMAL") === "PRIORITY" ? "建议优先" : "建议常规"}</em></label><p><b>待验证假设：</b>{String(row.hypothesis || "")}</p><p><b>为什么重要：</b>{String(row.why_it_matters || "")}</p><p><b>AI当前判断：</b>{String(row.current_judgment || "")}</p>{array(row.supporting_evidence).length > 0 && <details><summary>支持证据（{array(row.supporting_evidence).length}）</summary><ul>{array(row.supporting_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{array(row.counter_evidence).length > 0 && <details><summary>反证与不确定性（{array(row.counter_evidence).length}）</summary><ul>{array(row.counter_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{strings(row.data_gaps).length > 0 && <p className="ai-directed-gap"><b>待补证：</b>{strings(row.data_gaps).join("；")}</p>}</article>;
+        return <article key={id} className={checked ? "selected" : ""}><label><input type="checkbox" checked={checked} disabled={busy || status === "READY_FOR_EVIDENCE_COLLECTION" || status === "STOPPED_BY_USER"} onChange={event => toggleSelectedDirection(id, event.target.checked)} /><strong>{String(row.title || "研究方向")}</strong><em>{Math.round(Number(row.confidence || 0) * 100)}% · {String(row.recommended_priority || "NORMAL") === "PRIORITY" ? "建议优先" : "建议常规"}</em></label><p><b>待验证假设：</b>{String(row.hypothesis || "")}</p><p><b>为什么重要：</b>{String(row.why_it_matters || "")}</p><p><b>AI当前判断：</b>{String(row.current_judgment || "")}</p>{array(row.supporting_evidence).length > 0 && <details><summary>支持证据（{array(row.supporting_evidence).length}）</summary><ul>{array(row.supporting_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{array(row.counter_evidence).length > 0 && <details><summary>反证与不确定性（{array(row.counter_evidence).length}）</summary><ul>{array(row.counter_evidence).map((evidence, evidenceIndex) => <li key={evidenceIndex}>{String(evidence.claim || "")}<small>{String(evidence.reference_type || "")} #{String(evidence.reference_id || "")}</small></li>)}</ul></details>}{strings(row.data_gaps).length > 0 && <p className="ai-directed-gap"><b>待补证：</b>{strings(row.data_gaps).join("；")}</p>}</article>;
       })}</div>
       {status === "WAITING_USER_DIRECTION" && <div className="ai-directed-actions"><label>给本轮研究的补充意见（选填）<textarea rows={2} value={comment} onChange={event => setComment(event.target.value)} placeholder="例如：先核验高管变动是否与业务转型有关。" /></label><div><button type="button" disabled={disabled || busy || selected.length === 0} onClick={() => void confirm("CONFIRM_AND_RESEARCH")} className="primary-button">确认方向并生成补证计划</button><button type="button" disabled={disabled || busy} onClick={() => void confirm("SAVE_DRAFT")}>保存草稿</button><button type="button" disabled={disabled || busy} onClick={() => void confirm("SKIP_RESEARCH")}>本轮不治理</button></div></div>}
       {status === "READY_FOR_EVIDENCE_COLLECTION" && <div className="ai-directed-next"><strong>方向已确认</strong><p>已生成受控补证计划，未将推断写入事实库。数据补齐完成后，再调用AI复核支持证据、反证和置信度。</p><p>维度：{strings(state.collection_plan?.dimensions).join("、") || "当前没有可自动调用的维度"}</p></div>}
