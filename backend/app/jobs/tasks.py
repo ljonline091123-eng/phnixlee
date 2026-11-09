@@ -43,7 +43,13 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
     QA_TASK: execute_qa_sync,
     TEST_TASK_TYPE: execute_test_job,
     "model_health_test": lambda payload: _run_model_health_test(payload),
+    "ai_analyst_daily_review": lambda payload: _run_analyst_review(payload),
 }
+
+
+def _run_analyst_review(payload):
+    from app.services.analyst_followup import execute_daily_review
+    return execute_daily_review(payload)
 
 
 def _refresh_selection_tracking(payload: dict[str, Any]) -> dict[str, Any]:

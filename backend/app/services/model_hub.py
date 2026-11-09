@@ -20,6 +20,7 @@ from app.services.core_skill_defs import core_skill_rows
 from app.services.skill_registry import save_skill_content, sync_skill_from_file
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 from app.services.model_errors import describe_model_error
+from app.services.stock_analyst_skill import STOCK_ANALYST_SKILL, STOCK_ANALYST_FOLLOWUP_SKILL
 
 
 def _normalize_bounded_json(value: Any, schema: dict[str, Any], root: dict[str, Any], path: str = "$") -> tuple[Any, list[str]]:
@@ -759,6 +760,8 @@ RESEARCH_QUESTION_SKILLS = (
 
 
 DEFAULT_MODEL_SKILLS_V2 = (
+    STOCK_ANALYST_SKILL,
+    STOCK_ANALYST_FOLLOWUP_SKILL,
     *RESEARCH_QUESTION_SKILLS,
     {
         "skill_code": "STOCK_TREND_ADVISOR",

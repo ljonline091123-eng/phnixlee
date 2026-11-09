@@ -111,6 +111,8 @@ class OpenAICompatAdapter(ModelAdapter):
                 "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                 "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
                 "STOCK_SELECTION_PER_STOCK_RETRY",
+                "STANDALONE_STOCK_ANALYST",
+                "STANDALONE_STOCK_ANALYST_FOLLOWUP",
             }
             and metadata.get("require_real_model")
         )
@@ -265,6 +267,8 @@ class GeminiRestAdapter(ModelAdapter):
                 "STOCK_SELECTION_ANALYSIS",
                 "STOCK_SELECTION_SINGLE_STOCK_RECOVERY",
                 "STOCK_SELECTION_SINGLE_STOCK_CONTRACT_RETRY",
+                "STANDALONE_STOCK_ANALYST",
+                "STANDALONE_STOCK_ANALYST_FOLLOWUP",
             }
             and metadata.get("require_real_model")
         )
@@ -289,5 +293,7 @@ class GeminiRestAdapter(ModelAdapter):
         if candidates:
             content = candidates[0].get("content") or {}
             parts = content.get("parts") or []
-            text = "\n".join(part.get("text", "") for part in parts if part.get("text"))
+            # Thinking parts are not the final answer and can invalidate an
+            # otherwise correct JSON document when includeThoughts is enabled.
+            text = "\n".join(part.get("text", "") for part in parts if part.get("text") and not part.get("thought"))
         return ModelExecutionResult(response_text=text or str(response_json), response_json=response_json)

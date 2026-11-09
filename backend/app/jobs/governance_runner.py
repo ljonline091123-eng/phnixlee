@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 
 from app.jobs.worker import JobWorker
 
@@ -14,6 +15,7 @@ class GovernanceRunner:
             "selection_data_backfill", "selection_hypothesis_research",
             "selection_ai_directed_research",
             "model_health_test",
+            "ai_analyst_daily_review",
         ), lease_seconds=120)
         self.stop_event = threading.Event()
         self.wakeup = threading.Event()
@@ -30,9 +32,14 @@ class GovernanceRunner:
         self.thread.join(timeout=5)
 
     def _run(self):
+        last_schedule = 0
         while not self.stop_event.is_set():
             self.wakeup.clear()
             try:
+                if time.monotonic() - last_schedule >= 30:
+                    from app.services.analyst_followup import enqueue_due_reviews
+                    enqueue_due_reviews()
+                    last_schedule = time.monotonic()
                 if self.worker.run_once():
                     continue
             except Exception:
