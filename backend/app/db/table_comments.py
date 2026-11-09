@@ -64,6 +64,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "model_skill_revision": TableDescription("Skill 历史版本", "模型实验室", "保存 Skill 每个版本的指令正文、治理契约、内容哈希和变更来源，支持完整回滚。"),
     "prediction_ledger": TableDescription("预测账本", "研究复盘", "保存选股或买卖建议、依据与使用的 Skill 版本，并记录后续实际走势和评估。"),
     "research_report": TableDescription("研究报告", "研究复盘", "保存单只股票的 AI 研报、结论、评分、数据来源及历史报告评估。"),
+    "ai_stock_analysis": TableDescription("AI证券分析记录", "智能投研", "独立保存资深AI证券分析师对单只股票已有数据的条件化趋势判断、证据快照、模型版本和错误；不与八维评分混用。"),
     "stock_broker_research_report": TableDescription("券商研报资料", "股票研究", "按股票、公开来源和外部报告编号保存券商研报标题、评级、原文正文及来源证据。"),
     "stock_earnings_consensus": TableDescription("盈利预测共识", "股票研究", "按股票、预测年度和指标保存机构一致预期统计，保留来源及更新时间。"),
     "stock_institution_forecast": TableDescription("机构盈利预测", "股票研究", "保存单家机构按报告日披露的未来年度盈利预测，不与普通研报列表混为同一对象。"),
@@ -414,6 +415,13 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "ai_stock_analysis": {
+        "coverage_json": "本次分析输入覆盖、来源日期及资料限制。",
+        "evidence_snapshot_json": "模型实际读取的证据快照与证据白名单。",
+        "period_months": "新闻公告与行情回看月数，历史财务和公司背景作为补充。",
+        "progress_json": "后台执行阶段、状态和时间记录。",
+        "result_json": "模型形成的条件化趋势分析，不作为已验证事实。",
+    },
     "stock_broker_research_report": {
         "external_id": "公开来源中的稳定研报编号。", "report_date": "来源页面披露的研报日期。",
         "institution": "发布研报的券商或研究机构。", "analysts_json": "来源披露的分析师姓名列表。",
