@@ -152,7 +152,12 @@ def get_dialogue_evidence(analysis_id: int, dialogue_id: int, db: Session = Depe
     row = db.get(AiAnalystDialogue, dialogue_id)
     if row is None or row.analysis_id != analysis_id:
         raise HTTPException(404, detail="对话记录不存在")
-    return {key: value for key, value in row.context_snapshot_json.items() if key != "images"}
+    snapshot = dict(row.context_snapshot_json or {})
+    snapshot.pop("images", None)
+    review_state = snapshot.pop("full_local_review_state", None)
+    if review_state:
+        snapshot["full_local_review_coverage"] = review_state.get("coverage") or snapshot.get("full_local_review_coverage")
+    return snapshot
 
 
 @router.get("/analyses/{analysis_id}/dialogues/{dialogue_id}/images/{image_index}")

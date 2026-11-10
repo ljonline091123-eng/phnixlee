@@ -6,6 +6,10 @@ export type AnalystCoverage = {
   counts: Record<string, number>; total_counts: Record<string, number>;
   latest_dates: Record<string, string | null>; available_categories: string[];
   missing_categories: string[]; warnings: string[]; evidence_count: number;
+  evidence_manifest?: { schema_version?: string; scope?: string; evidence_count?: number;
+    category_counts?: Record<string, number>; source_record_counts?: Record<string, number>;
+    content_status_counts?: Record<string, Record<string, number>>;
+    category_sha256?: Record<string, string> };
 };
 export type AnalystReference = { evidence_id: string; claim: string };
 export type AnalystScenario = {
