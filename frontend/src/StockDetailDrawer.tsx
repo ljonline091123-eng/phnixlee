@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import { ArrowLeft, Building2, CalendarDays, ExternalLink, FileText, X } from "lucide-react";
 import { CompanyGraphDialog } from "./CompanyGraphWorkbench";
 import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
+import type { AnalystEvidence } from "./stockAnalystApi";
 
 import {
   api,
@@ -1790,6 +1791,7 @@ function NewsList({
   loading,
   dateKey,
   onPageChange,
+  onReference,
 }: {
   title: string;
   items: Array<StockNewsItem | StockNotice | JsonRecord>;
@@ -1799,7 +1801,9 @@ function NewsList({
   loading: boolean;
   dateKey: "news_time" | "notice_date" | "report_date" | "report_period";
   onPageChange?: (page: number) => void;
+  onReference?: (evidence: AnalystEvidence) => void;
 }) {
+  const [opened, setOpened] = useState<{ headline: string; date: string; source: string; content: string; url?: string } | null>(null);
   const totalPages = Math.max(1, Math.ceil((total || items.length) / pageSize));
   return (
     <section className="detail-list-section">
@@ -1823,14 +1827,7 @@ function NewsList({
                 <strong>{noticeCategory ? <em className="notice-category-badge" data-category={noticeCategory}>{noticeCategory}</em> : null}{record.is_latest ? <em className="notice-latest-badge">最新</em> : null}{String(headline)}</strong>
                 <small>{formatDate(String(date || ""))} · {String(source)}</small>
               </div>
-              {url ? (
-                <a href={String(url)} target="_blank" rel="noreferrer">查看详情</a>
-              ) : (
-                <details>
-                  <summary>查看详情</summary>
-                  <p>{contentText}</p>
-                </details>
-              )}
+              <div className="detail-news-actions">{onReference && record.id && (dateKey === "news_time" || dateKey === "notice_date") ? <button type="button" className="detail-news-link" onClick={() => onReference({ evidence_id: `${dateKey === "news_time" ? "news" : "notice"}:${record.id}`, category: dateKey === "news_time" ? "NEWS" : "NOTICE", category_name: dateKey === "news_time" ? "新闻" : "公告", title: String(headline), observed_at: String(date || ""), source: String(source) })}>引用到对话</button> : null}<button type="button" className="detail-news-link" onClick={() => setOpened({ headline: String(headline), date: formatDate(String(date || "")), source: String(source), content: contentText, url: url ? String(url) : undefined })}>查看详情</button></div>
             </article>
           );
         })
@@ -1846,6 +1843,7 @@ function NewsList({
           </div>
         </div>
       )}
+      {opened ? <div className="stock-news-detail-overlay" role="dialog" aria-modal="true" aria-label="新闻公告详情" onClick={() => setOpened(null)}><section className="stock-news-detail-dialog" onClick={event => event.stopPropagation()}><header><div><h3>{opened.headline}</h3><small>{opened.date} · {opened.source}</small></div><button type="button" aria-label="关闭新闻公告详情" onClick={() => setOpened(null)}><X size={18} /></button></header><div className="stock-news-detail-body"><p>{opened.content}</p></div><footer>{opened.url ? <a href={opened.url} target="_blank" rel="noreferrer">打开来源原文 <ExternalLink size={14} /></a> : <span>当前资料无外部原文链接</span>}</footer></section></div> : null}
     </section>
   );
 }
@@ -2988,11 +2986,13 @@ export function StockDetailDrawer({
   onOpenStock,
   onClose,
   embedded = false,
+  onReferenceDocument,
 }: {
   stock: StockNavigationTarget;
   onOpenStock?: (stock: StockNavigationTarget) => void;
   onClose: () => void;
   embedded?: boolean;
+  onReferenceDocument?: (evidence: AnalystEvidence) => void;
 }) {
   const requestId = useRef(0);
   const drawerRef = useRef<HTMLElement | null>(null);
@@ -3566,6 +3566,7 @@ export function StockDetailDrawer({
                   pageSize={pageSize}
                   loading={pageLoading === "news"}
                   dateKey="news_time"
+                  onReference={onReferenceDocument}
                   onPageChange={(page) => void changeNewsPage(page)}
                 />
                 </>
@@ -3583,6 +3584,7 @@ export function StockDetailDrawer({
                     pageSize={pageSize}
                     loading={pageLoading === "notice"}
                     dateKey="notice_date"
+                    onReference={onReferenceDocument}
                     onPageChange={(page) => void changeNoticePage(page)}
                   />
                 </>

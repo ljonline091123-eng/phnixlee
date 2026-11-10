@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.market_data import DataInterface, DataSource, StockKline, StockNews, StockNotice
+from app.models.ai_hub import ModelInstance
+from app.services.analyst_inputs import document_evidence, image_record, supports_images
 from app.models.stock_analyst import (AiStockAnalysisRecord, AiAnalystDialogue, AiAnalystReportRevision,
                                       AiAnalystWatch, AiAnalystDailyReview, AiAnalystWatchSuggestion)
 from app.schemas.stock_analyst import (AnalystDialogueCreate, AnalystDialogueOutput, AnalystReportConfirm,
@@ -48,16 +50,19 @@ def require_completed(db, analysis_id):
     return row
 
 
-def _call_model(db, *, schema, prompt, instance, metadata, on_log=None, validate_result=None):
+def _call_model(db, *, schema, prompt, instance, metadata, on_log=None, validate_result=None, images=()):
     feedback = None
     for attempt, budget in enumerate((8192, 12288), 1):
         request_prompt = prompt
         if feedback:
             request_prompt += ("\n上次输出未通过格式校验或证据校验：" + feedback
                 + "。请依据相同资料重新返回完整JSON，严格遵循上方Schema；检查嵌套对象的闭合、必填字段与长度，不补造事实。")
+        content = ([{"type": "text", "text": request_prompt},
+                    *[{"type": "image_url", "image_url": {"url": image["data_url"]}} for image in images]]
+                   if images else request_prompt)
         log = ModelHubService(db).chat(
             task_type="stock_analysis", instance_code=instance,
-            messages=[{"role": "user", "content": request_prompt}], temperature=0.2, max_tokens=budget,
+            messages=[{"role": "user", "content": content}], temperature=0.2, max_tokens=budget,
             metadata_json={"skill_codes": [FOLLOWUP_SKILL], "require_skills": True,
                            "require_real_model": True, "strict_instance": True,
                            "json_schema_output": schema.model_json_schema(), "bounded_schema_repair": True,
@@ -159,14 +164,27 @@ def queue_dialogue(db, analysis_id, payload: AnalystDialogueCreate):
     ))
     if existing:
         raise ValueError("上一条对话仍在处理中，请等待完成")
+    selected = []
+    known = {item["evidence_id"]: item for item in analysis.evidence_snapshot_json.get("evidence", [])}
+    for evidence_id in payload.evidence_ids:
+        if evidence_id.startswith(("news:", "notice:")):
+            selected.append(document_evidence(db, analysis, evidence_id, body_limit=3000))
+        elif evidence_id in known:
+            selected.append(deepcopy(known[evidence_id]))
+        else:
+            raise ValueError("所选资料不属于当前股票或本次报告，请重新选择")
+    images = [image_record(image, index) for index, image in enumerate(payload.images)]
+    instance_code = payload.model_instance_code or analysis.model_instance_code
+    if images:
+        instance = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == instance_code, ModelInstance.enabled.is_(True)))
+        if instance is None or not supports_images(instance.model_code, instance.config_json):
+            raise ValueError("当前模型不支持图片理解，请选择Gemini等支持图片的模型，或移除图片后发送")
     rev = latest_revision(db, analysis_id)
     row = AiAnalystDialogue(analysis_id=analysis_id, question=payload.question.strip(), status="QUEUED",
                            model_instance_code=payload.model_instance_code or analysis.model_instance_code,
                            base_revision_id=rev.id if rev else None,
-                           context_snapshot_json={"requested_evidence_ids": payload.evidence_ids})
-    known = set(analysis.evidence_snapshot_json.get("evidence_allowlist", []))
-    if set(payload.evidence_ids) - known:
-        raise ValueError("所选资料不属于本次报告，请重新选择")
+                           context_snapshot_json={"requested_evidence_ids": payload.evidence_ids,
+                                                  "selected_evidence": selected, "images": images})
     if not row.question or len(row.question) < 2:
         raise ValueError("请填写具体问题")
     db.add(row)
@@ -201,9 +219,18 @@ def execute_dialogue(db, dialogue_id):
         ).order_by(AiAnalystDailyReview.business_date.desc(), AiAnalystDailyReview.id.desc()).limit(3)).all())
         _, fresh_context, _ = build_stock_analyst_context(db, market=analysis.market,
             symbol=analysis.symbol, period_months=analysis.period_months)
-        requested = row.context_snapshot_json.get("requested_evidence_ids", [])
-        selected = [r for r in analysis.evidence_snapshot_json.get("evidence", []) if r["evidence_id"] in requested]
-        context = _bounded_context(fresh_context, [*selected, *fresh_context.get("evidence", []),
+        snapshot = row.context_snapshot_json or {}
+        requested = snapshot.get("requested_evidence_ids", [])
+        images = snapshot.get("images", [])
+        if images:
+            instance = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == row.model_instance_code))
+            if instance is None or not supports_images(instance.model_code, instance.config_json):
+                raise ValueError("当前模型不支持图片理解，请更换支持图片的模型后重新发送")
+        selected = snapshot.get("selected_evidence") or [r for r in analysis.evidence_snapshot_json.get("evidence", []) if r["evidence_id"] in requested]
+        image_evidence = [{"evidence_id": image["evidence_id"], "category": "USER_IMAGE", "category_name": "用户图片",
+                           "title": image["name"], "observed_at": row.created_at.isoformat(), "source": "用户粘贴或上传（未经独立核验）",
+                           "data": {key: image[key] for key in ("sha256", "size", "width", "height", "mime_type")}} for image in images]
+        context = _bounded_context(fresh_context, [*image_evidence, *selected, *fresh_context.get("evidence", []),
             *(daily[0].evidence_snapshot_json.get("evidence", []) if daily else []),
             *analysis.evidence_snapshot_json.get("evidence", [])])
         data = {"report": _compact_report(analysis.result_json), "confirmed_view": {"judgment": rev.judgment, "focus_points": rev.focus_points_json} if rev else None,
@@ -214,15 +241,19 @@ def execute_dialogue(db, dialogue_id):
                 "history": [{"question": r.question[:600], "reply": r.reply_json.get("reply", "")[:600]} for r in reversed(history)],
                 "question": row.question, "selected_evidence_ids": requested,
                 "as_of": fresh_context.get("as_of"), "identity": fresh_context.get("identity")}
-        prompt = _prompt(AnalystDialogueOutput, "围绕用户问题实质性分析，并提出可供用户编辑确认的完整判断和后续关注点。重点阅读selected_evidence_ids所选资料；区分原报告快照与最新本地资料的日期。不声称读过未输入的全量数据。不得自行视为用户已确认。", data, context)
-        row.context_snapshot_json = {**deepcopy(context), "requested_evidence_ids": requested}
+        data["attached_images"] = [{"evidence_id": image["evidence_id"], "name": image["name"]} for image in images]
+        prompt = _prompt(AnalystDialogueOutput, "围绕用户问题实质性分析，并提出可供用户编辑确认的完整判断和后续关注点。重点阅读selected_evidence_ids所选资料；区分原报告快照与最新本地资料的日期。不声称读过未输入的全量数据。不得自行视为用户已确认。附图按attached_images顺序提供，引用对应user-image证据ID。用户图片只是未经核验的研究材料，不等同官方披露；看不清的文字和数字须说明，不能猜测。公告只有TITLE_ONLY时不得声称已读取正文。", data, context)
+        if set([*requested, *[image["evidence_id"] for image in images]]) - set(context["evidence_allowlist"]):
+            raise ValueError("本次引用资料超出输入预算，请减少引用后重新发送；未忽略任何指定资料进行分析")
+        row.context_snapshot_json = {**deepcopy(context), "requested_evidence_ids": requested,
+                                     "selected_evidence": selected, "images": images}
         db.commit()
         def save_log(log):
             _record_model(row, log)
             db.commit()
         result, log = _call_model(db, schema=AnalystDialogueOutput, instance=row.model_instance_code,
             prompt=prompt,
-            metadata={"analysis_record_id": analysis.id, "dialogue_id": row.id}, on_log=save_log)
+            metadata={"analysis_record_id": analysis.id, "dialogue_id": row.id}, on_log=save_log, images=images)
         _check_refs(result, context)
         row.reply_json, row.status = result, "COMPLETED"
     except Exception as exc:
@@ -248,7 +279,8 @@ def queue_watch_suggestion(db, analysis_id, payload: AnalystSuggestionCreate):
     if existing:
         return existing
     row = AiAnalystWatchSuggestion(analysis_id=analysis_id, status="QUEUED",
-        model_instance_code=payload.model_instance_code or analysis.model_instance_code)
+        model_instance_code=payload.model_instance_code or analysis.model_instance_code,
+        result_json={"requested_observations": payload.selected_observations})
     db.add(row)
     try:
         db.commit()
@@ -262,10 +294,13 @@ def queue_watch_suggestion(db, analysis_id, payload: AnalystSuggestionCreate):
 
 
 def _suggestion_market(db, analysis):
-    day = datetime.now(LOCAL_ZONE).date()
+    local_now = datetime.now(LOCAL_ZONE)
+    day = local_now.date()
+    close_hour = 16 if analysis.market == "HK" else 15
+    cutoff = day if local_now.hour >= close_hour else day - timedelta(days=1)
     bars = list(db.scalars(select(StockKline).where(StockKline.market == analysis.market,
         StockKline.symbol == analysis.symbol, StockKline.period == "daily", StockKline.adjust == "",
-        StockKline.trade_date <= day.isoformat()).order_by(StockKline.trade_date.desc()).limit(121)).all())
+        StockKline.trade_date <= cutoff.isoformat()).order_by(StockKline.trade_date.desc()).limit(121)).all())
     latest = bars[0] if bars else None
     fresh = bool(latest and (day - datetime.fromisoformat(latest.trade_date[:10]).date()).days <= 4
                  and latest.close_price is not None and latest.close_price > 0)
@@ -300,6 +335,7 @@ def execute_watch_suggestion(db, suggestion_id):
         return row
     try:
         analysis = require_completed(db, row.analysis_id)
+        requested_observations = list(row.result_json.get("requested_observations") or [])
         rev = latest_revision(db, analysis.id)
         _, context, _ = build_stock_analyst_context(db, market=analysis.market,
             symbol=analysis.symbol, period_months=analysis.period_months)
@@ -308,24 +344,33 @@ def execute_watch_suggestion(db, suggestion_id):
         recent = db.scalars(select(AiAnalystDialogue).where(AiAnalystDialogue.analysis_id == analysis.id,
             AiAnalystDialogue.status == "COMPLETED").order_by(AiAnalystDialogue.id.desc()).limit(3)).all()
         watch = db.scalar(select(AiAnalystWatch).where(AiAnalystWatch.analysis_id == analysis.id))
+        available_observations = [item["text"] for item in tracking.observations(analysis, rev)]
+        requested_observations = [text for text in requested_observations if text in set(available_observations)]
+        if not requested_observations:
+            requested_observations = available_observations
         data = {"identity": context.get("identity"), "as_of": context.get("as_of"),
             "report": _compact_report(analysis.result_json),
             "confirmed_view": {"judgment": rev.judgment, "focus_points": rev.focus_points_json} if rev else None,
+            "selected_observations": requested_observations,
             "recent_discussion": [{"question": r.question[:600], "reply": r.reply_json.get("reply", "")[:1000]} for r in reversed(recent)],
             "current_conditions": {key: value for key, value in watch.config_json.items() if key in {
                 "price_lower", "price_upper", "volume_mode", "volume_ratio", "volume_window",
-                "event_conditions", "review_focus"}} if watch else None,
+                "event_conditions", "observation_rules", "selected_observations", "review_focus"}} if watch else None,
             "evidence": context["evidence"], "evidence_allowlist": context["evidence_allowlist"]}
         prompt = _prompt(AnalystWatchSuggestionOutput,
             "为用户预填可执行的每日关注条件草稿。conditions仅包含价位、量能、事件关键词及持续复核重点，不设置是否启用或模型。"
-            "依据报告、已确认关注点、近期不复权行情及新闻公告，建议关注上下限、放量或缩量条件、数组具体事件关键词。"
+            "依据selected_observations中由用户勾选的重点观察、报告、近期不复权行情及新闻公告，建议通用关注上下限、放量或缩量条件。"
+            "在observation_rules中为每一条selected_observations分别配置一项规则，每项可包含多组新闻、公告或两者兼有的触发条件；"
+            "每组使用label说明监控维度，例如订单交付、客户回款、高管变动、收购整合，再填写该维度具体关键词。"
+            "不得擅自增加、合并或替换用户未选择的研究方向；event_conditions保留为空数组，review_focus应概括selected_observations。"
             "price_reason/volume_reason/event_reason分别解释数值、计算窗口、事件与投资逻辑的联系，区分观察阈值与目标价。"
             "summary、conditions、price_reason、volume_reason、event_reason、limitations、evidence是并列的顶层字段；"
             "conditions对象在review_focus字段后闭合，不把依据和引用放入conditions。摘要不超过120字，关注重点不超过250字，"
             "每项理由不超过180字，只列3至6条最关键引用，避免重复报告全文。"
             '按以下完整JSON外形填写（其中值须依据本次资料替换）：'
             '{"summary":"条件摘要","conditions":{"price_lower":null,"price_upper":null,"volume_mode":"ANY",'
-            '"volume_ratio":1.5,"volume_window":20,"event_conditions":[{"category":"ANY","keywords":["公司具体事件"]}],'
+            '"volume_ratio":1.5,"volume_window":20,"event_conditions":[],"observation_rules":[{"observation":"所选重点观察原文",'
+            '"event_conditions":[{"category":"NOTICE","label":"订单交付","keywords":["公司具体事件"]}]}],'
             '"review_focus":"持续复核重点"},"price_reason":"价位依据及限制","volume_reason":"均量窗口与阈值依据",'
             '"event_reason":"事件与判断的联系","limitations":["资料限制"],"evidence":[{"evidence_id":"本次白名单ID","claim":"依据"}]}。'
             "价位必须与watch-market证据的币种和最新行情对应；该证据fresh为false时上下限必须为null并说明原因，不能照抄过期报告中的价位。"
@@ -343,6 +388,9 @@ def execute_watch_suggestion(db, suggestion_id):
                 "watch_suggestion_id": row.id}, on_log=save_log)
         _check_refs(result, context)
         cfg = result["conditions"]
+        configured = [rule["observation"] for rule in cfg["observation_rules"]]
+        if configured != requested_observations or any(not rule["event_conditions"] for rule in cfg["observation_rules"]):
+            raise ValueError("AI未逐项覆盖用户选择的重点观察，请重新生成建议")
         has_price = cfg["price_lower"] is not None or cfg["price_upper"] is not None
         if has_price and (not market["data"]["fresh"] or market["evidence_id"] not in {r["evidence_id"] for r in result["evidence"]}):
             raise ValueError("AI价位建议缺少近期行情依据，未采用该草稿；请更新行情后重新建议")
@@ -350,11 +398,11 @@ def execute_watch_suggestion(db, suggestion_id):
         complete_window = len(recent_volumes) == cfg["volume_window"] and all(r["volume"] is not None and r["volume"] > 0 for r in recent_volumes)
         if cfg["volume_mode"] != "ANY" and (not market["data"]["fresh"] or not complete_window):
             raise ValueError("AI量能建议所需的近期完整样本不足，请重新建议或补全行情")
-        row.result_json, row.status = result, "COMPLETED"
+        row.result_json, row.status = {**result, "selected_observations": requested_observations}, "COMPLETED"
     except Exception as exc:
         db.rollback()
         row = db.get(AiAnalystWatchSuggestion, suggestion_id)
-        row.status, row.error_message = "FAILED", str(exc)[:1800]
+        row.status, row.result_json, row.error_message = "FAILED", {}, str(exc)[:1800]
     row.completed_at = now()
     db.commit()
     db.refresh(row)
@@ -386,6 +434,23 @@ def confirm_report(db, analysis_id, payload: AnalystReportConfirm):
         source_type="USER_CONFIRMED", dialogue_id=dialogue.id, judgment=payload.judgment.strip(),
         focus_points_json=focus, report_json=report)
     db.add(revision)
+    watch = db.scalar(select(AiAnalystWatch).where(AiAnalystWatch.analysis_id == analysis_id))
+    if watch is not None:
+        config = deepcopy(watch.config_json or {})
+        previous = set(config.get("selected_observations") or [])
+        selected = [text for text in focus if text in previous] or focus
+        config["selected_observations"] = selected
+        old_rules = list(config.get("observation_rules") or [])
+        retained = [rule for rule in old_rules if rule.get("observation") in set(selected)]
+        template = next((deepcopy(rule.get("event_conditions") or []) for rule in old_rules if rule.get("event_conditions")),
+                        deepcopy(config.get("event_conditions") or []))
+        config["observation_rules"] = [next((rule for rule in retained if rule["observation"] == text),
+            {"observation": text, "event_conditions": deepcopy(template)}) for text in selected]
+        config["event_conditions"] = []
+        config["review_focus"] = "；".join(selected)
+        watch.config_json = config
+        watch.config_version += 1
+        watch.updated_at = now()
     try:
         db.commit()
     except IntegrityError:
@@ -397,12 +462,19 @@ def confirm_report(db, analysis_id, payload: AnalystReportConfirm):
 
 def save_watch(db, analysis_id, payload: AnalystWatchConfig):
     analysis = require_completed(db, analysis_id)
+    config = payload.model_dump(mode="json")
+    if not config["selected_observations"]:
+        config["selected_observations"] = [item["text"] for item in tracking.observations(analysis, latest_revision(db, analysis_id))]
+    if config["selected_observations"] and not config["observation_rules"] and config["event_conditions"]:
+        config["observation_rules"] = [{"observation": text, "event_conditions": deepcopy(config["event_conditions"])}
+            for text in config["selected_observations"]]
+        config["event_conditions"] = []
     row = db.scalar(select(AiAnalystWatch).where(AiAnalystWatch.analysis_id == analysis_id))
     if row is None:
         row = AiAnalystWatch(analysis_id=analysis_id, config_version=0)
         db.add(row)
     row.config_version += 1
-    row.config_json = payload.model_dump(mode="json")
+    row.config_json = config
     row.enabled = payload.enabled
     row.model_instance_code = payload.model_instance_code or analysis.model_instance_code
     row.updated_at = now()
@@ -549,31 +621,39 @@ def evaluate_conditions(db, analysis, cfg, day, since):
                  "previous_bar_ids": [r.id for r in rows[1:]],
                  "volume_baseline_values": [r.volume for r in rows[1:]],
                  "volume_window": cfg["volume_window"]}}] if latest else []
-    for index, rule in enumerate(cfg.get("event_conditions", [])):
-        matched, total = [], 0
-        keywords = [value for word in rule["keywords"] if (value := normalized_issuer_text(word))]
-        for model, date_column, prefix in ((StockNews, StockNews.news_time, "news"), (StockNotice, StockNotice.notice_date, "notice")):
-            if rule["category"] not in {"ANY", "NEWS" if model is StockNews else "NOTICE"}:
-                continue
-            documents = db.scalars(select(model).where(model.market == analysis.market, model.symbol == analysis.symbol,
-                date_column >= since, date_column < (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat(),
-            ).order_by(date_column.desc())).all()
-            from app.services.document_event_governance import document_body
-            for doc in documents:
-                total += 1
-                body = (doc.content or "") if model is StockNews else document_body(doc) or ""
-                searchable = normalized_issuer_text((doc.title or "") + " " + body)
-                if any(word in searchable for word in keywords):
-                    ref = f"{prefix}:{doc.id}"
-                    matched.append(ref)
-                    if len(matched_evidence) < 40 and ref not in {r["evidence_id"] for r in matched_evidence}:
-                        matched_evidence.append({"evidence_id": ref, "category": "NEWS" if model is StockNews else "NOTICE",
-                            "title": doc.title, "observed_at": str(getattr(doc, "news_time", None) or getattr(doc, "notice_date", "")),
-                            "excerpt": body[:900], "data": {"url": doc.url}, "source": "stock_news" if model is StockNews else "stock_notice"})
-        conditions.append({"kind": "event", "label": " / ".join(rule["keywords"]), "category": rule["category"],
-                           "status": "HIT" if matched else "NOT_HIT", "matched_count": len(matched),
-                           "scanned_count": total, "evidence_ids": matched[:40], "since": since,
-                           "reason": "关键词匹配仅为线索，由AI结合原判断复核"})
+    grouped_rules = list(cfg.get("observation_rules") or [])
+    if not grouped_rules and cfg.get("event_conditions"):
+        grouped_rules = [{"observation": text, "event_conditions": cfg["event_conditions"]}
+                         for text in cfg.get("selected_observations") or ["历史通用事件条件"]]
+    for observation_rule in grouped_rules:
+        observation = observation_rule["observation"]
+        for rule in observation_rule.get("event_conditions", []):
+            matched, total = [], 0
+            keywords = [value for word in rule["keywords"] if (value := normalized_issuer_text(word))]
+            for model, date_column, prefix in ((StockNews, StockNews.news_time, "news"), (StockNotice, StockNotice.notice_date, "notice")):
+                if rule["category"] not in {"ANY", "NEWS" if model is StockNews else "NOTICE"}:
+                    continue
+                documents = db.scalars(select(model).where(model.market == analysis.market, model.symbol == analysis.symbol,
+                    date_column >= since, date_column < (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat(),
+                ).order_by(date_column.desc())).all()
+                from app.services.document_event_governance import document_body
+                for doc in documents:
+                    total += 1
+                    body = (doc.content or "") if model is StockNews else document_body(doc) or ""
+                    searchable = normalized_issuer_text((doc.title or "") + " " + body)
+                    if any(word in searchable for word in keywords):
+                        ref = f"{prefix}:{doc.id}"
+                        matched.append(ref)
+                        if len(matched_evidence) < 40 and ref not in {r["evidence_id"] for r in matched_evidence}:
+                            matched_evidence.append({"evidence_id": ref, "category": "NEWS" if model is StockNews else "NOTICE",
+                                "title": doc.title, "observed_at": str(getattr(doc, "news_time", None) or getattr(doc, "notice_date", "")),
+                                "excerpt": body[:900], "data": {"url": doc.url}, "source": "stock_news" if model is StockNews else "stock_notice"})
+            dimension = rule.get("label") or " / ".join(rule["keywords"])
+            conditions.append({"kind": "event", "label": f"{observation}｜{dimension}",
+                               "observation": observation, "dimension": dimension, "category": rule["category"],
+                               "status": "HIT" if matched else "NOT_HIT", "matched_count": len(matched),
+                               "scanned_count": total, "evidence_ids": matched[:40], "since": since,
+                               "reason": "该维度关键词命中仅为线索，由AI结合对应重点观察复核"})
     return conditions, matched_evidence
 
 
@@ -624,7 +704,7 @@ def run_daily_review(db, review_id):
         # Ensure matched material is read even when the normal context sampler excludes it.
         context = _bounded_context(context, matched)
         rev = db.get(AiAnalystReportRevision, review.report_revision_id) if review.report_revision_id else None
-        items = tracking.observations(analysis, rev)
+        items = tracking.observations(analysis, rev, cfg.get("selected_observations"))
         context["tracked_observations"] = items
         context["monitor_window"] = {"since": since, "through": review.business_date}
         review.evidence_snapshot_json, review.conditions_json = deepcopy(context), conditions

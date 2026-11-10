@@ -1,4 +1,5 @@
 import unittest
+from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,12 @@ from app.connectors.model_adapters import ModelExecutionResult
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
 from app.schemas.selection import SelectionModelOutput
 from app.services.model_hub import ModelHubService, _normalize_bounded_json, seed_default_models
+
+
+@asynccontextmanager
+async def isolated_lifespan(_):
+    # Endpoint tests use their own seeded database; never run live bootstrap or jobs.
+    yield
 
 
 class ModelHubFoundationTest(unittest.TestCase):
@@ -285,7 +292,7 @@ class ModelHubFoundationTest(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
         try:
-            with TestClient(app) as client:
+            with patch.object(app.router, "lifespan_context", isolated_lifespan), TestClient(app) as client:
                 response = client.post(
                     "/api/v1/model-hub/routes",
                     json={
@@ -332,7 +339,7 @@ class ModelHubFoundationTest(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
         try:
-            with TestClient(app) as client:
+            with patch.object(app.router, "lifespan_context", isolated_lifespan), TestClient(app) as client:
                 response = client.post(
                     "/api/v1/model-hub/skills",
                     json={

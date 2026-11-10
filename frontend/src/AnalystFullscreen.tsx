@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 /** Use browser fullscreen, retaining a viewport fallback for unsupported hosts. */
-export function useAnalystFullscreen() {
-  const ref = useRef<HTMLElement>(null);
+export function useAnalystFullscreen<T extends HTMLElement = HTMLElement>() {
+  const ref = useRef<T>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [fallback, setFallback] = useState(false);
   useEffect(() => {
@@ -14,12 +14,23 @@ export function useAnalystFullscreen() {
     if (!fallback) return;
     const prior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !ref.current?.querySelector('[role="dialog"]')) { setFallback(false); setFullscreen(false); }
-    };
-    window.addEventListener("keydown", escape);
-    return () => { document.body.style.overflow = prior; window.removeEventListener("keydown", escape); };
+    return () => { document.body.style.overflow = prior; };
   }, [fallback]);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (fallback) {
+        if (ref.current?.querySelector('[role="dialog"]')) return;
+        setFallback(false);
+        setFullscreen(false);
+        return;
+      }
+      if (document.fullscreenElement === ref.current) void document.exitFullscreen().catch(() => {});
+    };
+    window.addEventListener("keydown", escape, true);
+    return () => window.removeEventListener("keydown", escape, true);
+  }, [fallback, fullscreen]);
   async function toggle() {
     if (fallback) { setFallback(false); setFullscreen(false); return; }
     try {

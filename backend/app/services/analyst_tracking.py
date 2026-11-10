@@ -17,11 +17,15 @@ ZONE = ZoneInfo("Asia/Shanghai")
 FINAL = {"PASSED", "FAILED", "INVALIDATED"}
 
 
-def observations(analysis, revision=None):
-    items = list(dict.fromkeys([
-        *(analysis.result_json.get("watch_items") or []),
-        *(revision.focus_points_json if revision else []),
-    ]))
+def observations(analysis, revision=None, selected=None):
+    # A user-confirmed report supersedes the original watch list in the current view;
+    # the original report remains immutable in analysis.result_json and revision history.
+    source = revision.focus_points_json if revision and revision.focus_points_json else (analysis.result_json.get("watch_items") or [])
+    items = list(dict.fromkeys(text.strip() for text in source if text and text.strip()))
+    selected = list(dict.fromkeys(text.strip() for text in (selected or []) if text and text.strip()))
+    if selected:
+        allowed = set(selected)
+        items = [text for text in items if text in allowed]
     return [{"observation_id": f"O{i+1}", "text": text} for i, text in enumerate(items)]
 
 

@@ -25,7 +25,8 @@ from app.services.stock_analyst import queue_stock_analysis
 def analysis(db):
     row = queue_stock_analysis(db, payload())
     row.status = "COMPLETED"
-    row.result_json = output(row.evidence_snapshot_json["evidence_allowlist"][0])
+    row.result_json = {**output(row.evidence_snapshot_json["evidence_allowlist"][0]),
+                       "watch_items": ["观察订单回款", "关注亏损收窄"]}
     db.commit()
     return row
 
@@ -104,6 +105,31 @@ def test_dialogue_audit_and_user_confirmed_versions_preserve_original(db, analys
         service.confirm_report(db, other.id, data)
 
 
+def test_confirmed_dialogue_updates_current_watch_observations_without_overwriting_report(db, analysis):
+    original = deepcopy(analysis.result_json)
+    watch = service.save_watch(db, analysis.id, AnalystWatchConfig(
+        selected_observations=["旧观察"], price_lower=6, event_conditions=[{"keywords": ["订单"]}]))
+    row = dialogue(db, analysis)
+    revision = service.confirm_report(db, analysis.id, AnalystReportConfirm(
+        dialogue_id=row.id, judgment="对话确认后，将主营兑现和现金流变化作为当前判断核心。",
+        focus_points=["主营订单兑现", "经营现金流改善"]))
+    db.refresh(watch)
+    assert revision.focus_points_json == ["主营订单兑现", "经营现金流改善"]
+    assert watch.config_version == 2
+    assert watch.config_json["selected_observations"] == revision.focus_points_json
+    assert watch.config_json["price_lower"] == 6
+    assert watch.config_json["observation_rules"][0]["event_conditions"][0]["keywords"] == ["订单"]
+    assert watch.config_json["event_conditions"] == []
+    assert analysis.result_json == original
+
+
+def test_watch_selection_filters_daily_observations(db, analysis):
+    analysis.result_json = {**analysis.result_json, "watch_items": ["观察订单兑现", "观察现金流", "观察股东行为"]}
+    db.commit()
+    selected = service.tracking.observations(analysis, None, ["观察现金流", "不存在的项目"])
+    assert selected == [{"observation_id": "O1", "text": "观察现金流"}]
+
+
 @pytest.mark.parametrize("mode", ["provider", "invalid_reference", "missing_references", "malformed"])
 def test_dialogue_failure_does_not_modify_report_or_fabricate_reply(db, analysis, mode):
     row = service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="请验证当前结论"))
@@ -147,10 +173,11 @@ def test_invalid_conditions_rejected(config):
 def test_real_prices_volume_baseline_body_keywords_and_market_isolation(db, analysis):
     source = db.scalar(select(DataSource))
     today = datetime.now(timezone.utc).date()
+    trading_day = today if datetime.now(service.LOCAL_ZONE).hour >= 16 else today - timedelta(days=1)
     current = db.scalar(select(StockKline).where(StockKline.adjust == ""))
-    current.volume = 300
+    current.trade_date, current.close_price, current.volume = trading_day.isoformat(), 500, 300
     for index in range(1, 6):
-        db.add(StockKline(market="HK", symbol="02533", trade_date=(today-timedelta(days=index)).isoformat(), adjust="", close_price=9, volume=100, source_id=source.id))
+        db.add(StockKline(market="HK", symbol="02533", trade_date=(trading_day-timedelta(days=index)).isoformat(), adjust="", close_price=9, volume=100, source_id=source.id))
     db.add_all([
         StockNotice(market="HK", symbol="02533", notice_date=today.isoformat(), title="公司进展", content_json={"content": "公司决定回购股份"}, source_id=source.id),
         StockNews(market="CN_A", symbol="02533", news_time=today.isoformat(), title="收购事件不属于港股公司", source_id=source.id),
@@ -201,11 +228,12 @@ def test_monitor_matches_simplified_and_traditional_without_changing_source(db, 
 
 def test_suggestion_volume_baseline_matches_monitor_and_excludes_latest_bar(db, analysis):
     today = datetime.now(service.LOCAL_ZONE).date()
+    trading_day = today if datetime.now(service.LOCAL_ZONE).hour >= 16 else today - timedelta(days=1)
     current = db.scalar(select(StockKline).where(StockKline.adjust == ""))
-    current.trade_date, current.volume = today.isoformat(), 900
+    current.trade_date, current.close_price, current.volume = trading_day.isoformat(), 500, 900
     for index in range(1, 7):
         db.add(StockKline(market="HK", symbol="02533", adjust="", source_id=current.source_id,
-            trade_date=(today-timedelta(days=index)).isoformat(), close_price=500, volume=index * 100))
+            trade_date=(trading_day-timedelta(days=index)).isoformat(), close_price=500, volume=index * 100))
     db.commit()
     market = service._suggestion_market(db, analysis)
     baseline = market["data"]["volume_baselines"]["5"]
@@ -213,10 +241,10 @@ def test_suggestion_volume_baseline_matches_monitor_and_excludes_latest_bar(db, 
     conditions, _ = service.evaluate_conditions(db, analysis, cfg, today.isoformat(), today.isoformat())
     assert baseline["complete"] and baseline["average_volume"] == conditions[0]["baseline"] == 300
     assert conditions[0]["value"] == 3
-    assert baseline["end_date"] == (today-timedelta(days=1)).isoformat()
+    assert baseline["end_date"] == (trading_day-timedelta(days=1)).isoformat()
     assert not market["data"]["volume_baselines"]["10"]["complete"]
     previous = db.scalar(select(StockKline).where(StockKline.adjust == "",
-        StockKline.trade_date == (today-timedelta(days=2)).isoformat()))
+        StockKline.trade_date == (trading_day-timedelta(days=2)).isoformat()))
     previous.volume = None
     db.commit()
     incomplete = service._suggestion_market(db, analysis)["data"]["volume_baselines"]["5"]
@@ -283,7 +311,8 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     from scripts import migrate_analyst_followup as migration
     from app.services.stock_analyst_skill import STOCK_ANALYST_FOLLOWUP_SKILL
     skill = ModelSkill(**{**STOCK_ANALYST_FOLLOWUP_SKILL, "output_contract_json": {"type": "object"},
-        "config_json": {"managed_contract_version": "ANALYST_FOLLOWUP_V1"}}, is_builtin=True)
+        "config_json": {"managed_contract_version": "ANALYST_FOLLOWUP_V1"},
+        "idempotency_policy": "SNAPSHOT"}, is_builtin=True)
     db.add(skill)
     db.flush()
     ensure_current_revision(db, skill)
@@ -306,8 +335,11 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     assert db.get(service.AiAnalystDialogue, legacy_id).question == legacy_question
     assert db.get(service.AiAnalystDialogue, legacy_id).context_snapshot_json == {}
     assert db.get(ModelSkillRevision, old_id).governance_json["output_contract_json"] == {"type": "object"}
-    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V4"
-    assert db.get(ModelSkill, skill.id).version == "1.1.1"
+    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V7"
+    assert db.get(ModelSkill, skill.id).version == "1.4.1"
+    assert db.get(ModelSkill, skill.id).description == STOCK_ANALYST_FOLLOWUP_SKILL["description"]
+    assert db.get(ModelSkill, skill.id).instructions == STOCK_ANALYST_FOLLOWUP_SKILL["instructions"]
+    assert db.get(ModelSkill, skill.id).idempotency_policy == "REQUIRED"
     assert db.scalar(select(func.count()).select_from(ModelSkillRevision).where(ModelSkillRevision.skill_id == skill.id)) == 2
 
 
@@ -371,9 +403,11 @@ def test_followup_api_pagination_confirmation_validation_and_scope(db, analysis)
 
 
 def suggestion_output(analysis, market_id):
+    selected = service.tracking.observations(analysis)
     return {"summary": "根据近期行情和主营经营逻辑设置可调整的观察条件。",
         "conditions": {"price_lower": 480, "price_upper": 520, "volume_mode": "ANY", "volume_ratio": 1.5,
-            "volume_window": 20, "event_conditions": [{"category": "ANY", "keywords": ["订单", "回购"]}],
+            "volume_window": 20, "event_conditions": [], "observation_rules": [{"observation": item["text"],
+                "event_conditions": [{"category": "ANY", "label": "订单与回购", "keywords": ["订单", "回购"]}]} for item in selected],
             "review_focus": "结合订单回款与主营盈利变化，持续验证原报告判断。"},
         "price_reason": "以近期不复权收盘价为基准设置上下观察区间，不作为收益承诺。",
         "volume_reason": "已有完整量能样本不足，因此暂不限定放量或缩量。",
@@ -385,6 +419,10 @@ def test_ai_suggestion_is_audited_draft_and_never_enables_or_replaces_watch(db, 
     original = deepcopy(analysis.result_json)
     watch = service.save_watch(db, analysis.id, AnalystWatchConfig(enabled=False, price_lower=450))
     before = deepcopy(watch.config_json)
+    current = db.scalar(select(StockKline).where(StockKline.adjust == ""))
+    local_now = datetime.now(service.LOCAL_ZONE)
+    current.trade_date = (local_now.date() if local_now.hour >= 16 else local_now.date() - timedelta(days=1)).isoformat()
+    db.commit()
     row = service.queue_watch_suggestion(db, analysis.id, AnalystSuggestionCreate(model_instance_code="REAL_TEST"))
     assert service.queue_watch_suggestion(db, analysis.id, AnalystSuggestionCreate()).id == row.id
     result = suggestion_output(analysis, service._suggestion_market(db, analysis)["evidence_id"])
@@ -398,6 +436,26 @@ def test_ai_suggestion_is_audited_draft_and_never_enables_or_replaces_watch(db, 
     sent = json.loads(call.call_args.kwargs["messages"][0]["content"].split("\n资料:", 1)[1])
     assert sent["current_conditions"]["price_lower"] == 450
     assert not {"enabled", "schedule_hour", "schedule_minute", "model_instance_code"}.intersection(sent["current_conditions"])
+
+
+def test_observation_rules_bind_multiple_event_dimensions_to_each_focus(db, analysis):
+    today = datetime.now(service.LOCAL_ZONE).date().isoformat()
+    db.add_all([
+        StockNotice(market="HK", symbol="02533", notice_date=today, title="首批订单完成交付", content_json={}, source_id=db.scalar(select(DataSource.id))),
+        StockNews(market="HK", symbol="02533", news_time=today, title="客户回款进度改善", content="经营现金流有望改善", source_id=db.scalar(select(DataSource.id))),
+    ])
+    db.commit()
+    cfg = AnalystWatchConfig(selected_observations=["订单兑现", "现金流改善"], observation_rules=[
+        {"observation": "订单兑现", "event_conditions": [
+            {"category": "NOTICE", "label": "订单交付", "keywords": ["完成交付"]},
+            {"category": "ANY", "label": "客户验收", "keywords": ["客户验收"]}]},
+        {"observation": "现金流改善", "event_conditions": [
+            {"category": "NEWS", "label": "客户回款", "keywords": ["回款进度"]}]},
+    ]).model_dump()
+    conditions, _ = service.evaluate_conditions(db, analysis, cfg, today, today)
+    assert [(row["observation"], row["dimension"], row["status"]) for row in conditions] == [
+        ("订单兑现", "订单交付", "HIT"), ("订单兑现", "客户验收", "NOT_HIT"), ("现金流改善", "客户回款", "HIT")]
+    assert all(row["kind"] == "event" for row in conditions)
 
 
 @pytest.mark.parametrize("fault", ["stale", "missing", "no_market_reference", "volume_gap", "provider"])
@@ -449,7 +507,7 @@ def test_dialogue_uses_selected_evidence_and_latest_local_data_with_auditable_sn
     assert chosen in saved.context_snapshot_json["evidence_allowlist"]
     assert f"news:{news.id}" in saved.context_snapshot_json["evidence_allowlist"]
     assert "分析之后的新订单进展" in call.call_args.kwargs["messages"][0]["content"]
-    with pytest.raises(ValueError, match="资料"):
+    with pytest.raises(ValueError, match="不属于当前股票"):
         service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="不属于报告的资料", evidence_ids=["news:999999"]))
 
 
