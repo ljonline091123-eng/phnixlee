@@ -2,6 +2,7 @@
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -18,17 +19,39 @@ from app.models.pipeline import ScheduledJob
 from app.models.stock_analyst import AiAnalystDailyReview, AiAnalystReportRevision, AiStockAnalysisRecord, AiAnalystWatch, AiAnalystWatchSuggestion
 from app.schemas.stock_analyst import AnalystDialogueCreate, AnalystReportConfirm, AnalystWatchConfig, AnalystDialogueOutput, AnalystSuggestionCreate, AnalystWatchSuggestionOutput
 from app.services import analyst_followup as service
-from app.services.stock_analyst import queue_stock_analysis
+from app.services.stock_analyst import build_stock_analyst_context, queue_stock_analysis
 
 
 @pytest.fixture
 def analysis(db):
     row = queue_stock_analysis(db, payload())
+    _, snapshot, coverage = build_stock_analyst_context(
+        db, market=row.market, symbol=row.symbol, period_months=row.period_months, include_all=True,
+    )
+    row.evidence_snapshot_json = snapshot
+    row.coverage_json = {**coverage, "review_mode": "FULL_SINGLE_PASS",
+                         "reviewed_evidence_count": len(snapshot["evidence"])}
     row.status = "COMPLETED"
-    row.result_json = {**output(row.evidence_snapshot_json["evidence_allowlist"][0]),
+    row.result_json = {**output(snapshot["evidence_allowlist"][0]),
                        "watch_items": ["观察订单回款", "关注亏损收窄"]}
     db.commit()
     return row
+
+
+@pytest.fixture(autouse=True)
+def stub_followup_refresh(monkeypatch):
+    monkeypatch.setattr("app.services.analyst_followup.sync_stock_data_for_analysis", lambda db, **kwargs: {
+        "status": "SUCCESS", "items": [], "source_policy": "TEST_REGISTERED_SOURCES",
+    })
+    monkeypatch.setattr("app.services.analyst_followup._extract_material_document_bodies", lambda db, **kwargs: {
+        "attempted": 0, "completed": 0, "failed": 0, "errors": [],
+    })
+    def review(_db, *, segments, instance_code, **kwargs):
+        return ({"reviewed_segment_keys": [item["segment_key"] for item in segments],
+                 "batch_summary": "测试中已完整审阅本批本地证据。", "material_events": [],
+                 "cross_document_links": [], "contradictions": [], "limitations": []},
+                SimpleNamespace(id=999, instance_code=instance_code, request_json={}))
+    monkeypatch.setattr(service, "_review_evidence_batch", review)
 
 
 def model_output(analysis):
@@ -81,6 +104,102 @@ def test_dialogue_requires_completed_analysis_and_serializes_pending(db, analysi
     service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="依据是什么"))
     with pytest.raises(ValueError, match="处理中"):
         service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="再问一个问题"))
+
+
+def test_local_document_retrieval_finds_traditional_board_notice_by_date_and_topic(db, analysis):
+    notice = StockNotice(market="HK", symbol="02533", notice_date="2026-01-30",
+        title="董事調任及行政總裁職能變更", source_id=db.scalar(select(DataSource.id)),
+        content_json={"governance_full_text": "公司于2026年1月30日披露董事調任。劉衛紅由執行董事調任非執行董事，並不再擔任總裁。"})
+    db.add(notice)
+    db.commit()
+    rows = service.local_document_matches(db, analysis,
+        "2026年1月30日董事调任，刘卫红由执行董事改为非执行董事并不再担任总裁", limit=8)
+    assert rows
+    assert rows[0]["evidence_id"] == f"notice:{notice.id}"
+    assert rows[0]["data"]["content_status"] == "SOURCE_TEXT"
+    assert rows[0]["excerpt"] == notice.content_json["governance_full_text"]
+
+
+def test_dialogue_syncs_then_reads_and_cites_matching_local_notice(db, analysis, monkeypatch):
+    notice = StockNotice(market="HK", symbol="02533", notice_date="2026-01-30",
+        title="董事調任及行政總裁職能變更", source_id=db.scalar(select(DataSource.id)),
+        content_json={"governance_full_text": "公司于2026年1月30日披露董事調任。劉衛紅由執行董事調任非執行董事，並不再擔任總裁。"})
+    db.add(notice)
+    db.commit()
+    row = service.queue_dialogue(db, analysis.id,
+        AnalystDialogueCreate(question="2026年1月30日董事调任，刘卫红不再担任总裁，公告怎么说？"))
+    result = model_output(analysis)
+    result["evidence"] = [{"evidence_id": f"notice:{notice.id}", "claim": "公告正文披露董事职务调整及总裁变更"}]
+    call = followup_log(db, result)
+    reviewed = []
+    def review(_db, *, segments, instance_code, **kwargs):
+        reviewed.extend(segments)
+        return ({"reviewed_segment_keys": [item["segment_key"] for item in segments],
+                 "batch_summary": "本轮新增公告全文揭示联合创始人职务调整。",
+                 "material_events": [{"event_type": "管理层调整", "summary": "联合创始人退出执行董事及总裁职务",
+                    "impact_hypothesis": "可能影响业务拓展或战略执行，仍需经营数据验证",
+                    "direction": "待核验", "evidence_ids": [f"notice:{notice.id}"]}],
+                 "cross_document_links": [], "contradictions": [], "limitations": []},
+                SimpleNamespace(id=998, instance_code=instance_code, request_json={}))
+    monkeypatch.setattr(service, "_review_evidence_batch", review)
+    progress_events = []
+    original_progress = service._set_dialogue_progress
+    def capture_progress(_db, dialogue_row, stage, message, **details):
+        progress_events.append((stage, message, details))
+        return original_progress(_db, dialogue_row, stage, message, **details)
+    monkeypatch.setattr(service, "_set_dialogue_progress", capture_progress)
+    def sync(_db, **kwargs):
+        kwargs["progress_callback"]("SYNCING", "正在刷新登记来源：公告")
+        return {"status": "SUCCESS", "items": [], "source_policy": "TEST_REGISTERED_SOURCES"}
+    monkeypatch.setattr(service, "sync_stock_data_for_analysis", sync)
+    with patch.object(service.ModelHubService, "chat", return_value=call) as model_call:
+        saved = service.execute_dialogue(db, row.id)
+    assert saved.status == "COMPLETED"
+    assert saved.context_snapshot_json["automatically_matched_local_documents"] == [f"notice:{notice.id}"]
+    sent_prompt = model_call.call_args.kwargs["messages"][0]["content"]
+    assert notice.title in sent_prompt and notice.content_json["governance_full_text"] in sent_prompt
+    assert any(item["evidence_id"] == f"notice:{notice.id}" and notice.content_json["governance_full_text"] in item["text"]
+               for item in reviewed)
+    assert "本轮新增公告全文揭示联合创始人职务调整" in sent_prompt
+    coverage = saved.context_snapshot_json["full_local_review_coverage"]
+    assert coverage["status"] == "COMPLETE" and coverage["added_evidence_count"] == 1
+    assert coverage["reviewed_segment_count"] == coverage["total_segment_count"]
+    assert "full_local_review_state" in saved.context_snapshot_json
+    assert [item[0] for item in progress_events][:3] == ["SYNCING", "SYNCING", "READING"]
+    assert any("第1/" in item[1] and item[0] == "REVIEWING" for item in progress_events)
+    assert saved.context_snapshot_json["progress"]["stage"] == "COMPLETED"
+    assert saved.reply_json["evidence"][0]["evidence_id"] == f"notice:{notice.id}"
+
+    next_row = service.queue_dialogue(db, analysis.id,
+        AnalystDialogueCreate(question="再核实一次2026年1月30日董事调任公告"))
+    with patch.object(service, "_review_evidence_batch", side_effect=AssertionError("未变化记录不应重复调用审阅模型")), \
+         patch.object(service.ModelHubService, "chat", return_value=followup_log(db, result)):
+        next_saved = service.execute_dialogue(db, next_row.id)
+    assert next_saved.status == "COMPLETED"
+    next_coverage = next_saved.context_snapshot_json["full_local_review_coverage"]
+    assert next_coverage["unchanged_evidence_count"] == next_coverage["current_evidence_count"]
+
+
+def test_incomplete_legacy_baseline_requires_full_review_and_fails_closed(db, analysis, monkeypatch):
+    analysis.coverage_json = {"status": "FULL_LOCAL_SNAPSHOT_READY"}
+    db.commit()
+    row = service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="请重新审阅该股票本地资料"))
+    reviewed = []
+    def incomplete_review(_db, *, segments, instance_code, **kwargs):
+        reviewed.extend(segments)
+        keys = [item["segment_key"] for item in segments]
+        return ({"reviewed_segment_keys": keys[:-1], "batch_summary": "覆盖不完整",
+                 "material_events": [], "cross_document_links": [], "contradictions": [], "limitations": []},
+                SimpleNamespace(id=997, instance_code=instance_code, request_json={}))
+    monkeypatch.setattr(service, "_review_evidence_batch", incomplete_review)
+    with patch.object(service.ModelHubService, "chat") as model_call:
+        saved = service.execute_dialogue(db, row.id)
+    assert saved.status == "FAILED"
+    assert "审阅覆盖不完整" in saved.error_message
+    assert {item["evidence_id"] for item in reviewed} == {
+        item["evidence_id"] for item in analysis.evidence_snapshot_json["evidence"]
+    }
+    model_call.assert_not_called()
 
 
 def test_dialogue_audit_and_user_confirmed_versions_preserve_original(db, analysis):
@@ -326,7 +445,7 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
     # File writes are excluded from the isolated migration test; contracts/revisions use the real registry.
     with patch.object(migration, "engine", db.get_bind()), patch.object(migration, "SessionLocal", factory), \
-         patch.object(migration, "seed_table_comments"), patch.object(migration, "sync_skill_from_file"), \
+         patch.object(migration, "seed_table_comments"), patch.object(migration, "sync_skill_from_file", return_value=False), \
          patch("app.services.skill_registry.write_skill_file", return_value=("test-skill.md", "test-hash")):
         migration.migrate()
         migration.migrate()
@@ -335,8 +454,8 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     assert db.get(service.AiAnalystDialogue, legacy_id).question == legacy_question
     assert db.get(service.AiAnalystDialogue, legacy_id).context_snapshot_json == {}
     assert db.get(ModelSkillRevision, old_id).governance_json["output_contract_json"] == {"type": "object"}
-    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V7"
-    assert db.get(ModelSkill, skill.id).version == "1.4.1"
+    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V10_INCREMENTAL_FULL_LOCAL_REVIEW"
+    assert db.get(ModelSkill, skill.id).version == "1.7.1"
     assert db.get(ModelSkill, skill.id).description == STOCK_ANALYST_FOLLOWUP_SKILL["description"]
     assert db.get(ModelSkill, skill.id).instructions == STOCK_ANALYST_FOLLOWUP_SKILL["instructions"]
     assert db.get(ModelSkill, skill.id).idempotency_policy == "REQUIRED"
@@ -345,8 +464,13 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
 
 def queue_completed_analysis(db):
     row = queue_stock_analysis(db, payload())
+    _, snapshot, coverage = build_stock_analyst_context(
+        db, market=row.market, symbol=row.symbol, period_months=row.period_months, include_all=True,
+    )
+    row.evidence_snapshot_json = snapshot
+    row.coverage_json = coverage
     row.status = "COMPLETED"
-    row.result_json = output(row.evidence_snapshot_json["evidence_allowlist"][0])
+    row.result_json = output(snapshot["evidence_allowlist"][0])
     db.commit()
     return row
 

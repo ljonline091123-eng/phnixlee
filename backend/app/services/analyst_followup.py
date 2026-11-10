@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import json
 from statistics import mean
 from zoneinfo import ZoneInfo
@@ -15,7 +16,9 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.market_data import DataInterface, DataSource, StockKline, StockNews, StockNotice
 from app.models.ai_hub import ModelInstance
-from app.services.analyst_inputs import document_evidence, image_record, supports_images
+from app.services.analyst_inputs import (
+    document_evidence, image_record, local_document_matches, supports_images,
+)
 from app.models.stock_analyst import (AiStockAnalysisRecord, AiAnalystDialogue, AiAnalystReportRevision,
                                       AiAnalystWatch, AiAnalystDailyReview, AiAnalystWatchSuggestion)
 from app.schemas.stock_analyst import (AnalystDialogueCreate, AnalystDialogueOutput, AnalystReportConfirm,
@@ -24,7 +27,11 @@ from app.schemas.stock_analyst import (AnalystDialogueCreate, AnalystDialogueOut
 from app.services.model_hub import ModelHubService
 from app.services.news_identity import normalized_issuer_text
 from app.services import analyst_tracking as tracking
-from app.services.stock_analyst import _json_object, _truncation_reason, build_stock_analyst_context
+from app.services.stock_analyst import (
+    REVIEW_SKILL_CODE, _evidence_segments, _extract_material_document_bodies,
+    _json_object, _pack_evidence_segments, _review_evidence_batch, _truncation_reason,
+    build_stock_analyst_context, sync_stock_data_for_analysis,
+)
 
 LOCAL_ZONE = ZoneInfo("Asia/Shanghai")
 FOLLOWUP_SKILL = "STOCK_ANALYST_FOLLOWUP"
@@ -111,8 +118,11 @@ def _prompt(schema, instruction, data, context):
     )
     # Keep complete JSON and its evidence whitelist aligned, including large histories.
     data["evidence"] = list(data.get("evidence") or [])
+    extra_allowlist = set(data.get("evidence_allowlist") or [])
     while True:
-        data["evidence_allowlist"] = [row["evidence_id"] for row in data["evidence"]]
+        data["evidence_allowlist"] = sorted(extra_allowlist | {
+            row["evidence_id"] for row in data["evidence"]
+        })
         prompt = prefix + json.dumps(data, ensure_ascii=False, default=str, separators=(",", ":"))
         if len(prompt) <= 55000:
             context.update(evidence=data["evidence"], evidence_allowlist=data["evidence_allowlist"])
@@ -130,8 +140,15 @@ def _record_model(row, log):
 
 
 def _compact_report(report):
-    return {key: report.get(key) for key in ("executive_summary", "overall_direction", "overall_confidence",
-        "core_drivers", "key_risks", "watch_items", "confirmed_judgment", "confirmed_focus_points") if key in report}
+    compact = {key: report.get(key) for key in ("executive_summary", "current_assessment", "overall_direction",
+        "overall_confidence", "core_drivers", "key_risks", "watch_items", "confirmed_judgment",
+        "confirmed_focus_points") if key in report}
+    compact["scenarios"] = [{key: str(value)[:700] if isinstance(value, str) else value
+        for key, value in scenario.items() if key in {"horizon", "horizon_label", "direction", "confidence",
+            "thesis", "conditions", "invalidation_conditions", "evidence"}}
+        for scenario in (report.get("scenarios") or [])[:3] if isinstance(scenario, dict)]
+    compact["evidence_chain"] = (report.get("evidence_chain") or [])[:8]
+    return compact
 
 
 def _bounded_context(context, priority=()):
@@ -140,12 +157,188 @@ def _bounded_context(context, priority=()):
         if row["evidence_id"] in ids:
             continue
         size = len(json.dumps(row, ensure_ascii=False, default=str))
-        if used + size > 33000:
+        if used + size > 22000:
             continue
         selected.append(row)
         ids.add(row["evidence_id"])
         used += size + 10
     return {**context, "evidence": selected, "evidence_allowlist": [r["evidence_id"] for r in selected]}
+
+
+def _compact_local_reviews(rows, *, max_chars=12000):
+    """Keep a compact pointer to every batch from the completed full-local review."""
+    compact = []
+    for row in rows or []:
+        compact.append({
+            "batch_key": row.get("batch_key"),
+            "summary": str(row.get("batch_summary") or "")[:420],
+            "material_events": [{
+                "event_type": event.get("event_type"),
+                "summary": str(event.get("summary") or "")[:220],
+                "impact_hypothesis": str(event.get("impact_hypothesis") or "")[:120],
+                "direction": event.get("direction"),
+                "evidence_ids": event.get("evidence_ids", [])[:8],
+            } for event in (row.get("material_events") or [])[:3]],
+            "cross_document_links": (row.get("cross_document_links") or [])[:2],
+            "contradictions": (row.get("contradictions") or [])[:2],
+        })
+    if len(json.dumps(compact, ensure_ascii=False, default=str)) <= max_chars:
+        return compact
+    compact = [{"batch_key": row.get("batch_key"), "summary": row.get("summary", "")[:160],
+                "material_events": [{"event_type": event.get("event_type"),
+                                     "summary": event.get("summary", "")[:90],
+                                     "direction": event.get("direction"),
+                                     "evidence_ids": event.get("evidence_ids", [])[:4]}
+                                    for event in row.get("material_events", [])[:1]]}
+               for row in compact]
+    if len(json.dumps(compact, ensure_ascii=False, default=str)) <= max_chars:
+        return compact
+    return [{"batch_key": row.get("batch_key"), "summary": row.get("summary", "")[:48]}
+            for row in compact]
+
+
+def _evidence_fingerprints(evidence):
+    fingerprints = {}
+    volatile_fields = {"fetched_at", "retrieved_at", "last_seen_at"}
+    for row in evidence or []:
+        canonical = deepcopy(row)
+        data = canonical.get("data")
+        if isinstance(data, dict):
+            canonical["data"] = {key: value for key, value in data.items() if key not in volatile_fields}
+        encoded = json.dumps(canonical, ensure_ascii=False, sort_keys=True,
+                             default=str, separators=(",", ":"))
+        fingerprints[str(row["evidence_id"])] = sha256(encoded.encode("utf-8")).hexdigest()
+    return fingerprints
+
+
+def _merge_local_review_summaries(previous, additions, *, max_chars=18000):
+    rows = [*deepcopy(previous or []), *_compact_local_reviews(additions)]
+    if len(json.dumps(rows, ensure_ascii=False, default=str)) <= max_chars:
+        return rows
+    rows = [{
+        "batch_key": row.get("batch_key"),
+        "summary": str(row.get("summary") or "")[:150],
+        "material_events": [{
+            "event_type": event.get("event_type"),
+            "summary": str(event.get("summary") or "")[:100],
+            "direction": event.get("direction"),
+            "evidence_ids": (event.get("evidence_ids") or [])[:5],
+        } for event in (row.get("material_events") or [])[:1]],
+    } for row in rows]
+    if len(json.dumps(rows, ensure_ascii=False, default=str)) <= max_chars:
+        return rows
+    return [{"batch_key": row.get("batch_key"), "summary": row.get("summary", "")[:72]}
+            for row in rows]
+
+
+def _review_baseline(db, analysis):
+    previous = db.scalar(select(AiAnalystDialogue).where(
+        AiAnalystDialogue.analysis_id == analysis.id,
+        AiAnalystDialogue.status == "COMPLETED",
+    ).order_by(AiAnalystDialogue.id.desc()).limit(1))
+    previous_state = (previous.context_snapshot_json or {}).get("full_local_review_state") if previous else None
+    if previous_state and previous_state.get("coverage_complete"):
+        return {
+            "complete": True,
+            "fingerprints": previous_state.get("evidence_fingerprints") or {},
+            "batch_reviews": previous_state.get("batch_reviews") or [],
+            "source": "PREVIOUS_COMPLETED_DIALOGUE",
+        }
+
+    snapshot = analysis.evidence_snapshot_json or {}
+    coverage = analysis.coverage_json or {}
+    full_single_pass = coverage.get("review_mode") == "FULL_SINGLE_PASS"
+    total = coverage.get("total_segment_count")
+    reviewed = coverage.get("reviewed_segment_count")
+    batch_coverage_complete = (isinstance(total, int) and total > 0
+                               and isinstance(reviewed, int) and reviewed >= total)
+    complete = full_single_pass or batch_coverage_complete
+    prior_reviews = snapshot.get("reduced_batch_reviews") or snapshot.get("batch_reviews") or []
+    return {
+        "complete": complete,
+        "fingerprints": _evidence_fingerprints(snapshot.get("evidence") or []) if complete else {},
+        "batch_reviews": _compact_local_reviews(prior_reviews) if complete else [],
+        "source": "COMPLETED_ANALYSIS_SNAPSHOT" if complete else "NO_VERIFIABLE_COMPLETE_BASELINE",
+    }
+
+
+def _review_current_local_snapshot(db, analysis, fresh_context, instance_code, progress_callback=None):
+    current_evidence = list(fresh_context.get("evidence") or [])
+    current_fingerprints = _evidence_fingerprints(current_evidence)
+    baseline = _review_baseline(db, analysis)
+    old_fingerprints = baseline["fingerprints"]
+    changed_ids = ({evidence_id for evidence_id, digest in current_fingerprints.items()
+                    if old_fingerprints.get(evidence_id) != digest}
+                   if baseline["complete"] else set(current_fingerprints))
+    removed_ids = sorted(set(old_fingerprints) - set(current_fingerprints)) if baseline["complete"] else []
+    changed_rows = [row for row in current_evidence if row["evidence_id"] in changed_ids]
+    segments = _evidence_segments(changed_rows)
+    batches = _pack_evidence_segments(segments)
+    batch_reviews = []
+    review_call_log_ids = []
+    active_instance = instance_code
+    allowed_evidence_ids = set(current_fingerprints)
+
+    for index, batch in enumerate(batches, start=1):
+        if progress_callback:
+            progress_callback("REVIEWING", f"AI Skill 正在审阅本地证据第{index}/{len(batches)}批（本轮变化记录 {len(changed_rows)} 条）",
+                              current_batch=index, total_batches=len(batches))
+        review, log = _review_evidence_batch(
+            db, record=analysis, segments=batch, instance_code=active_instance,
+            allowed_evidence_ids=allowed_evidence_ids, batch_number=index,
+            total_batches=len(batches),
+        )
+        review_call_log_ids.append(log.id)
+        active_instance = log.instance_code or active_instance
+        chain = ((log.request_json or {}).get("metadata_json") or {}).get("skill_chain") or []
+        review["skill_version"] = next((item["skill_version"] for item in chain
+                                         if item.get("skill_code") == REVIEW_SKILL_CODE), "1.0.0")
+        batch_reviews.append(review)
+
+    reviewed_keys = {key for batch in batch_reviews for key in batch.get("reviewed_segment_keys", [])}
+    expected_keys = {segment["segment_key"] for segment in segments}
+    if reviewed_keys != expected_keys:
+        raise ValueError("本轮本地证据分批审阅覆盖不完整，未调用研究伙伴模型；请检查证据审阅Skill执行记录后重试")
+
+    merged_reviews = _merge_local_review_summaries(baseline["batch_reviews"], batch_reviews)
+    old_ids = set(old_fingerprints)
+    added_count = len(set(current_fingerprints) - old_ids) if baseline["complete"] else len(current_fingerprints)
+    changed_count = len(changed_ids - (set(current_fingerprints) - old_ids)) if baseline["complete"] else 0
+    coverage = {
+        "status": "COMPLETE",
+        "baseline_source": baseline["source"],
+        "baseline_complete": baseline["complete"],
+        "current_evidence_count": len(current_evidence),
+        "unchanged_evidence_count": max(0, len(current_evidence) - len(changed_ids)),
+        "added_evidence_count": added_count,
+        "changed_evidence_count": changed_count,
+        "removed_from_local_snapshot_count": len(removed_ids),
+        "reviewed_evidence_count": len(changed_rows),
+        "reviewed_segment_count": len(reviewed_keys),
+        "total_segment_count": len(segments),
+        "reviewed_batch_count": len(batch_reviews),
+        "review_skill_code": REVIEW_SKILL_CODE,
+        "review_call_log_ids": review_call_log_ids,
+    }
+    state = {
+        "coverage_complete": True,
+        "evidence_fingerprints": current_fingerprints,
+        "batch_reviews": merged_reviews,
+        "coverage": coverage,
+    }
+    return {
+        "state": state,
+        "coverage": coverage,
+        "batch_reviews": batch_reviews,
+        "merged_batch_reviews": merged_reviews,
+        "removed_evidence_ids": removed_ids[:200],
+        "active_instance_code": active_instance,
+    }
+
+
+def _review_event_ids(rows):
+    return {evidence_id for batch in rows or [] for event in (batch.get("material_events") or [])
+            for evidence_id in (event.get("evidence_ids") or [])}
 
 
 def _check_refs(result, context):
@@ -184,7 +377,8 @@ def queue_dialogue(db, analysis_id, payload: AnalystDialogueCreate):
                            model_instance_code=payload.model_instance_code or analysis.model_instance_code,
                            base_revision_id=rev.id if rev else None,
                            context_snapshot_json={"requested_evidence_ids": payload.evidence_ids,
-                                                  "selected_evidence": selected, "images": images})
+                                                  "selected_evidence": selected, "images": images,
+                                                  "progress": {"stage": "QUEUED", "message": "已排队，等待后台开始同步数据"}})
     if not row.question or len(row.question) < 2:
         raise ValueError("请填写具体问题")
     db.add(row)
@@ -195,6 +389,14 @@ def queue_dialogue(db, analysis_id, payload: AnalystDialogueCreate):
         raise ValueError("上一条对话仍在处理中，请等待完成")
     db.refresh(row)
     return row
+
+
+def _set_dialogue_progress(db, row, stage, message, **details):
+    snapshot = dict(row.context_snapshot_json or {})
+    snapshot["progress"] = {"stage": stage, "message": message,
+                            "updated_at": now().isoformat(), **details}
+    row.context_snapshot_json = snapshot
+    db.commit()
 
 
 def execute_dialogue(db, dialogue_id):
@@ -209,6 +411,7 @@ def execute_dialogue(db, dialogue_id):
         return row
     try:
         analysis = require_completed(db, row.analysis_id)
+        _set_dialogue_progress(db, row, "SYNCING", "第一步：正在刷新该股票已登记的数据源")
         rev = db.get(AiAnalystReportRevision, row.base_revision_id) if row.base_revision_id else None
         history = list(db.scalars(select(AiAnalystDialogue).where(
             AiAnalystDialogue.analysis_id == row.analysis_id, AiAnalystDialogue.id < row.id,
@@ -217,8 +420,22 @@ def execute_dialogue(db, dialogue_id):
         daily = list(db.scalars(select(AiAnalystDailyReview).join(AiAnalystWatch).where(
             AiAnalystWatch.analysis_id == analysis.id, AiAnalystDailyReview.status.in_(("COMPLETED", "PARTIAL")),
         ).order_by(AiAnalystDailyReview.business_date.desc(), AiAnalystDailyReview.id.desc()).limit(3)).all())
+        def report_progress(stage, message, **details):
+            _set_dialogue_progress(db, row, stage, message, **details)
+            return True
+
+        data_sync = sync_stock_data_for_analysis(db, market=analysis.market,
+            symbol=analysis.symbol, period_months=analysis.period_months,
+            progress_callback=report_progress)
+        report_progress("READING", "第二步：同步结束，正在读取该股票本地全部业务数据、新闻和公告")
+        body_since = (datetime.now(timezone.utc).date() - timedelta(days=max(365, analysis.period_months * 31))).isoformat()
+        body_extraction = _extract_material_document_bodies(
+            db, market=analysis.market, symbol=analysis.symbol, since=body_since,
+        )
+        db.expire_all()
         _, fresh_context, _ = build_stock_analyst_context(db, market=analysis.market,
-            symbol=analysis.symbol, period_months=analysis.period_months)
+            symbol=analysis.symbol, period_months=analysis.period_months, include_all=True)
+        report_progress("REVIEWING", f"第三步：已读取{len(fresh_context.get('evidence') or [])}条本地证据，正在核验全量覆盖和增量变化")
         snapshot = row.context_snapshot_json or {}
         requested = snapshot.get("requested_evidence_ids", [])
         images = snapshot.get("images", [])
@@ -227,26 +444,62 @@ def execute_dialogue(db, dialogue_id):
             if instance is None or not supports_images(instance.model_code, instance.config_json):
                 raise ValueError("当前模型不支持图片理解，请更换支持图片的模型后重新发送")
         selected = snapshot.get("selected_evidence") or [r for r in analysis.evidence_snapshot_json.get("evidence", []) if r["evidence_id"] in requested]
+        fresh_by_id = {item["evidence_id"]: item for item in fresh_context.get("evidence", [])}
+        selected = [fresh_by_id.get(item["evidence_id"], item) for item in selected]
+        automatic_matches = local_document_matches(db, analysis, row.question, limit=8, body_limit=10000)
+        local_review = _review_current_local_snapshot(
+            db, analysis, fresh_context, row.model_instance_code, progress_callback=report_progress,
+        )
+        row.model_instance_code = local_review["active_instance_code"] or row.model_instance_code
         image_evidence = [{"evidence_id": image["evidence_id"], "category": "USER_IMAGE", "category_name": "用户图片",
                            "title": image["name"], "observed_at": row.created_at.isoformat(), "source": "用户粘贴或上传（未经独立核验）",
                            "data": {key: image[key] for key in ("sha256", "size", "width", "height", "mime_type")}} for image in images]
-        context = _bounded_context(fresh_context, [*image_evidence, *selected, *fresh_context.get("evidence", []),
-            *(daily[0].evidence_snapshot_json.get("evidence", []) if daily else []),
-            *analysis.evidence_snapshot_json.get("evidence", [])])
+        context = _bounded_context(fresh_context, [*image_evidence, *automatic_matches, *selected,
+                                                   *fresh_context.get("evidence", [])])
+        visible_review_ids = _review_event_ids(local_review["merged_batch_reviews"])
+        visible_report_ids = {
+            item.get("evidence_id") for item in (analysis.result_json or {}).get("evidence_chain", [])
+            if isinstance(item, dict) and item.get("evidence_id")
+        }
+        context["evidence_allowlist"] = sorted(set(context.get("evidence_allowlist") or [])
+            | {item["evidence_id"] for item in [*image_evidence, *selected, *automatic_matches]}
+            | visible_review_ids | visible_report_ids)
+        full_local_review = local_review["merged_batch_reviews"]
         data = {"report": _compact_report(analysis.result_json), "confirmed_view": {"judgment": rev.judgment, "focus_points": rev.focus_points_json} if rev else None,
                 "validated_learning": tracking.learning_context(db, analysis.id),
                 "evidence": context.get("evidence"), "evidence_allowlist": context.get("evidence_allowlist"),
+                "registered_source_sync": data_sync, "body_extraction": body_extraction,
+                "local_snapshot_manifest": fresh_context.get("evidence_manifest"),
+                "previous_full_local_review": full_local_review,
+                "current_full_local_review": {"coverage": local_review["coverage"],
+                    "new_or_changed_batch_reviews": _compact_local_reviews(local_review["batch_reviews"]),
+                    "removed_evidence_ids": local_review["removed_evidence_ids"]},
+                "automatically_matched_local_documents": [item["evidence_id"] for item in automatic_matches],
                 "recent_daily_judgments": [{"date": r.business_date, "judgment": r.result_json.get("judgment", "")[:1000],
                     "verdict": r.result_json.get("verdict")} for r in daily],
                 "history": [{"question": r.question[:600], "reply": r.reply_json.get("reply", "")[:600]} for r in reversed(history)],
                 "question": row.question, "selected_evidence_ids": requested,
                 "as_of": fresh_context.get("as_of"), "identity": fresh_context.get("identity")}
         data["attached_images"] = [{"evidence_id": image["evidence_id"], "name": image["name"]} for image in images]
-        prompt = _prompt(AnalystDialogueOutput, "围绕用户问题实质性分析，并提出可供用户编辑确认的完整判断和后续关注点。重点阅读selected_evidence_ids所选资料；区分原报告快照与最新本地资料的日期。不声称读过未输入的全量数据。不得自行视为用户已确认。附图按attached_images顺序提供，引用对应user-image证据ID。用户图片只是未经核验的研究材料，不等同官方披露；看不清的文字和数字须说明，不能猜测。公告只有TITLE_ONLY时不得声称已读取正文。", data, context)
-        if set([*requested, *[image["evidence_id"] for image in images]]) - set(context["evidence_allowlist"]):
-            raise ValueError("本次引用资料超出输入预算，请减少引用后重新发送；未忽略任何指定资料进行分析")
-        row.context_snapshot_json = {**deepcopy(context), "requested_evidence_ids": requested,
-                                     "selected_evidence": selected, "images": images}
+        report_progress("SYNTHESIZING", "第四步：全量本地证据覆盖校验通过，正在结合报告和已同步来源生成回复")
+        prompt = _prompt(AnalystDialogueOutput, "每轮必须先刷新已登记数据源，再重新读取当前股票本地全量数据；不得复用排队时的旧预览。local_snapshot_manifest是同步后全量本地快照。current_full_local_review.coverage.status为COMPLETE时，表示未变化记录由已完整覆盖的上一版本承接，新增及变化记录已由STOCK_ANALYST_EVIDENCE_REVIEW逐段审阅；baseline_complete为false时，本轮必须对全部当前证据完成分批审阅。未覆盖完成不得给出对话结论。previous_full_local_review是当前股票全量记录对应的证据审阅摘要，不能只回答最新资料。automatically_matched_local_documents是按当前问题从该股票本地全部新闻与公告中检索的原文证据，必须优先逐条阅读；明确回答是否找到用户所指日期/事项、来源、发布日期、正文状态及其如何影响原报告。联网补充只能使用本轮登记来源同步并已保存的数据，注明来源、日期和链接；没有通用网页搜索结果时不得声称自行浏览互联网。区分原报告、当前本地记录、外部来源、用户观点和推理；正文未读取时不得声称读过。围绕问题给出实质分析和可编辑确认的判断，不能自行视为用户已确认。附图按attached_images顺序关联user-image证据ID；图片未经独立核验，看不清的文字和数字不能猜。", data, context)
+        required_ids = set(requested) | {image["evidence_id"] for image in images} | {
+            item["evidence_id"] for item in automatic_matches
+        }
+        missing_ids = required_ids - {item["evidence_id"] for item in context.get("evidence", [])}
+        if missing_ids:
+            raise ValueError("本地检索到的引用资料未能完整放入模型输入，未忽略资料继续分析；请减少手动引用后重试")
+        row.context_snapshot_json = {**deepcopy(context),
+                                     "registered_source_sync": data_sync,
+                                     "body_extraction": body_extraction,
+                                     "local_snapshot_manifest": fresh_context.get("evidence_manifest"),
+                                     "full_local_review_coverage": local_review["coverage"],
+                                     "full_local_review_state": local_review["state"],
+                                     "previous_full_local_review": full_local_review,
+                                     "automatically_matched_local_documents": [item["evidence_id"] for item in automatic_matches],
+                                     "requested_evidence_ids": requested,
+                                     "selected_evidence": selected, "images": images,
+                                     "progress": (row.context_snapshot_json or {}).get("progress")}
         db.commit()
         def save_log(log):
             _record_model(row, log)
@@ -256,10 +509,15 @@ def execute_dialogue(db, dialogue_id):
             metadata={"analysis_record_id": analysis.id, "dialogue_id": row.id}, on_log=save_log, images=images)
         _check_refs(result, context)
         row.reply_json, row.status = result, "COMPLETED"
+        _set_dialogue_progress(db, row, "COMPLETED", "处理完成：本地全量证据审阅与研究伙伴分析已完成",
+                               evidence_count=local_review["coverage"]["current_evidence_count"],
+                               reviewed_batches=local_review["coverage"]["reviewed_batch_count"])
     except Exception as exc:
         db.rollback()
         row = db.get(AiAnalystDialogue, dialogue_id)
         row.status, row.error_message = "FAILED", str(exc)[:1800]
+        _set_dialogue_progress(db, row, "FAILED", "处理失败：本地全量证据校验或模型分析未完成",
+                               error=row.error_message)
     row.completed_at = now()
     db.commit()
     db.refresh(row)

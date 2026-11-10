@@ -14,7 +14,8 @@ from app.db.session import get_db
 from app.main import app
 from app.models.ai_hub import ModelCallLog
 from app.models.foundation import FoundationFact
-from app.models.market_data import DataSource, StockF10Cache, StockKline, StockNews, StockSymbol
+from app.models.market_data import (DataSource, StockF10Cache, StockFinancialReport,
+                                    StockKline, StockNews, StockNotice, StockSymbol)
 from app.models.selection import SelectionRun
 from app.models.stock_analyst import AiStockAnalysisRecord
 from app.schemas.stock_analyst import AiStockAnalysisCreate, AiStockAnalystOutput
@@ -61,8 +62,22 @@ def db():
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def stub_analysis_refresh(monkeypatch):
+    monkeypatch.setattr("app.services.stock_analyst.sync_stock_data_for_analysis", lambda db, **kwargs: {
+        "status": "SUCCESS", "items": [], "source_policy": "TEST_REGISTERED_SOURCES",
+    })
+    monkeypatch.setattr("app.services.stock_analyst._extract_material_document_bodies", lambda db, **kwargs: {
+        "attempted": 0, "completed": 0, "failed": 0, "errors": [],
+    })
+
+
 def payload():
     return AiStockAnalysisCreate(market="HK", symbol="02533", model_instance_code="REAL_TEST")
+
+
+def local_news_evidence_id(db):
+    return f'news:{db.scalar(select(StockNews.id).where(StockNews.market == "HK").limit(1))}'
 
 
 def test_same_title_disclosures_on_different_days_remain_distinct():
@@ -113,15 +128,79 @@ def test_context_market_isolation_adjustment_dedup_and_archive_budget(db):
     assert db.scalar(select(func.count()).select_from(AiStockAnalysisRecord)) == 0
 
 
+def test_full_context_keeps_every_local_notice_and_daily_price_bar(db):
+    source_id = db.scalar(select(DataSource.id))
+    today = datetime.now(timezone.utc).date()
+    notices = [StockNotice(market="HK", symbol="02533", notice_date=(today - timedelta(days=index % 300)).isoformat(),
+                           title=f"历史披露事项 {index:04d}", source_id=source_id)
+               for index in range(505)]
+    db.add_all(notices)
+    db.add(StockFinancialReport(market="HK", symbol="02533", indicator="revenue", report_period="2025FY",
+                                currency="HKD", data_json={"value": 123}, source_id=source_id))
+    db.commit()
+    _, context, preview = build_stock_analyst_context(
+        db, market="HK", symbol="02533", period_months=12, include_all=True,
+    )
+    notice_evidence = [row for row in context["evidence"] if row["category"] == "NOTICE"]
+    kline_evidence = next(row for row in context["evidence"] if row["evidence_id"].startswith("kline-range:"))
+    assert len(notice_evidence) == 505
+    assert context["coverage"]["source_record_counts"]["NOTICE"] == 505
+    assert len(kline_evidence["data"]["daily_bars"]) == 3
+    assert kline_evidence["data"]["source_record_count"] == 3
+    assert len(context["evidence_manifest"]["category_sha256"]["NOTICE"]) == 64
+    assert context["evidence_manifest"]["evidence_count"] == preview["evidence_count"]
+    assert preview["total_counts"]["FINANCIAL"] == 1
+
+
+def test_analysis_syncs_then_reviews_long_full_text_before_synthesis(monkeypatch, db):
+    from app.services import stock_analyst as service
+
+    row = queue_stock_analysis(db, payload())
+    sync_order = []
+
+    def refresh(_db, **kwargs):
+        sync_order.append("SYNC")
+        _db.add(StockNotice(market="HK", symbol="02533", notice_date="2026-01-30",
+            title="董事調任及總裁變更", source_id=_db.scalar(select(DataSource.id)),
+            content_json={"governance_full_text": "董事調任公告正文及影响说明。" * 5000}))
+        _db.commit()
+        return {"status": "SUCCESS", "items": [], "source_policy": "TEST_REGISTERED_SOURCES"}
+
+    def review(_db, *, segments, **kwargs):
+        sync_order.append("REVIEW")
+        return ({"reviewed_segment_keys": [item["segment_key"] for item in segments],
+                 "batch_summary": "已逐条审阅本批本地证据。", "material_events": [],
+                 "cross_document_links": [], "contradictions": [], "limitations": []},
+                log_result(_db, status="SUCCESS"))
+
+    first_news_id = db.scalar(select(StockNews.id).where(StockNews.market == "HK").limit(1))
+    final_log = log_result(db, output(f"news:{first_news_id}"))
+    monkeypatch.setattr(service, "sync_stock_data_for_analysis", refresh)
+    monkeypatch.setattr(service, "_extract_material_document_bodies", lambda *_args, **_kwargs: {
+        "attempted": 1, "completed": 1, "failed": 0, "errors": [],
+    })
+    monkeypatch.setattr(service, "_review_evidence_batch", review)
+    with patch("app.services.stock_analyst.ModelHubService.chat", return_value=final_log):
+        saved = execute_stock_analysis(db, row.id)
+    assert saved.status == "COMPLETED"
+    assert sync_order[0] == "SYNC" and "REVIEW" in sync_order
+    assert saved.evidence_snapshot_json["evidence_manifest"]["schema_version"] == "STOCK_EVIDENCE_SNAPSHOT_V2"
+    assert any(item["title"] == "董事調任及總裁變更" for item in saved.evidence_snapshot_json["evidence"])
+    assert saved.coverage_json["review_skill_code"] == "STOCK_ANALYST_EVIDENCE_REVIEW"
+    assert saved.coverage_json["reviewed_segment_count"] == saved.coverage_json["total_segment_count"]
+
+
 def test_success_keeps_exact_snapshot_and_does_not_write_old_selection_or_facts(db):
     run = queue_stock_analysis(db, payload())
     snapshot = run.evidence_snapshot_json
-    valid = output(snapshot["evidence_allowlist"][0])
+    valid = output(local_news_evidence_id(db))
     with patch("app.services.stock_analyst.ModelHubService.chat", return_value=log_result(db, valid)) as call:
         saved = execute_stock_analysis(db, run.id)
         assert saved.status == "COMPLETED"
         assert saved.skill_version == "1.2.3"
-        assert saved.evidence_snapshot_json == snapshot
+        assert snapshot["evidence"] == []
+        assert saved.evidence_snapshot_json["evidence"]
+        assert saved.evidence_snapshot_json["evidence_manifest"]["evidence_count"] == len(saved.evidence_snapshot_json["evidence"])
         assert {row["horizon"] for row in saved.result_json["scenarios"]} == {"SHORT", "MEDIUM", "LONG"}
         assert call.call_args.kwargs["metadata_json"]["require_real_model"] is True
         assert call.call_args.kwargs["metadata_json"]["strict_instance"] is True
@@ -134,7 +213,7 @@ def test_success_keeps_exact_snapshot_and_does_not_write_old_selection_or_facts(
 @pytest.mark.parametrize("mode", ["provider_failure", "malformed", "missing_horizon"])
 def test_failures_never_publish_a_fallback_conclusion(db, mode):
     run = queue_stock_analysis(db, payload())
-    result = output(run.evidence_snapshot_json["evidence_allowlist"][0])
+    result = output(local_news_evidence_id(db))
     if mode == "missing_horizon":
         result["scenarios"][2]["horizon"] = "SHORT"
     log = log_result(db, result, status="FAILED" if mode == "provider_failure" else "SUCCESS")
@@ -167,7 +246,7 @@ def test_cancel_before_start_and_during_call_wins(db):
     second = queue_stock_analysis(db, payload())
     def cancel_during_call(**kwargs):
         cancel_stock_analysis(db, second)
-        return log_result(db, output(second.evidence_snapshot_json["evidence_allowlist"][0]))
+        return log_result(db, output(local_news_evidence_id(db)))
     with patch("app.services.stock_analyst.ModelHubService.chat", side_effect=cancel_during_call):
         saved = execute_stock_analysis(db, second.id)
     assert saved.status == "CANCELLED"
@@ -178,7 +257,7 @@ def test_cancel_before_start_and_during_call_wins(db):
 def test_truncated_gemini_response_retries_same_model_with_original_evidence(db):
     run = queue_stock_analysis(db, payload())
     snapshot = run.evidence_snapshot_json
-    valid = output(snapshot["evidence_allowlist"][0])
+    valid = output(local_news_evidence_id(db))
     truncated = log_result(db, valid)
     truncated.response_text = '{"executive_summary":"正文未完成'
     truncated.response_json = {"candidates": [{"finishReason": "MAX_TOKENS"}]}
@@ -186,7 +265,8 @@ def test_truncated_gemini_response_retries_same_model_with_original_evidence(db)
     with patch("app.services.stock_analyst.ModelHubService.chat", side_effect=[truncated, complete]) as chat:
         saved = execute_stock_analysis(db, run.id)
     assert saved.status == "COMPLETED"
-    assert saved.evidence_snapshot_json == snapshot
+    assert snapshot["evidence"] == []
+    assert saved.evidence_snapshot_json["evidence"]
     assert saved.model_call_log_id == complete.id
     assert [call.kwargs["max_tokens"] for call in chat.call_args_list] == [8192, 12288]
     assert all(call.kwargs["instance_code"] == "REAL_TEST" for call in chat.call_args_list)
@@ -203,7 +283,7 @@ def test_truncated_gemini_response_retries_same_model_with_original_evidence(db)
 ])
 def test_repeated_truncation_never_publishes_even_parseable_json(db, response):
     run = queue_stock_analysis(db, payload())
-    log = log_result(db, output(run.evidence_snapshot_json["evidence_allowlist"][0]))
+    log = log_result(db, output(local_news_evidence_id(db)))
     log.response_json = response
     db.commit()
     with patch("app.services.stock_analyst.ModelHubService.chat", return_value=log) as chat:
@@ -218,7 +298,7 @@ def test_cancelling_truncated_call_prevents_automatic_retry(db):
     run = queue_stock_analysis(db, payload())
     def truncated_after_cancel(**kwargs):
         cancel_stock_analysis(db, run)
-        log = log_result(db, output(run.evidence_snapshot_json["evidence_allowlist"][0]))
+        log = log_result(db, output(local_news_evidence_id(db)))
         log.response_json = {"candidates": [{"finishReason": "MAX_TOKENS"}]}
         db.commit()
         return log
@@ -250,7 +330,7 @@ def test_api_acknowledges_before_model_and_evidence_is_paginated(db):
             assert created["status"] == "QUEUED"
             worker.assert_called_once_with(created["id"])
         evidence = client.get(f"/api/v1/ai-stock-analyst/analyses/{created['id']}/evidence?offset=1&limit=1").json()
-        assert len(evidence["items"]) == 1 and evidence["total"] >= 3
+        assert evidence["items"] == [] and evidence["total"] == 0
         assert client.get("/api/v1/ai-stock-analyst/analyses/999999").status_code == 404
         assert client.post("/api/v1/ai-stock-analyst/analyses", json={**payload().model_dump(), "period_months": 0}).status_code == 422
     finally:
