@@ -18,17 +18,32 @@ from app.models.pipeline import ScheduledJob
 from app.models.stock_analyst import AiAnalystDailyReview, AiAnalystReportRevision, AiStockAnalysisRecord, AiAnalystWatch, AiAnalystWatchSuggestion
 from app.schemas.stock_analyst import AnalystDialogueCreate, AnalystReportConfirm, AnalystWatchConfig, AnalystDialogueOutput, AnalystSuggestionCreate, AnalystWatchSuggestionOutput
 from app.services import analyst_followup as service
-from app.services.stock_analyst import queue_stock_analysis
+from app.services.stock_analyst import build_stock_analyst_context, queue_stock_analysis
 
 
 @pytest.fixture
 def analysis(db):
     row = queue_stock_analysis(db, payload())
+    _, snapshot, coverage = build_stock_analyst_context(
+        db, market=row.market, symbol=row.symbol, period_months=row.period_months, include_all=True,
+    )
+    row.evidence_snapshot_json = snapshot
+    row.coverage_json = coverage
     row.status = "COMPLETED"
-    row.result_json = {**output(row.evidence_snapshot_json["evidence_allowlist"][0]),
+    row.result_json = {**output(snapshot["evidence_allowlist"][0]),
                        "watch_items": ["观察订单回款", "关注亏损收窄"]}
     db.commit()
     return row
+
+
+@pytest.fixture(autouse=True)
+def stub_followup_refresh(monkeypatch):
+    monkeypatch.setattr("app.services.analyst_followup.sync_stock_data_for_analysis", lambda db, **kwargs: {
+        "status": "SUCCESS", "items": [], "source_policy": "TEST_REGISTERED_SOURCES",
+    })
+    monkeypatch.setattr("app.services.analyst_followup._extract_material_document_bodies", lambda db, **kwargs: {
+        "attempted": 0, "completed": 0, "failed": 0, "errors": [],
+    })
 
 
 def model_output(analysis):
@@ -81,6 +96,40 @@ def test_dialogue_requires_completed_analysis_and_serializes_pending(db, analysi
     service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="依据是什么"))
     with pytest.raises(ValueError, match="处理中"):
         service.queue_dialogue(db, analysis.id, AnalystDialogueCreate(question="再问一个问题"))
+
+
+def test_local_document_retrieval_finds_traditional_board_notice_by_date_and_topic(db, analysis):
+    notice = StockNotice(market="HK", symbol="02533", notice_date="2026-01-30",
+        title="董事調任及行政總裁職能變更", source_id=db.scalar(select(DataSource.id)),
+        content_json={"governance_full_text": "公司于2026年1月30日披露董事調任。劉衛紅由執行董事調任非執行董事，並不再擔任總裁。"})
+    db.add(notice)
+    db.commit()
+    rows = service.local_document_matches(db, analysis,
+        "2026年1月30日董事调任，刘卫红由执行董事改为非执行董事并不再担任总裁", limit=8)
+    assert rows
+    assert rows[0]["evidence_id"] == f"notice:{notice.id}"
+    assert rows[0]["data"]["content_status"] == "SOURCE_TEXT"
+    assert rows[0]["excerpt"] == notice.content_json["governance_full_text"]
+
+
+def test_dialogue_syncs_then_reads_and_cites_matching_local_notice(db, analysis):
+    notice = StockNotice(market="HK", symbol="02533", notice_date="2026-01-30",
+        title="董事調任及行政總裁職能變更", source_id=db.scalar(select(DataSource.id)),
+        content_json={"governance_full_text": "公司于2026年1月30日披露董事調任。劉衛紅由執行董事調任非執行董事，並不再擔任總裁。"})
+    db.add(notice)
+    db.commit()
+    row = service.queue_dialogue(db, analysis.id,
+        AnalystDialogueCreate(question="2026年1月30日董事调任，刘卫红不再担任总裁，公告怎么说？"))
+    result = model_output(analysis)
+    result["evidence"] = [{"evidence_id": f"notice:{notice.id}", "claim": "公告正文披露董事职务调整及总裁变更"}]
+    call = followup_log(db, result)
+    with patch.object(service.ModelHubService, "chat", return_value=call) as model_call:
+        saved = service.execute_dialogue(db, row.id)
+    assert saved.status == "COMPLETED"
+    assert saved.context_snapshot_json["automatically_matched_local_documents"] == [f"notice:{notice.id}"]
+    sent_prompt = model_call.call_args.kwargs["messages"][0]["content"]
+    assert notice.title in sent_prompt and notice.content_json["governance_full_text"] in sent_prompt
+    assert saved.reply_json["evidence"][0]["evidence_id"] == f"notice:{notice.id}"
 
 
 def test_dialogue_audit_and_user_confirmed_versions_preserve_original(db, analysis):
@@ -326,7 +375,7 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
     # File writes are excluded from the isolated migration test; contracts/revisions use the real registry.
     with patch.object(migration, "engine", db.get_bind()), patch.object(migration, "SessionLocal", factory), \
-         patch.object(migration, "seed_table_comments"), patch.object(migration, "sync_skill_from_file"), \
+         patch.object(migration, "seed_table_comments"), patch.object(migration, "sync_skill_from_file", return_value=False), \
          patch("app.services.skill_registry.write_skill_file", return_value=("test-skill.md", "test-hash")):
         migration.migrate()
         migration.migrate()
@@ -335,8 +384,8 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
     assert db.get(service.AiAnalystDialogue, legacy_id).question == legacy_question
     assert db.get(service.AiAnalystDialogue, legacy_id).context_snapshot_json == {}
     assert db.get(ModelSkillRevision, old_id).governance_json["output_contract_json"] == {"type": "object"}
-    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V7"
-    assert db.get(ModelSkill, skill.id).version == "1.4.1"
+    assert db.get(ModelSkill, skill.id).config_json["managed_contract_version"] == "ANALYST_FOLLOWUP_V9_LOCAL_FULL_DATA"
+    assert db.get(ModelSkill, skill.id).version == "1.6.1"
     assert db.get(ModelSkill, skill.id).description == STOCK_ANALYST_FOLLOWUP_SKILL["description"]
     assert db.get(ModelSkill, skill.id).instructions == STOCK_ANALYST_FOLLOWUP_SKILL["instructions"]
     assert db.get(ModelSkill, skill.id).idempotency_policy == "REQUIRED"
@@ -345,8 +394,13 @@ def test_additive_migration_upgrades_only_builtin_contract_and_retains_revision(
 
 def queue_completed_analysis(db):
     row = queue_stock_analysis(db, payload())
+    _, snapshot, coverage = build_stock_analyst_context(
+        db, market=row.market, symbol=row.symbol, period_months=row.period_months, include_all=True,
+    )
+    row.evidence_snapshot_json = snapshot
+    row.coverage_json = coverage
     row.status = "COMPLETED"
-    row.result_json = output(row.evidence_snapshot_json["evidence_allowlist"][0])
+    row.result_json = output(snapshot["evidence_allowlist"][0])
     db.commit()
     return row
 

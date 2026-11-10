@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.market_data import DataInterface, DataSource, StockKline, StockNews, StockNotice
 from app.models.ai_hub import ModelInstance
-from app.services.analyst_inputs import document_evidence, image_record, supports_images
+from app.services.analyst_inputs import (
+    document_evidence, image_record, local_document_matches, supports_images,
+)
 from app.models.stock_analyst import (AiStockAnalysisRecord, AiAnalystDialogue, AiAnalystReportRevision,
                                       AiAnalystWatch, AiAnalystDailyReview, AiAnalystWatchSuggestion)
 from app.schemas.stock_analyst import (AnalystDialogueCreate, AnalystDialogueOutput, AnalystReportConfirm,
@@ -24,7 +26,10 @@ from app.schemas.stock_analyst import (AnalystDialogueCreate, AnalystDialogueOut
 from app.services.model_hub import ModelHubService
 from app.services.news_identity import normalized_issuer_text
 from app.services import analyst_tracking as tracking
-from app.services.stock_analyst import _json_object, _truncation_reason, build_stock_analyst_context
+from app.services.stock_analyst import (
+    _extract_material_document_bodies, _json_object, _truncation_reason,
+    build_stock_analyst_context, sync_stock_data_for_analysis,
+)
 
 LOCAL_ZONE = ZoneInfo("Asia/Shanghai")
 FOLLOWUP_SKILL = "STOCK_ANALYST_FOLLOWUP"
@@ -140,12 +145,44 @@ def _bounded_context(context, priority=()):
         if row["evidence_id"] in ids:
             continue
         size = len(json.dumps(row, ensure_ascii=False, default=str))
-        if used + size > 33000:
+        if used + size > 22000:
             continue
         selected.append(row)
         ids.add(row["evidence_id"])
         used += size + 10
     return {**context, "evidence": selected, "evidence_allowlist": [r["evidence_id"] for r in selected]}
+
+
+def _compact_local_reviews(rows, *, max_chars=12000):
+    """Keep a compact pointer to every batch from the completed full-local review."""
+    compact = []
+    for row in rows or []:
+        compact.append({
+            "batch_key": row.get("batch_key"),
+            "summary": str(row.get("batch_summary") or "")[:420],
+            "material_events": [{
+                "event_type": event.get("event_type"),
+                "summary": str(event.get("summary") or "")[:220],
+                "impact_hypothesis": str(event.get("impact_hypothesis") or "")[:120],
+                "direction": event.get("direction"),
+                "evidence_ids": event.get("evidence_ids", [])[:8],
+            } for event in (row.get("material_events") or [])[:3]],
+            "cross_document_links": (row.get("cross_document_links") or [])[:2],
+            "contradictions": (row.get("contradictions") or [])[:2],
+        })
+    if len(json.dumps(compact, ensure_ascii=False, default=str)) <= max_chars:
+        return compact
+    compact = [{"batch_key": row.get("batch_key"), "summary": row.get("summary", "")[:160],
+                "material_events": [{"event_type": event.get("event_type"),
+                                     "summary": event.get("summary", "")[:90],
+                                     "direction": event.get("direction"),
+                                     "evidence_ids": event.get("evidence_ids", [])[:4]}
+                                    for event in row.get("material_events", [])[:1]]}
+               for row in compact]
+    if len(json.dumps(compact, ensure_ascii=False, default=str)) <= max_chars:
+        return compact
+    return [{"batch_key": row.get("batch_key"), "summary": row.get("summary", "")[:48]}
+            for row in compact]
 
 
 def _check_refs(result, context):
@@ -217,8 +254,15 @@ def execute_dialogue(db, dialogue_id):
         daily = list(db.scalars(select(AiAnalystDailyReview).join(AiAnalystWatch).where(
             AiAnalystWatch.analysis_id == analysis.id, AiAnalystDailyReview.status.in_(("COMPLETED", "PARTIAL")),
         ).order_by(AiAnalystDailyReview.business_date.desc(), AiAnalystDailyReview.id.desc()).limit(3)).all())
-        _, fresh_context, _ = build_stock_analyst_context(db, market=analysis.market,
+        data_sync = sync_stock_data_for_analysis(db, market=analysis.market,
             symbol=analysis.symbol, period_months=analysis.period_months)
+        body_since = (datetime.now(timezone.utc).date() - timedelta(days=max(365, analysis.period_months * 31))).isoformat()
+        body_extraction = _extract_material_document_bodies(
+            db, market=analysis.market, symbol=analysis.symbol, since=body_since,
+        )
+        db.expire_all()
+        _, fresh_context, _ = build_stock_analyst_context(db, market=analysis.market,
+            symbol=analysis.symbol, period_months=analysis.period_months, include_all=True)
         snapshot = row.context_snapshot_json or {}
         requested = snapshot.get("requested_evidence_ids", [])
         images = snapshot.get("images", [])
@@ -227,25 +271,41 @@ def execute_dialogue(db, dialogue_id):
             if instance is None or not supports_images(instance.model_code, instance.config_json):
                 raise ValueError("当前模型不支持图片理解，请更换支持图片的模型后重新发送")
         selected = snapshot.get("selected_evidence") or [r for r in analysis.evidence_snapshot_json.get("evidence", []) if r["evidence_id"] in requested]
+        fresh_by_id = {item["evidence_id"]: item for item in fresh_context.get("evidence", [])}
+        selected = [fresh_by_id.get(item["evidence_id"], item) for item in selected]
+        automatic_matches = local_document_matches(db, analysis, row.question, limit=8, body_limit=10000)
         image_evidence = [{"evidence_id": image["evidence_id"], "category": "USER_IMAGE", "category_name": "用户图片",
                            "title": image["name"], "observed_at": row.created_at.isoformat(), "source": "用户粘贴或上传（未经独立核验）",
                            "data": {key: image[key] for key in ("sha256", "size", "width", "height", "mime_type")}} for image in images]
-        context = _bounded_context(fresh_context, [*image_evidence, *selected, *fresh_context.get("evidence", []),
+        context = _bounded_context(fresh_context, [*image_evidence, *selected, *automatic_matches, *fresh_context.get("evidence", []),
             *(daily[0].evidence_snapshot_json.get("evidence", []) if daily else []),
             *analysis.evidence_snapshot_json.get("evidence", [])])
+        matched_ids = {item["evidence_id"] for item in [*selected, *automatic_matches]}
+        source_reviews = (analysis.evidence_snapshot_json or {}).get("reduced_batch_reviews") or []
+        full_local_review = _compact_local_reviews(source_reviews)
         data = {"report": _compact_report(analysis.result_json), "confirmed_view": {"judgment": rev.judgment, "focus_points": rev.focus_points_json} if rev else None,
                 "validated_learning": tracking.learning_context(db, analysis.id),
                 "evidence": context.get("evidence"), "evidence_allowlist": context.get("evidence_allowlist"),
+                "registered_source_sync": data_sync, "body_extraction": body_extraction,
+                "local_snapshot_manifest": fresh_context.get("evidence_manifest"),
+                "previous_full_local_review": full_local_review,
+                "automatically_matched_local_documents": [item["evidence_id"] for item in automatic_matches],
                 "recent_daily_judgments": [{"date": r.business_date, "judgment": r.result_json.get("judgment", "")[:1000],
                     "verdict": r.result_json.get("verdict")} for r in daily],
                 "history": [{"question": r.question[:600], "reply": r.reply_json.get("reply", "")[:600]} for r in reversed(history)],
                 "question": row.question, "selected_evidence_ids": requested,
                 "as_of": fresh_context.get("as_of"), "identity": fresh_context.get("identity")}
         data["attached_images"] = [{"evidence_id": image["evidence_id"], "name": image["name"]} for image in images]
-        prompt = _prompt(AnalystDialogueOutput, "围绕用户问题实质性分析，并提出可供用户编辑确认的完整判断和后续关注点。重点阅读selected_evidence_ids所选资料；区分原报告快照与最新本地资料的日期。不声称读过未输入的全量数据。不得自行视为用户已确认。附图按attached_images顺序提供，引用对应user-image证据ID。用户图片只是未经核验的研究材料，不等同官方披露；看不清的文字和数字须说明，不能猜测。公告只有TITLE_ONLY时不得声称已读取正文。", data, context)
+        prompt = _prompt(AnalystDialogueOutput, "本轮先刷新登记的数据源，再以当前本地证据为主进行分析。local_snapshot_manifest说明刚同步后对该股票本地全量记录的覆盖范围；previous_full_local_review包含此前分析时覆盖的全部本地证据批次摘要，不能只回答最新资料。automatically_matched_local_documents是按当前问题从全部本地新闻和公告中检索出的原文证据，必须优先逐条阅读；证据中包含用户所指日期或事项时，应明确回答是否找到、来源、正文状态及其如何影响原报告。互联网补充仅可依据本轮登记来源同步且已保存的材料，按数据中的来源、原文链接和日期注明；系统没有提供通用网页搜索结果时，不得声称自行浏览互联网。区分原报告快照、当前本地记录、来源事实与推断。围绕问题实质分析并提出可编辑确认的判断，不能自行视为用户已确认。附图按attached_images顺序关联user-image证据ID；图片未经独立核验，看不清的文字和数字不能猜。TITLE_ONLY仅能描述公告标题，不得声称读过公告正文。", data, context)
         if set([*requested, *[image["evidence_id"] for image in images]]) - set(context["evidence_allowlist"]):
             raise ValueError("本次引用资料超出输入预算，请减少引用后重新发送；未忽略任何指定资料进行分析")
-        row.context_snapshot_json = {**deepcopy(context), "requested_evidence_ids": requested,
+        row.context_snapshot_json = {**deepcopy(context),
+                                     "registered_source_sync": data_sync,
+                                     "body_extraction": body_extraction,
+                                     "local_snapshot_manifest": fresh_context.get("evidence_manifest"),
+                                     "previous_full_local_review": full_local_review,
+                                     "automatically_matched_local_documents": [item["evidence_id"] for item in automatic_matches],
+                                     "requested_evidence_ids": requested,
                                      "selected_evidence": selected, "images": images}
         db.commit()
         def save_log(log):
