@@ -93,11 +93,32 @@ class AiStockAnalysisRead(BaseModel):
     completed_at: datetime | None = None
 
 
+class AnalystImageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="", max_length=160)
+    data_url: str = Field(max_length=5_600_000)
+
+    @model_validator(mode="after")
+    def valid_image(self):
+        from app.services.analyst_inputs import validate_image
+        validate_image(self.data_url)
+        return self
+
+
 class AnalystDialogueCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question: str = Field(min_length=2, max_length=6000)
     model_instance_code: str | None = Field(default=None, max_length=64)
     evidence_ids: list[str] = Field(default_factory=list, max_length=8)
+    images: list[AnalystImageInput] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def valid_attachments(self):
+        from app.services.analyst_inputs import MAX_TOTAL_IMAGE_BYTES, validate_image
+        if sum(len(validate_image(image.data_url)[1]) for image in self.images) > MAX_TOTAL_IMAGE_BYTES:
+            raise ValueError("本次图片合计最大12MB，请减少图片后发送")
+        self.evidence_ids = list(dict.fromkeys(self.evidence_ids))
+        return self
 
 
 class AnalystDialogueOutput(BaseModel):
@@ -119,6 +140,7 @@ class AnalystReportConfirm(BaseModel):
 class AnalystEventCondition(BaseModel):
     model_config = ConfigDict(extra="forbid")
     category: Literal["NEWS", "NOTICE", "ANY"] = "ANY"
+    label: str = Field(default="", max_length=80)
     keywords: list[str] = Field(min_length=1, max_length=12)
 
     @model_validator(mode="after")
@@ -126,6 +148,19 @@ class AnalystEventCondition(BaseModel):
         self.keywords = list(dict.fromkeys(word.strip() for word in self.keywords if word.strip()))
         if not self.keywords or any(len(word) > 80 for word in self.keywords):
             raise ValueError("请填写有效关键词，每个关键词不超过80字")
+        return self
+
+
+class AnalystObservationRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    observation: str = Field(min_length=1, max_length=500)
+    event_conditions: list[AnalystEventCondition] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def clean_observation(self):
+        self.observation = self.observation.strip()
+        if not self.observation:
+            raise ValueError("重点观察不能为空")
         return self
 
 
@@ -137,7 +172,10 @@ class AnalystWatchConfig(BaseModel):
     volume_mode: Literal["ANY", "EXPAND", "SHRINK"] = "ANY"
     volume_ratio: float = Field(default=1.5, gt=0, le=100)
     volume_window: int = Field(default=20, ge=5, le=120)
+    # Retained for old saved configurations. New writes use observation_rules.
     event_conditions: list[AnalystEventCondition] = Field(default_factory=list, max_length=12)
+    observation_rules: list[AnalystObservationRule] = Field(default_factory=list, max_length=12)
+    selected_observations: list[str] = Field(default_factory=list, max_length=12)
     review_focus: str = Field(default="", max_length=2500)
     schedule_hour: int = Field(default=18, ge=0, le=23)
     schedule_minute: int = Field(default=0, ge=0, le=59)
@@ -145,6 +183,16 @@ class AnalystWatchConfig(BaseModel):
 
     @model_validator(mode="after")
     def valid_bounds(self):
+        self.selected_observations = list(dict.fromkeys(
+            text.strip() for text in self.selected_observations if text.strip()
+        ))
+        if any(len(text) > 500 for text in self.selected_observations):
+            raise ValueError("重点观察每项不超过500字")
+        observations = [rule.observation for rule in self.observation_rules]
+        if len(observations) != len(set(observations)):
+            raise ValueError("每条重点观察只能配置一组触发规则")
+        if any(text not in self.selected_observations for text in observations):
+            raise ValueError("触发规则必须属于已选择的重点观察")
         if self.price_lower is not None and self.price_upper is not None and self.price_lower >= self.price_upper:
             raise ValueError("关注下限必须小于上限")
         if self.volume_mode == "EXPAND" and self.volume_ratio <= 1:
@@ -195,6 +243,16 @@ class AnalystDailyOutput(BaseModel):
 class AnalystSuggestionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model_instance_code: str | None = Field(default=None, max_length=64)
+    selected_observations: list[str] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def clean_observations(self):
+        self.selected_observations = list(dict.fromkeys(
+            text.strip() for text in self.selected_observations if text.strip()
+        ))
+        if any(len(text) > 500 for text in self.selected_observations):
+            raise ValueError("重点观察每项不超过500字")
+        return self
 
 
 class AnalystSuggestedConditions(BaseModel):
@@ -205,12 +263,15 @@ class AnalystSuggestedConditions(BaseModel):
     volume_mode: Literal["ANY", "EXPAND", "SHRINK"]
     volume_ratio: float = Field(gt=0, le=100)
     volume_window: int = Field(ge=5, le=120)
-    event_conditions: list[AnalystEventCondition] = Field(min_length=1, max_length=8)
+    event_conditions: list[AnalystEventCondition] = Field(default_factory=list, max_length=8)
+    observation_rules: list[AnalystObservationRule] = Field(min_length=1, max_length=12)
     review_focus: str = Field(min_length=10, max_length=2500)
 
     @model_validator(mode="after")
     def valid_conditions(self):
-        AnalystWatchConfig(**self.model_dump())
+        data = self.model_dump()
+        data["selected_observations"] = [rule.observation for rule in self.observation_rules]
+        AnalystWatchConfig(**data)
         return self
 
 

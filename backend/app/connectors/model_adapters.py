@@ -15,6 +15,32 @@ from app.models.ai_hub import ModelInstance
 MODEL_HTTP_TIMEOUT = httpx.Timeout(connect=8.0, read=90.0, write=30.0, pool=8.0)
 
 
+def text_content(content) -> str:
+    if isinstance(content, str):
+        return content
+    return "\n".join(part.get("text", "") for part in content if part.get("type") == "text")
+
+
+def native_parts(content, provider: str):
+    if isinstance(content, str):
+        return [{"text": content}] if provider == "GEMINI_REST" else content
+    parts = []
+    for part in content:
+        if part.get("type") == "text":
+            parts.append({"text": part["text"]} if provider == "GEMINI_REST" else {"type": "text", "text": part["text"]})
+        elif part.get("type") == "image_url":
+            url = part["image_url"]["url"]
+            if not url.startswith("data:image/") or ";base64," not in url:
+                raise ValueError("图片请求仅支持已验证的内嵌图片")
+            header, data = url.split(",", 1)
+            mime = header[5:].removesuffix(";base64")
+            parts.append({"inlineData": {"mimeType": mime, "data": data}} if provider == "GEMINI_REST"
+                         else {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}})
+        else:
+            raise ValueError("不支持的模型输入内容类型")
+    return parts
+
+
 @dataclass(frozen=True)
 class ModelExecutionResult:
     response_text: str
@@ -181,9 +207,9 @@ class AnthropicMessagesAdapter(ModelAdapter):
     ) -> ModelExecutionResult:
         self.health_check(instance)
         url = f"{instance.api_base_url.rstrip('/')}/{(instance.api_path or 'messages').lstrip('/')}"
-        system = "\n".join(item["content"] for item in messages if item["role"] == "system").strip()
+        system = "\n".join(text_content(item["content"]) for item in messages if item["role"] == "system").strip()
         conversation = [
-            {"role": "assistant" if item["role"] == "assistant" else "user", "content": item["content"]}
+            {"role": "assistant" if item["role"] == "assistant" else "user", "content": native_parts(item["content"], "ANTHROPIC")}
             for item in messages if item["role"] != "system"
         ]
         payload: dict[str, Any] = {
@@ -243,9 +269,9 @@ class GeminiRestAdapter(ModelAdapter):
         if model_code.startswith("models/"):
             model_code = model_code.removeprefix("models/")
         url = f"{base_url}/models/{model_code}:generateContent"
-        system_instruction = "\n".join(item["content"] for item in messages if item["role"] == "system").strip()
+        system_instruction = "\n".join(text_content(item["content"]) for item in messages if item["role"] == "system").strip()
         contents = [
-            {"role": "model" if item["role"] == "assistant" else "user", "parts": [{"text": item["content"]}]}
+            {"role": "model" if item["role"] == "assistant" else "user", "parts": native_parts(item["content"], "GEMINI_REST")}
             for item in messages
             if item["role"] != "system"
         ]

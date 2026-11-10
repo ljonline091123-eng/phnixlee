@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import Response
+from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -100,6 +102,24 @@ def _action(fn, *args, **kwargs):
         raise HTTPException(409, detail=str(exc)) from exc
 
 
+def _dialogue_public(row):
+    value = _public(row, omit=("context_snapshot_json",))
+    snapshot = row.context_snapshot_json or {}
+    value["references"] = snapshot.get("selected_evidence", [])
+    value["images"] = [{key: image.get(key) for key in ("name", "evidence_id", "width", "height")}
+                       | {"url": f"/api/v1/ai-stock-analyst/analyses/{row.analysis_id}/dialogues/{row.id}/images/{index}"}
+                       for index, image in enumerate(snapshot.get("images", []))]
+    return value
+
+
+@router.get("/analyses/{analysis_id}/local-documents")
+def list_local_documents(analysis_id: int, category: Literal["ANY", "NEWS", "NOTICE"] = "ANY",
+                         keyword: str = Query("", max_length=100), offset: int = Query(0, ge=0),
+                         limit: int = Query(12, ge=1, le=50), db: Session = Depends(get_db)):
+    from app.services.analyst_inputs import local_documents
+    return local_documents(db, get_analysis(analysis_id, db), category, keyword, offset, limit)
+
+
 @router.get("/analyses/{analysis_id}/followup")
 def get_followup(analysis_id: int, db: Session = Depends(get_db)):
     get_analysis(analysis_id, db)
@@ -114,7 +134,7 @@ def get_followup(analysis_id: int, db: Session = Depends(get_db)):
     from app.jobs.governance_runner import governance_runner_status
     suggestion = db.scalar(select(AiAnalystWatchSuggestion).where(AiAnalystWatchSuggestion.analysis_id == analysis_id)
         .order_by(AiAnalystWatchSuggestion.id.desc()).limit(1))
-    return {"dialogues": [_public(r, omit=("context_snapshot_json",)) for r in reversed(dialogues)], "revisions": [_public(r) for r in revisions],
+    return {"dialogues": [_dialogue_public(r) for r in reversed(dialogues)], "revisions": [_public(r) for r in revisions],
             "watch_suggestion": _public(suggestion, omit=("evidence_snapshot_json",)),
             "watch": _public(watch), "latest_review": _public(daily, omit=("evidence_snapshot_json",)),
             "runner": governance_runner_status(), "timezone": "Asia/Shanghai"}
@@ -124,7 +144,7 @@ def get_followup(analysis_id: int, db: Session = Depends(get_db)):
 def create_dialogue(analysis_id: int, payload: AnalystDialogueCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     row = _action(followup.queue_dialogue, db, analysis_id, payload)
     background_tasks.add_task(followup.run_dialogue_background, row.id)
-    return _public(row, omit=("context_snapshot_json",))
+    return _dialogue_public(row)
 
 
 @router.get("/analyses/{analysis_id}/dialogues/{dialogue_id}/evidence")
@@ -132,7 +152,17 @@ def get_dialogue_evidence(analysis_id: int, dialogue_id: int, db: Session = Depe
     row = db.get(AiAnalystDialogue, dialogue_id)
     if row is None or row.analysis_id != analysis_id:
         raise HTTPException(404, detail="对话记录不存在")
-    return row.context_snapshot_json
+    return {key: value for key, value in row.context_snapshot_json.items() if key != "images"}
+
+
+@router.get("/analyses/{analysis_id}/dialogues/{dialogue_id}/images/{image_index}")
+def get_dialogue_image(analysis_id: int, dialogue_id: int, image_index: int, db: Session = Depends(get_db)):
+    row = db.get(AiAnalystDialogue, dialogue_id)
+    if row is None or row.analysis_id != analysis_id or not 0 <= image_index < len((row.context_snapshot_json or {}).get("images", [])):
+        raise HTTPException(404, detail="对话图片不存在")
+    from app.services.analyst_inputs import validate_image
+    mime, binary, _, _ = validate_image(row.context_snapshot_json["images"][image_index]["data_url"])
+    return Response(binary, media_type=mime, headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
 
 
 @router.post("/analyses/{analysis_id}/watch/suggestions", status_code=202)

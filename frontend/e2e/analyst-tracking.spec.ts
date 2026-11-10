@@ -7,6 +7,11 @@ async function prepare(page: Page, request: APIRequestContext) {
   const runs = await (await request.get(`${api}/ai-stock-analyst/analyses?limit=50`)).json();
   const run = runs.find((r: { status: string }) => r.status === "COMPLETED");
   expect(run).toBeTruthy();
+  const f10Response = await request.get(`${api}/stocks/${run.market}/${run.symbol}/f10?local_only=true&kline_limit=5000&financial_limit=20&notice_limit=8&news_limit=8`);
+  expect(f10Response.ok()).toBeTruthy();
+  const f10 = await f10Response.json();
+  f10.news = [{ id: 99001, title: "全屏新闻详情验收", news_time: "2026-11-10T09:30:00", source_name: "验收新闻源", content: "新闻详情应在统一研究工作区内打开，关闭详情不退出全屏。" }];
+  f10.news_total = 1;
   await page.addInitScript(id => localStorage.setItem("ai-analyst-active", String(id)), run.id);
   const stamp = new Date().toISOString();
   const config = { enabled: true, price_lower: 6, price_upper: 8, volume_mode: "ANY", volume_ratio: 1.5,
@@ -38,26 +43,39 @@ async function prepare(page: Page, request: APIRequestContext) {
     if (url.pathname.endsWith("/timeline/601/evidence")) return route.fulfill({ json: { evidence: [ { evidence_id: "notice:1", title: "主营订单进展", excerpt: "保留真实来源和原文" } ] } });
     return route.continue();
   });
+  await page.route(`${api}/stocks/${run.market}/${run.symbol}/f10?*`, async route => route.fulfill({ json: f10 }));
   await page.goto(`${base}/#/research/analyst`);
   await expect(page.getByRole("heading", { name: "AI研究伙伴", exact: true })).toBeVisible();
 }
 
-test("两区域原生全屏、全屏内弹窗及退出恢复", async ({ page, request }) => {
+test("统一研究工作区全屏、伙伴收缩及全屏内弹窗", async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await prepare(page, request);
-  await page.getByRole("button", { name: "全屏分析结论", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.tagName)).toBe("MAIN");
-  await expect(page.getByRole("button", { name: "退出全屏分析结论" })).toBeVisible();
-  await page.getByRole("button", { name: "退出全屏分析结论" }).click();
-  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
-  await page.getByRole("button", { name: "全屏研究伙伴", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.tagName)).toBe("SECTION");
+  await page.getByRole("button", { name: "全屏研究工作区", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("analyst-unified-workspace"))).toBeTruthy();
+  await page.getByRole("button", { name: "向右收起AI研究伙伴", exact: true }).click();
+  await expect(page.locator(".analyst-unified-workspace")).toHaveClass(/partner-collapsed/);
+  await page.getByRole("button", { name: "展开AI研究伙伴", exact: true }).click();
   await page.getByRole("button", { name: "关注价位 / 条件" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   expect(await page.getByRole("dialog").evaluate(el => document.fullscreenElement?.contains(el))).toBeTruthy();
   await page.getByRole("button", { name: "关闭关注条件" }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("analyst-unified-workspace"))).toBeTruthy();
+  await page.getByRole("tab", { name: "股票资料", exact: true }).click();
+  const drawer = page.locator(".stock-detail-drawer.embedded");
+  await expect(drawer).toBeVisible();
+  await drawer.locator(".detail-primary-tabs").getByRole("button", { name: "新闻", exact: true }).click();
+  await expect(drawer).toContainText("全屏新闻详情验收");
+  await drawer.getByRole("button", { name: "查看详情", exact: true }).click();
+  const newsDialog = page.getByRole("dialog", { name: "新闻公告详情" });
+  await expect(newsDialog).toBeVisible();
+  expect(await newsDialog.evaluate(element => document.fullscreenElement?.contains(element))).toBeTruthy();
+  await page.getByRole("button", { name: "关闭新闻公告详情" }).click();
+  await expect(newsDialog).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("analyst-unified-workspace"))).toBeTruthy();
+  await drawer.getByRole("button", { name: "查看详情", exact: true }).click();
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: "test-results/analyst-chat-fullscreen.png" });
-  await page.getByRole("button", { name: "退出全屏研究伙伴", exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
 });
 
@@ -67,20 +85,19 @@ test("全屏降级、观察时间轴、模型失败仍显示目标提醒及复�
   await prepare(page, request);
   const tabs = page.getByRole("tablist", { name: "分析内容" });
   await expect(tabs.getByRole("tab")).toHaveText(["分析结论", "股票资料", /依据与数据/, "执行记录", "时间轴", "跟踪复盘"]);
-  await page.getByRole("button", { name: "全屏分析结论", exact: true }).click();
-  await expect(page.locator(".analyst-main.analyst-pane-fullscreen")).toBeVisible();
+  await page.getByRole("button", { name: "全屏研究工作区", exact: true }).click();
+  await expect(page.locator(".analyst-unified-workspace.analyst-pane-fullscreen")).toBeVisible();
   await page.getByRole("button", { name: "讨论这条结论" }).click();
-  await expect(page.locator(".analyst-pane-fullscreen")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "AI研究伙伴", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "时间轴", exact: true }).click();
-  await expect(page.locator(".analyst-observation-overview")).toContainText("来自报告的重点观察");
+  await expect(page.locator(".analyst-observation-overview")).toContainText("来自当前报告的重点观察");
   await expect(page.locator(".analyst-timeline-item")).toContainText("验证通过");
   await expect(page.locator(".analyst-timeline-item")).toContainText("模型临时不可用");
-  await page.getByRole("button", { name: "全屏分析结论", exact: true }).click();
   await page.getByRole("button", { name: "查看本次证据" }).click();
-  await expect(page.locator(".analyst-main.analyst-pane-fullscreen").getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".analyst-unified-workspace.analyst-pane-fullscreen").getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".analyst-main.analyst-pane-fullscreen")).toBeVisible();
+  await expect(page.locator(".analyst-unified-workspace.analyst-pane-fullscreen")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator(".analyst-pane-fullscreen")).toHaveCount(0);
   await page.getByRole("tab", { name: "跟踪复盘", exact: true }).click();

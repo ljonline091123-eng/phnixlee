@@ -48,6 +48,25 @@ test("对话、编辑确认、关注条件、每日时间轴与历史恢复", as
   });
   await page.goto(`${base}/#/research/analyst`);
   await expect(page.getByRole("heading", { name: "AI研究伙伴" })).toBeVisible();
+  await page.getByRole("button", { name: "全屏研究工作区", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.classList.contains("analyst-unified-workspace"))).toBeTruthy();
+  await expect(page.getByRole("heading", { name: "AI研究伙伴" })).toBeVisible();
+  await page.getByRole("button", { name: "向右收起AI研究伙伴", exact: true }).click();
+  await expect(page.locator(".analyst-unified-workspace")).toHaveClass(/partner-collapsed/);
+  await page.getByRole("button", { name: "展开AI研究伙伴", exact: true }).click();
+  await page.getByRole("button", { name: "退出全屏研究工作区", exact: true }).click();
+  const topModel = page.getByLabel("证券分析模型");
+  const partnerModel = page.getByLabel("AI研究伙伴模型");
+  await expect.poll(() => partnerModel.locator("option:not([disabled])").count()).toBeGreaterThan(1);
+  await expect(partnerModel).toHaveValue(await topModel.inputValue());
+  const modelValues = await partnerModel.locator("option:not([disabled])").evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
+  expect(modelValues.length).toBeGreaterThan(1);
+  const initialModel = await topModel.inputValue();
+  const alternateModel = modelValues.find(value => value !== initialModel) || modelValues[0];
+  await partnerModel.selectOption(alternateModel);
+  await expect(topModel).toHaveValue(alternateModel);
+  await topModel.selectOption(initialModel, { force: true });
+  await expect(partnerModel).toHaveValue(initialModel);
   await page.getByLabel("针对这份报告继续提问").fill("回购足以改变当前判断吗？");
   await page.getByRole("button", { name: "发送问题", exact: true }).click();
   await expect(page.locator(".analyst-ai-bubble")).toContainText("仍需观察主营收入和现金流");
@@ -55,20 +74,26 @@ test("对话、编辑确认、关注条件、每日时间轴与历史恢复", as
   await page.getByLabel("最终判断", { exact: true }).fill("用户编辑后确认：重点观察主营业务改善，回购作为辅助信号。");
   await page.getByLabel("确认关注点").fill("主营收入增长\n回购执行进度\n现金流改善");
   await page.getByRole("button", { name: "确认并更新报告", exact: true }).click();
-  await expect(page.locator(".analyst-confirmed-report")).toContainText("用户编辑后确认");
-  await expect(page.locator(".analyst-verdict")).toContainText(run.result_json.executive_summary);
+  await expect(page.locator(".analyst-verdict")).toContainText("用户编辑后确认");
+  await expect(page.locator(".analyst-verdict details")).toContainText(run.result_json.executive_summary);
   await page.getByRole("button", { name: "关注价位 / 条件" }).click();
+  await expect(page.getByRole("group", { name: "选择需要每日跟踪的重点观察（可多选）" })).toContainText("主营收入增长");
+  await page.getByLabel("重点观察2").uncheck();
   await page.getByLabel("关注下限", { exact: true }).fill("20");
   await page.getByLabel("关注上限", { exact: true }).fill("35");
   await page.getByLabel("量能条件").selectOption("EXPAND");
   await page.getByLabel("相对均量倍数").fill("2");
-  await page.getByRole("button", { name: "＋增加事件条件" }).click();
-  await page.getByLabel("事件关键词1").fill("回购,订单");
+  await page.getByRole("button", { name: "＋为该观察增加触发维度" }).first().click();
+  await page.getByLabel("观察1维度1").fill("订单兑现");
+  await page.getByLabel("观察1来源1").selectOption("NOTICE");
+  await page.getByLabel("观察1关键词1").fill("回购,订单");
   await page.getByRole("button", { name: "保存关注条件", exact: true }).click();
   await page.getByRole("tab", { name: "时间轴", exact: true }).click();
   await expect(page.locator(".analyst-watch-overview")).toContainText("每日监控已开启");
   expect(state.watch.config_json.price_lower).toBe(20);
-  expect(state.watch.config_json.event_conditions[0].keywords).toEqual(["回购", "订单"]);
+  expect(state.watch.config_json.event_conditions).toEqual([]);
+  expect(state.watch.config_json.observation_rules[0].event_conditions[0]).toMatchObject({ label: "订单兑现", category: "NOTICE", keywords: ["回购", "订单"] });
+  expect(state.watch.config_json.selected_observations).toEqual(["主营收入增长", "现金流改善"]);
   await page.getByRole("button", { name: "立即检查", exact: true }).click();
   await expect(page.locator(".analyst-timeline-item")).toContainText("部分完成");
   await expect(page.locator(".analyst-condition-pills")).toContainText("已触发");
@@ -81,7 +106,7 @@ test("对话、编辑确认、关注条件、每日时间轴与历史恢复", as
   await page.getByRole("button", { name: "暂停监控", exact: true }).click();
   await expect(page.locator(".analyst-watch-overview")).toContainText("每日监控已暂停");
   await page.reload();
-  await expect(page.locator(".analyst-confirmed-report").filter({ hasText: "用户编辑后确认" })).toBeVisible();
+  await expect(page.locator(".analyst-verdict")).toContainText("用户编辑后确认");
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.getByRole("button", { name: "AI讨论与跟踪", exact: true }).click();
   await page.getByRole("button", { name: "关注价位 / 条件" }).click();
@@ -109,11 +134,11 @@ test("切换历史报告时晚到的旧对话不覆盖当前确认判断", async
   await expect.poll(() => waiting).toBeTruthy();
   await page.getByRole("button", { name: "分析历史", exact: true }).click();
   await page.locator(".analyst-history-row").nth(history.findIndex((row: { id: number }) => row.id === second.id)).click();
-  await expect(page.locator(".analyst-confirmed-report")).toContainText("当前报告独立确认的判断");
+  await expect(page.locator(".analyst-verdict")).toContainText("当前报告独立确认的判断");
   release();
   await page.waitForLoadState("networkidle");
-  await expect(page.locator(".analyst-confirmed-report")).toContainText("当前报告独立确认的判断");
-  await expect(page.locator(".analyst-confirmed-report")).not.toContainText("旧报告延迟返回");
+  await expect(page.locator(".analyst-verdict")).toContainText("当前报告独立确认的判断");
+  await expect(page.locator(".analyst-verdict")).not.toContainText("旧报告延迟返回");
 });
 
 test("AI预填关注条件、保护手动编辑、失败保留和报告资料独立交流", async ({ page, request }) => {
@@ -122,8 +147,9 @@ test("AI预填关注条件、保护手动编辑、失败保留和报告资料独
   const run = history.find((r: { status: string }) => r.status === "COMPLETED");
   await page.addInitScript(id => localStorage.setItem("ai-analyst-active", String(id)), run.id);
   const stamp = new Date().toISOString();
-  const conditions = { price_lower: 6, price_upper: 8, volume_mode: "EXPAND", volume_ratio: 1.8, volume_window: 20,
-    event_conditions: [{ category: "NOTICE", keywords: ["订单", "回购"] }], review_focus: "持续验证主营增长与回购执行的共同影响。" };
+  const conditions = { price_lower: 6, price_upper: 8, volume_mode: "EXPAND", volume_ratio: 1.8, volume_window: 20, event_conditions: [],
+    observation_rules: [{ observation: run.result_json.watch_items[0], event_conditions: [{ category: "NOTICE", label: "订单与回购", keywords: ["订单", "回购"] }] }],
+    review_focus: "持续验证主营增长与回购执行的共同影响。" };
   const state: any = { dialogues: [], revisions: [], latest_review: null, watch: null, watch_suggestion: null,
     runner: { available: true, message: "后台已启动" } };
   let requests = 0;
@@ -170,11 +196,11 @@ test("AI预填关注条件、保护手动编辑、失败保留和报告资料独
   await expect(page.locator(".analyst-discussion-context")).toContainText("正在讨论");
   await page.getByRole("button", { name: "发送问题", exact: true }).click();
   await expect(page.locator(".analyst-ai-bubble")).toContainText("结合所选资料");
-  expect(sent.question).toContain("整体研判");
+  expect(sent.question).toContain("当前结论");
   await page.getByRole("button", { name: "关注价位 / 条件", exact: true }).click();
   await expect(page.getByLabel("关注下限", { exact: true })).toHaveValue("6");
   await expect(page.getByLabel("关注上限", { exact: true })).toHaveValue("8");
-  await expect(page.getByLabel("事件关键词1")).toHaveValue("订单，回购");
+  await expect(page.getByLabel("观察1关键词1")).toHaveValue("订单，回购");
   expect(saves).toBe(0);
   await page.getByLabel("关注下限", { exact: true }).fill("5.5");
   await page.getByRole("button", { name: "重新生成AI建议" }).click();

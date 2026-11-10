@@ -1240,7 +1240,8 @@ class ModelHubService:
         # Enforce the limit on the exact prompt sent to the provider, including
         # any enabled Skill instructions added above.
         if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
-            if sum(len(item.get("content", "")) for item in messages) > 60_000:
+            from app.connectors.model_adapters import text_content
+            if sum(len(text_content(item.get("content", ""))) for item in messages) > 60_000:
                 raise ValueError("完整分析上下文（含 Skill 指令）超过 60,000 字符安全上限，请压缩证据包或缩小单次候选范围")
         candidates = self.list_route_options(
             task_type=task_type,

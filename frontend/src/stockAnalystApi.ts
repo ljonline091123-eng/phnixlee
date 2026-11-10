@@ -50,26 +50,36 @@ export const analystApi = {
 export type AnalystDialogue = {
   id: number; status: string; question: string; reply_json: { reply?: string; suggested_judgment?: string; focus_points?: string[]; evidence?: AnalystReference[] };
   error_message?: string; model_instance_code?: string; created_at: string; completed_at?: string;
+  references?: AnalystEvidence[];
+  images?: { name: string; evidence_id: string; url: string; width: number; height: number }[];
 };
+export type AnalystImageInput = { name: string; data_url: string };
+export function analystModelSupportsImages(model?: { model_code: string; config_json?: Record<string, unknown> }) {
+  if (!model) return false;
+  for (const key of ["supports_images", "supports_vision"]) if (typeof model.config_json?.[key] === "boolean") return model.config_json[key] as boolean;
+  return ["gemini", "gpt-4o", "gpt-4.1", "gpt-5", "claude", "qwen-vl", "qwen2.5-vl", "qwen3-vl", "glm-4v", "glm-4.1v", "glm-4.5v", "glm-4.6v"].some(value => model.model_code.toLowerCase().includes(value));
+}
 export type AnalystRevision = { id: number; version: number; judgment: string; focus_points_json: string[]; created_at: string; dialogue_id: number };
+export type AnalystEventCondition = { category: "NEWS" | "NOTICE" | "ANY"; label?: string; keywords: string[] };
+export type AnalystObservationRule = { observation: string; event_conditions: AnalystEventCondition[] };
 export type AnalystWatchConfig = {
   enabled: boolean; price_lower: number | null; price_upper: number | null; volume_mode: "ANY" | "EXPAND" | "SHRINK";
-  volume_ratio: number; volume_window: number; event_conditions: { category: "NEWS" | "NOTICE" | "ANY"; keywords: string[] }[];
-  review_focus: string; schedule_hour: number; schedule_minute: number; model_instance_code?: string;
+  volume_ratio: number; volume_window: number; event_conditions: AnalystEventCondition[]; observation_rules: AnalystObservationRule[];
+  selected_observations: string[]; review_focus: string; schedule_hour: number; schedule_minute: number; model_instance_code?: string;
 };
 export type AnalystWatch = { id: number; enabled: boolean; config_json: AnalystWatchConfig; config_version: number; model_instance_code: string };
 export type AnalystWatchSuggestion = {
   id: number; status: string; model_instance_code?: string; created_at: string; error_message?: string;
-  result_json: { summary?: string; conditions?: Partial<AnalystWatchConfig>; price_reason?: string; volume_reason?: string; event_reason?: string; limitations?: string[]; evidence?: AnalystReference[] };
+  result_json: { summary?: string; conditions?: Partial<AnalystWatchConfig>; selected_observations?: string[]; price_reason?: string; volume_reason?: string; event_reason?: string; limitations?: string[]; evidence?: AnalystReference[] };
 };
-export type AnalystDiscussionContext = { text: string; evidenceId?: string; nonce: number };
+export type AnalystDiscussionContext = { text: string; evidenceId?: string; evidence?: AnalystEvidence; nonce: number };
 export type AnalystFollowupState = { dialogues: AnalystDialogue[]; revisions: AnalystRevision[]; latest_review: AnalystDailyReview | null; watch: AnalystWatch | null; watch_suggestion?: AnalystWatchSuggestion | null; runner: { available: boolean; message: string }; timezone: string };
 export type AnalystForecastValidation = { forecast_id: number; state: string; detail: string; price_date?: string; actual_price?: number; lesson?: string };
 export type AnalystDailyReview = {
   id: number; status: string; business_date: string; attempt: number; created_at: string; completed_at?: string;
   error_message?: string; progress_json: { stage?: string; message?: string; forecast_validations?: AnalystForecastValidation[]; collection?: { category: string; status: string; count?: number; error?: string; source?: string; fetch_log_id?: number }[] };
   config_snapshot_json: AnalystWatchConfig & { config_version: number };
-  conditions_json: { kind: string; label: string; status: string; threshold?: number; value?: number; currency?: string; trade_date?: string; matched_count?: number; scanned_count?: number; reason?: string }[];
+  conditions_json: { kind: string; label: string; observation?: string; dimension?: string; status: string; threshold?: number; value?: number; currency?: string; trade_date?: string; matched_count?: number; scanned_count?: number; reason?: string }[];
   result_json: { summary?: string; judgment?: string; verdict?: string; confidence?: number; changes?: string[]; next_focus?: string[]; evidence?: AnalystReference[];
     observation_checks?: { observation_id: string; observation_text?: string; status: string; explanation: string; evidence: AnalystReference[] }[];
     forecast_ids?: number[]; forecast_reason?: string; forecast_warnings?: string[]; learning_notes?: string[]; forecast_validations?: AnalystForecastValidation[] };
@@ -87,8 +97,9 @@ export type AnalystForecast = {
 export type AnalystTrackingPage = { items: AnalystForecast[]; total: number; stats: Record<string, number> };
 export const analystFollowupApi = {
   state: (id: number) => request<AnalystFollowupState>(`/ai-stock-analyst/analyses/${id}/followup`),
-  send: (id: number, question: string, model_instance_code: string, evidence_ids: string[] = []) => request<AnalystDialogue>(`/ai-stock-analyst/analyses/${id}/dialogues`, { method: "POST", body: JSON.stringify({ question, model_instance_code, evidence_ids }) }),
-  suggest: (id: number, model_instance_code: string) => request<AnalystWatchSuggestion>(`/ai-stock-analyst/analyses/${id}/watch/suggestions`, { method: "POST", body: JSON.stringify({ model_instance_code }) }),
+  send: (id: number, question: string, model_instance_code: string, evidence_ids: string[] = [], images: AnalystImageInput[] = []) => request<AnalystDialogue>(`/ai-stock-analyst/analyses/${id}/dialogues`, { method: "POST", body: JSON.stringify({ question, model_instance_code, evidence_ids, images }) }),
+  localDocuments: (id: number, category: string, keyword: string, offset: number, signal?: AbortSignal) => request<{ items: AnalystEvidence[]; total: number }>(`/ai-stock-analyst/analyses/${id}/local-documents?category=${category}&keyword=${encodeURIComponent(keyword)}&offset=${offset}&limit=12`, { signal }),
+  suggest: (id: number, model_instance_code: string, selected_observations: string[] = []) => request<AnalystWatchSuggestion>(`/ai-stock-analyst/analyses/${id}/watch/suggestions`, { method: "POST", body: JSON.stringify({ model_instance_code, selected_observations }) }),
   suggestionEvidence: (id: number, suggestion: number) => request<{ evidence: AnalystEvidence[] }>(`/ai-stock-analyst/analyses/${id}/watch/suggestions/${suggestion}/evidence`),
   dialogueEvidence: (id: number, dialogue: number) => request<{ evidence: AnalystEvidence[] }>(`/ai-stock-analyst/analyses/${id}/dialogues/${dialogue}/evidence`),
   confirm: (id: number, payload: { dialogue_id: number; expected_revision_id: number | null; judgment: string; focus_points: string[] }) => request<AnalystRevision>(`/ai-stock-analyst/analyses/${id}/report-confirmations`, { method: "POST", body: JSON.stringify(payload) }),
