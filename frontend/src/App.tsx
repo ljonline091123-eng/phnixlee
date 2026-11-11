@@ -1096,7 +1096,6 @@ function message(text: string) {
         .split(/[\n,，]/)
         .map((item) => item.trim())
         .filter(Boolean);
-      if (!fallback_chain_json.length) throw new Error("请至少配置一个降级模型实例");
       const payload: ModelRoutePayload = {
         task_type: editingRoute.task_type.trim(),
         preferred_instance_code:
@@ -1181,13 +1180,30 @@ function message(text: string) {
     }
   }
   async function deleteInstance(item: ModelInstance) {
-    if (!window.confirm(`删除模型实例 ${item.instance_code}？`)) return;
+    const dependentRoutes = routes.filter(
+      (route) => route.preferred_instance_code === item.instance_code || route.fallback_chain_json.includes(item.instance_code),
+    );
+    const impact = dependentRoutes.length
+      ? `\n\n将移除 ${dependentRoutes.length} 条任务路由中对它的引用。若它是首选，将由该路由中第一个已启用的备用模型接替；没有可接替的模型时，删除会被阻止。`
+      : "";
+    if (!window.confirm(`删除模型实例 ${item.instance_code}？${impact}`)) return;
     try {
-      await api.deleteModelInstance(item.id);
-      await load();
-      message("模型实例已删除");
+      await api.deleteModelInstance(item.id, dependentRoutes.length > 0);
     } catch (e) {
-      message(e instanceof Error ? e.message : "删除失败，可能仍被路由引用");
+      message(e instanceof Error ? e.message : "模型实例删除失败，请重试");
+      return;
+    }
+    setInstances((current) => current.filter((instance) => instance.id !== item.id).map(
+      (instance) => instance.fallback_instance_code === item.instance_code ? { ...instance, fallback_instance_code: undefined } : instance,
+    ));
+    setChat((current) => current.instance_code === item.instance_code ? { ...current, instance_code: "" } : current);
+    message(`模型实例 ${item.instance_code} 已删除`);
+    if (dependentRoutes.length) {
+      try {
+        setRoutes(await api.listModelRoutes());
+      } catch {
+        message(`模型实例 ${item.instance_code} 已删除；任务路由列表刷新失败，请重新加载页面。`);
+      }
     }
   }
   async function deleteRoute(item: ModelRoute) {

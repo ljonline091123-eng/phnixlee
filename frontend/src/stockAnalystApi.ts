@@ -6,6 +6,10 @@ export type AnalystCoverage = {
   counts: Record<string, number>; total_counts: Record<string, number>;
   latest_dates: Record<string, string | null>; available_categories: string[];
   missing_categories: string[]; warnings: string[]; evidence_count: number;
+  evidence_manifest?: { schema_version?: string; scope?: string; evidence_count?: number;
+    category_counts?: Record<string, number>; source_record_counts?: Record<string, number>;
+    content_status_counts?: Record<string, Record<string, number>>;
+    category_sha256?: Record<string, string> };
 };
 export type AnalystReference = { evidence_id: string; claim: string };
 export type AnalystScenario = {
@@ -50,6 +54,7 @@ export const analystApi = {
 export type AnalystDialogue = {
   id: number; status: string; question: string; reply_json: { reply?: string; suggested_judgment?: string; focus_points?: string[]; evidence?: AnalystReference[] };
   error_message?: string; model_instance_code?: string; created_at: string; completed_at?: string;
+  progress?: { stage?: string; message?: string; updated_at?: string; current_batch?: number; total_batches?: number };
   references?: AnalystEvidence[];
   images?: { name: string; evidence_id: string; url: string; width: number; height: number }[];
 };

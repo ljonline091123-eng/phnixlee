@@ -1208,7 +1208,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
-  deleteModelInstance: (id: number) => request<void>(`/model-hub/instances/${id}`, { method: "DELETE" }),
+  deleteModelInstance: (id: number, reassignRoutes = false) =>
+    request<void>(`/model-hub/instances/${id}${reassignRoutes ? "?reassign_routes=true" : ""}`, { method: "DELETE" }),
   testModelInstance: (id: number) =>
     request<ModelTestResponse>(`/model-hub/instances/${id}/test`, { method: "POST" }),
   listModelRoutes: () => request<ModelRoute[]>("/model-hub/routes"),

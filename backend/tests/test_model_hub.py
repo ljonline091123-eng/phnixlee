@@ -62,8 +62,8 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(deepseek_instance.model_code, "deepseek-v4-pro")
         self.assertIsNotNone(instance)
         self.assertIsNotNone(route)
-        self.assertEqual(route.preferred_instance_code, "DEEPSEEK_V4_FLASH")
-        self.assertEqual(route.fallback_chain_json, ["GEMINI_FLASH", "MOCK_GENERAL"])
+        self.assertEqual(route.preferred_instance_code, "GEMINI_FLASH_25")
+        self.assertEqual(route.fallback_chain_json, ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH_LITE", "MOCK_GENERAL"])
 
     def test_seed_repairs_damaged_qwen_display_name_without_resetting_model_config(self) -> None:
         qwen = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "QWEN_PLUS"))
@@ -75,7 +75,7 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(qwen.model_name, "通义千问 Plus")
         self.assertEqual(qwen.model_code, "operator-custom-qwen")
 
-    def test_legacy_route_upgrades_without_overwriting_custom_route(self) -> None:
+    def test_seed_preserves_existing_routes_and_repairs_instance_fallback(self) -> None:
         with TemporaryDirectory() as folder:
             engine = create_engine(f"sqlite:///{Path(folder) / 'routes.db'}")
             Base.metadata.create_all(engine)
@@ -88,8 +88,8 @@ class ModelHubFoundationTest(unittest.TestCase):
                 route.fallback_chain_json = ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"]
                 db.commit()
                 seed_default_models(db)
-                self.assertEqual(route.preferred_instance_code, "DEEPSEEK_V4_FLASH")
-                self.assertEqual(route.fallback_chain_json, ["GEMINI_FLASH", "MOCK_GENERAL"])
+                self.assertEqual(route.preferred_instance_code, "QWEN_PLUS")
+                self.assertEqual(route.fallback_chain_json, ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"])
                 self.assertEqual(deepseek.fallback_instance_code, "GEMINI_PRO")
                 route.preferred_instance_code = "GEMINI_PRO"
                 route.fallback_chain_json = ["MOCK_GENERAL"]

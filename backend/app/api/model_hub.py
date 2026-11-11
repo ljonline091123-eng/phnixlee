@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.ai_hub import AgentSkillLink, ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill, ModelSkillRevision, PredictionLedger, SkillOptimizationDraft, ResearchReportRecord
+from app.models.ai_hub import AgentDefinition, AgentSkillLink, ModelCallLog, ModelInstance, ModelInstanceDeletion, ModelProvider, ModelRouteRule, ModelSkill, ModelSkillRevision, PredictionLedger, SkillOptimizationDraft, ResearchReportRecord
 from app.models.selection import SelectionRun
 from app.schemas.model_hub import (
     ModelCallLogRead,
@@ -126,7 +126,7 @@ def _instance_availability(db: Session, instance: ModelInstance, api_key_configu
         }
     latest = db.scalar(
         select(ModelCallLog)
-        .where(ModelCallLog.instance_code == instance.instance_code)
+        .where(ModelCallLog.instance_code == instance.instance_code, ModelCallLog.model_code == instance.model_code)
         .order_by(ModelCallLog.started_at.desc(), ModelCallLog.id.desc())
         .limit(1)
     )
@@ -159,6 +159,8 @@ def _instance_availability(db: Session, instance: ModelInstance, api_key_configu
     category = str(classified.get("category") or "MODEL_UNKNOWN")
     if category == "MODEL_BILLING":
         status, label = "BILLING", "欠费/额度不足"
+        if instance.provider and instance.provider.provider_code == "GEMINI":
+            label = "API额度不足"
     elif category == "MODEL_UNAVAILABLE":
         status, label = "DEGRADED", "暂时不可用，可重试"
     elif category == "MODEL_CREDENTIAL":
@@ -222,6 +224,7 @@ def _instance_read(instance: ModelInstance, db: Session) -> ModelInstanceRead:
         setattr(data, field_name, value)
     recent = list(db.scalars(select(ModelCallLog).where(
         ModelCallLog.instance_code == instance.instance_code,
+        ModelCallLog.model_code == instance.model_code,
     ).order_by(ModelCallLog.started_at.desc(), ModelCallLog.id.desc()).limit(20)).all())
     successful = [row for row in recent if row.status == "SUCCESS"]
     success_rate = len(successful) / len(recent) if recent else 0.0
@@ -381,7 +384,11 @@ def create_instance(payload: ModelInstanceCreate, db: Session = Depends(get_db))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     instance = ModelInstance(**values)
+    # Explicitly registering the same code is the only way to restore it.
+    deletion = db.get(ModelInstanceDeletion, instance.instance_code)
     db.add(instance)
+    if deletion is not None:
+        db.delete(deletion)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -418,20 +425,72 @@ def update_instance(
 
 
 @router.delete("/instances/{instance_id}", status_code=204)
-def delete_instance(instance_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_instance(
+    instance_id: int, db: Session = Depends(get_db), *, reassign_routes: bool = False,
+) -> Response:
     instance = _instance_or_404(db, instance_id)
-    routes = list(db.scalars(select(ModelRouteRule)).all())
-    route_count = sum(
-        1
-        for route in routes
-        if route.preferred_instance_code == instance.instance_code
-        or instance.instance_code in (route.fallback_chain_json or [])
-    )
-    if route_count:
+    code = instance.instance_code
+    if code == "MOCK_GENERAL":
+        raise HTTPException(status_code=409, detail="该模型是系统内置的模拟兜底实例，不能删除。")
+    routes = [
+        route for route in db.scalars(select(ModelRouteRule).order_by(ModelRouteRule.task_type))
+        if route.preferred_instance_code == code or code in (route.fallback_chain_json or [])
+    ]
+    if routes and not reassign_routes:
         raise HTTPException(
             status_code=409,
-            detail={"message": "Model instance is referenced by one or more routes.", "dependent_count": int(route_count)},
+            detail={
+                "message": f"模型仍被 {len(routes)} 条任务路由引用：{'、'.join(route.task_type for route in routes)}。",
+                "dependent_count": len(routes),
+                "recovery_actions": ["调整任务路由后重试，或在模型管理页确认由现有备用模型接替。"],
+            },
         )
+
+    agents = list(db.scalars(select(AgentDefinition.agent_code).where(AgentDefinition.model_instance_code == code)))
+    skills = [
+        skill.skill_code for skill in db.scalars(select(ModelSkill))
+        if (skill.config_json or {}).get("preferred_instance_code") == code
+    ]
+    if agents or skills:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"以下智能体或技能直接使用该模型：{'、'.join(sorted(agents + skills))}。",
+                "recovery_actions": ["在对应配置中更换首选模型后再删除。"],
+            },
+        )
+
+    eligible = set(db.scalars(
+        select(ModelInstance.instance_code)
+        .join(ModelInstance.provider)
+        .where(ModelInstance.enabled.is_(True), ModelProvider.enabled.is_(True), ModelInstance.id != instance_id)
+    )) if any(route.preferred_instance_code == code for route in routes) else set()
+    route_updates: list[tuple[ModelRouteRule, str, list[str]]] = []
+    blocked: list[str] = []
+    for route in routes:
+        preferred = route.preferred_instance_code
+        fallback = [candidate for candidate in (route.fallback_chain_json or []) if candidate != code]
+        if preferred == code:
+            replacement = next((candidate for candidate in fallback if candidate in eligible), None)
+            if replacement is None:
+                blocked.append(route.task_type)
+                continue
+            preferred = replacement
+            fallback = [candidate for candidate in fallback if candidate != preferred]
+        route_updates.append((route, preferred, fallback))
+    if blocked:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"以下任务路由没有已启用的备用模型：{'、'.join(blocked)}。",
+                "recovery_actions": ["先为这些路由配置其他已启用的模型，再删除该实例。"],
+            },
+        )
+    for route, preferred, fallback in route_updates:
+        route.preferred_instance_code = preferred
+        route.fallback_chain_json = fallback
+    db.execute(update(ModelInstance).where(ModelInstance.fallback_instance_code == code).values(fallback_instance_code=None))
+    db.add(ModelInstanceDeletion(instance_code=code))
     db.delete(instance)
     db.commit()
     return Response(status_code=204)
@@ -462,8 +521,6 @@ def list_routes(db: Session = Depends(get_db)) -> list[ModelRouteRule]:
 
 
 def _validate_route_chain(db: Session, primary: str, fallback_chain: list[str]) -> None:
-    if not fallback_chain:
-        raise HTTPException(status_code=422, detail="A task route requires at least one fallback instance")
     codes = [primary, *fallback_chain]
     if len(codes) != len(set(codes)):
         raise HTTPException(status_code=422, detail="Route instances must be distinct")

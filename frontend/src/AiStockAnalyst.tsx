@@ -187,8 +187,14 @@ export function AiStockAnalyst() {
   const modelName = models.find(row => row.instance_code === active?.model_instance_code)?.model_name || active?.model_instance_code;
   const elapsed = active ? Math.max(0, Math.floor(((active.completed_at ? dateValue(active.completed_at).getTime() : now) - dateValue(active.created_at).getTime()) / 1000)) : 0;
   const phase = active && ["FAILED", "CANCELLED"].includes(active.status) ? active.progress_json.last_stage : active?.progress_json.stage;
-  const phases = [{ code: "PREPARED", label: "读取本地资料" }, { code: "MODEL", label: "AI综合研判" }, { code: "VALIDATING", label: "核验证据与保存" }];
-  const phaseIndex = active?.status === "COMPLETED" ? 3 : Math.max(0, phases.findIndex(row => row.code === phase));
+  const phases = [
+    { code: "SYNCING", label: "同步登记数据源" },
+    { code: "READING", label: "读取本地全量数据" },
+    { code: "DOCUMENT_REVIEW", label: "分批审阅完整证据" },
+    { code: "MODEL", label: "AI综合研判" },
+    { code: "VALIDATING", label: "校验引用并保存" },
+  ];
+  const phaseIndex = active?.status === "COMPLETED" ? phases.length : Math.max(0, phases.findIndex(row => row.code === phase));
   const references = result?.evidence_chain || [];
 
   return <div className="ai-stock-analyst">
@@ -203,11 +209,11 @@ export function AiStockAnalyst() {
         <label>回看资料周期<select aria-label="回看资料周期" value={months} onChange={e => setMonths(Number(e.target.value))}>{[3, 6, 12, 24, 36, 60].map(value => <option key={value} value={value}>近{value}个月</option>)}</select></label>
         <label className="analyst-model">分析模型<select aria-label="证券分析模型" value={model} onChange={e => setModel(e.target.value)}><option value="" disabled>请选择真实AI模型</option>{models.map(row => <option key={row.id} value={row.instance_code}>{row.model_name} · {row.availability_label || "待测试"}</option>)}</select></label>
         <button type="button" className="analyst-secondary" disabled={!model || testing || isRunning} onClick={() => void testModel()}>{testing ? "测试中…" : "测试模型"}</button>
-        <button type="button" className="analyst-primary" disabled={!stock || !model || !coverage || coverage.evidence_count < 3 || previewing || submitting || isRunning} onClick={() => void start()}><BrainCircuit size={17} />{submitting ? "正在提交…" : isRunning ? "后台分析中" : active?.status === "FAILED" ? "重新分析" : "开始AI分析"}</button>
+        <button type="button" className="analyst-primary" disabled={!stock || !model || previewing || submitting || isRunning} onClick={() => void start()}><BrainCircuit size={17} />{submitting ? "正在提交…" : isRunning ? "后台分析中" : active?.status === "FAILED" ? "重新分析" : "开始AI分析"}</button>
       </div>
       <div className="analyst-config-note">{stock ? `${stock.name}（${stock.symbol}）` : "支持中文、代码、英文及拼音查找股票。"}<span>{selectedModel?.availability_reason || "基于本地已有数据；不会自动重复采集。"}</span></div>
       {previewing && <p role="status">正在读取本地资料覆盖情况…</p>}
-      {coverage && <div className="analyst-preview"><div><strong>本次可读 {coverage.evidence_count} 条资料摘要</strong><span>按类别控制输入长度，行情为区间汇总；财务和公司背景可追溯更早报告。</span></div><div className="analyst-coverage-pills">{Object.entries(coverage.counts).map(([key, count]) => <span className={count ? "has-data" : "no-data"} key={key} title={`本次读取${count}条；本地范围内${coverage.total_counts[key] ?? count}条`}>{categories[key] || key} <b>{count}</b></span>)}</div></div>}
+      {coverage && <div className="analyst-preview"><div><strong>当前本地预览 {coverage.evidence_count} 条 · 开始后先同步更新</strong><span>正式分析会刷新登记数据源，再读取最新本地全量记录；预览只用于查看启动前覆盖情况。</span></div><div className="analyst-coverage-pills">{Object.entries(coverage.counts).map(([key, count]) => <span className={count ? "has-data" : "no-data"} key={key} title={`预览${count}条；本地范围内${coverage.total_counts[key] ?? count}条`}>{categories[key] || key} <b>{count}</b></span>)}</div></div>}
     </details>
     {notice && <div className="analyst-notice" role="status">{notice}<button type="button" aria-label="关闭提示" onClick={() => setNotice("")}>×</button></div>}
     {active?.status === "COMPLETED" && <div className="analyst-mobile-switch"><button className={mobilePane === "reader" ? "selected" : ""} onClick={() => setMobilePane("reader")}><FileText size={15} />报告与资料</button><button className={mobilePane === "chat" ? "selected" : ""} onClick={() => setMobilePane("chat")}><MessageCircle size={15} />AI讨论与跟踪</button></div>}

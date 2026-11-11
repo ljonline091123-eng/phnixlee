@@ -15,12 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.connectors.model_registry import get_model_adapter
 from app.core.config import get_settings
-from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
+from app.models.ai_hub import ModelCallLog, ModelInstance, ModelInstanceDeletion, ModelProvider, ModelRouteRule, ModelSkill
 from app.services.core_skill_defs import core_skill_rows
 from app.services.skill_registry import save_skill_content, sync_skill_from_file
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 from app.services.model_errors import describe_model_error
-from app.services.stock_analyst_skill import STOCK_ANALYST_SKILL, STOCK_ANALYST_FOLLOWUP_SKILL
+from app.services.stock_analyst_skill import (
+    STOCK_ANALYST_SKILL, STOCK_ANALYST_EVIDENCE_REVIEW_SKILL, STOCK_ANALYST_FOLLOWUP_SKILL,
+)
 
 
 def _normalize_bounded_json(value: Any, schema: dict[str, Any], root: dict[str, Any], path: str = "$") -> tuple[Any, list[str]]:
@@ -294,6 +296,91 @@ DEFAULT_MODEL_INSTANCES = (
         "description": "Long financial reports and chart or document interpretation.",
     },
     {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_FLASH_LITE",
+        "model_code": "gemini-3.5-flash-lite",
+        "model_name": "Gemini 3.5 Flash-Lite（快速问答）",
+        "purpose": "QA_QUERY,GENERAL,FAST",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_FLASH_25",
+        "config_json": {"billing_label": "按 API 项目额度", "billing_type": "FREE_TIER_OR_PAID", "thinking_level": "low"},
+        "description": "轻量文本模型，适合高频问答、信息抽取和短文本归纳。",
+    },
+    {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_FLASH_25",
+        "model_code": "gemini-3.8-flash",
+        "model_name": "Gemini 3.8 Flash（全方位）",
+        "purpose": "GENERAL,RESEARCH,KNOWLEDGE_GRAPH,DATA_GOVERNANCE,QA_QUERY",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 6000,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_PRO_25",
+        "config_json": {"billing_label": "免费额度/付费", "billing_type": "FREE_TIER_OR_PAID", "thinking_level": "low"},
+        "description": "对应截图「3.8 Flash / 全方位」；均衡通用档。",
+    },
+    {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_PRO_25",
+        "model_code": "gemini-3.1-pro-preview",
+        "model_name": "Gemini 3.1 Pro Preview（深度研究）",
+        "purpose": "DEEP_RESEARCH,LONG_REPORT,MULTIMODAL,RESEARCH_REPORT",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 8192,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_ARGON",
+        "config_json": {"billing_label": "免费额度/付费", "billing_type": "FREE_TIER_OR_PAID", "thinking_level": "medium"},
+        "description": "预览版，适合长文档与多源归纳；使用 Google API 项目的模型额度。",
+    },
+    {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_ARGON",
+        "model_code": "gemini-4-argon",
+        "model_name": "Gemini 4 Argon（代码与分析）",
+        "purpose": "STOCK_ANALYSIS,CODE_ANALYSIS",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 8192,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_PRO_25",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID", "thinking_level": "medium"},
+        "description": "对应截图「4 Argon / 代码与分析」；当前真旗舰 gemini-4-argon，代码生成与结构化分析。仅付费档可用（Free 不开放）。",
+    },
+    {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_CARBON",
+        "model_code": "gemini-4-carbon",
+        "model_name": "Gemini 4 Carbon（复杂研究）",
+        "purpose": "STOCK_ANALYSIS,META_REVIEW,LONG_REPORT,MOST_COMPLEX",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 16384,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_ARGON",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID", "thinking_level": "high"},
+        "description": "用于复杂研究与多步推理；需 Google API 项目具备该模型额度。",
+    },
+    {
         "provider_code": "ANTHROPIC",
         "instance_code": "CLAUDE_SONNET",
         "model_code": "claude-sonnet-5",
@@ -329,105 +416,173 @@ DEFAULT_MODEL_INSTANCES = (
     },
 )
 
+GEMINI_ADDITIONAL_TEXT_MODELS = (
+    ("GEMINI_FLASH_35", "gemini-3.5-flash", "Gemini 3.5 Flash", "通用分析、摘要与结构化抽取。"),
+    ("GEMINI_FLASH_LITE_31", "gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite", "轻量问答和短文本处理。"),
+    ("GEMINI_FLASH_PREVIEW_3", "gemini-3-flash-preview", "Gemini 3 Flash Preview", "预览版，适合测试通用分析与结构化输出。"),
+)
+
+# Match only the old bundled targets. Keep instance codes stable for saved
+# selections, call history and route rules.
+LEGACY_GEMINI_TARGETS = {
+    "GEMINI_FLASH_LITE": ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite（快速问答）"),
+    "GEMINI_PRO_25": ("gemini-3.1-pro", "Gemini 3.1 Pro（深度研究）"),
+    "GEMINI_CARBON": ("gemini-4-argon", "Gemini 4 Argon（最复杂任务）"),
+}
+
+
+def sync_gemini_model_catalog(db: Session, provider: ModelProvider, deleted_codes: set[str]) -> None:
+    """Reconcile bundled Gemini targets without touching credentials or routes."""
+    rows = list(db.scalars(select(ModelInstance).where(ModelInstance.provider_id == provider.id)))
+    by_code = {row.instance_code: row for row in rows}
+    for default in DEFAULT_MODEL_INSTANCES:
+        code = default["instance_code"]
+        instance = by_code.get(code)
+        legacy = LEGACY_GEMINI_TARGETS.get(code)
+        if instance is None or legacy is None or code in deleted_codes:
+            continue
+        if (instance.model_code, instance.model_name) == legacy:
+            instance.model_code = default["model_code"]
+            instance.model_name = default["model_name"]
+            if not instance.description or instance.description.startswith("对应截图"):
+                instance.description = default["description"]
+
+    configured_targets = {row.model_code.removeprefix("models/") for row in rows}
+    reserved_codes = set(db.scalars(select(ModelInstance.instance_code))) | deleted_codes
+    managed_targets = {
+        item["model_code"] for item in DEFAULT_MODEL_INSTANCES if item["provider_code"] == "GEMINI"
+    } | {item[1] for item in GEMINI_ADDITIONAL_TEXT_MODELS}
+    for instance in rows:
+        if instance.model_code not in managed_targets or not instance.model_code.startswith(("gemini-3", "gemini-4")):
+            continue
+        config = dict(instance.config_json or {})
+        level = config.get("thinking_level")
+        if level not in {None, "off", "none", "low", "medium", "high"}:
+            continue
+        extra = dict(config.get("extra_body_json") or {})
+        generation = dict(extra.get("generationConfig") or {})
+        thinking = dict(generation.get("thinkingConfig") or {})
+        if not thinking:
+            thinking["thinkingLevel"] = "HIGH" if level == "high" else "LOW"
+            generation["thinkingConfig"] = thinking
+            extra["generationConfig"] = generation
+            config["extra_body_json"] = extra
+            # Persist the provider-native parameter so existing API workers
+            # can use the corrected targets without a route change.
+            config["thinking_level"] = None
+            instance.config_json = config
+
+    for code, target, name, description in GEMINI_ADDITIONAL_TEXT_MODELS:
+        if code in reserved_codes or target in configured_targets:
+            continue
+        db.add(ModelInstance(
+            provider_id=provider.id, instance_code=code, model_code=target, model_name=name,
+            purpose="GENERAL,RESEARCH,QA_QUERY", max_tokens=8192,
+            config_json={"billing_label": "按 API 项目额度", "billing_type": "FREE_TIER_OR_PAID", "thinking_level": None,
+                         "extra_body_json": {"generationConfig": {"thinkingConfig": {"thinkingLevel": "LOW"}}}},
+            description=description,
+        ))
+
+
 DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "data_distillation",
-        "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["GEMINI_FLASH"],
+        "preferred_instance_code": "GEMINI_ARGON",
+        "fallback_chain_json": ["GEMINI_PRO_25", "GEMINI_FLASH_25", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": False,
         "description": "单文档双轨蒸馏；完成任务执行器及真实模型连通验证后启用。",
     },
     {
         "task_type": "deep_research",
-        "preferred_instance_code": "GEMINI_PRO",
-        "fallback_chain_json": ["DEEPSEEK_CHAT", "GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_PRO_25",
+        "fallback_chain_json": ["GEMINI_CARBON", "DEEPSEEK_CHAT", "GEMINI_FLASH_25", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "Long report reading and research synthesis after deterministic screening.",
+        "description": "深度研究首选 Gemini 3.1 Pro（截图 3.1 Pro），依次降级到 k Carbon、DeepSeek、本地 Mock。",
     },
     {
         "task_type": "meta_review",
-        "preferred_instance_code": "GEMINI_PRO",
-        "fallback_chain_json": ["DEEPSEEK_CHAT", "GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_CARBON",
+        "fallback_chain_json": ["GEMINI_PRO_25", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "Review repeated failed predictions and propose a Skill revision for approval.",
+        "description": "复盘失败预测、提出 Skill 修订，首选最复杂档 k Carbon（Gemini 4 Argon）。",
     },
     {
         "task_type": "general_chat",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_FLASH_25",
+        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH_LITE", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "通用对话优先使用 DeepSeek V4 Flash，失败时依次降级到 Gemini Flash、本地 Mock。",
+        "description": "通用对话首选 Gemini 3.8 Flash（截图 3.8 Flash 全方位），降级到 DeepSeek Flash、Flash-Lite。",
     },
     {
         "task_type": "model_lab_chat",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_FLASH_25",
+        "fallback_chain_json": ["GEMINI_FLASH_LITE", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "模型实验室手工问答和连通性验证路由。",
+        "description": "模型实验室手工问答和连通性验证路由，首选 Gemini 3.8 Flash。",
     },
     {
         "task_type": "data_governance",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "preferred_instance_code": "GEMINI_FLASH_25",
         # Document governance must have more than one real provider.  The
         # local mock remains in the catalog for offline development, but is
         # filtered out whenever a caller requires a real model.
-        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "QWEN_PLUS", "GEMINI_PRO_25", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "数据治理、分类入湖、DW 层质量检查与字段解释路由。",
+        "description": "数据治理、分类入湖、DW 层质量检查与字段解释路由，首选 Gemini 3.8 Flash。",
     },
     {
         "task_type": "knowledge_graph",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_FLASH_25",
+        "fallback_chain_json": ["GEMINI_PRO_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "单股知识图谱构建、实体关系抽取与证据归档路由。",
+        "description": "单股知识图谱构建、实体关系抽取与证据归档路由，首选 Gemini 3.8 Flash。",
     },
     {
         "task_type": "qa_query",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_FLASH_LITE",
+        "fallback_chain_json": ["GEMINI_FLASH_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "研究中心对话页签的问答、问数、治理和分析路由。",
+        "description": "研究中心问答、问数、治理和分析路由，首选最轻量 Gemini 2.5 Flash-Lite（截图 3.5 快速问答）。",
     },
     {
         "task_type": "stock_screening",
-        "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_ARGON",
+        "fallback_chain_json": ["GEMINI_CARBON", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "分析选股、基本面和量价策略研判路由。",
+        "description": "分析选股、基本面和量价策略研判，首选代码与分析档 Gemini 4 Argon（截图 4 Argon）。",
     },
     {
         "task_type": "stock_analysis",
-        "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_CARBON",
+        "fallback_chain_json": ["GEMINI_ARGON", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "股票分析优先使用 DeepSeek V4 Pro，失败时依次降级到 Gemini 2.5 Pro、本地 Mock。",
+        "description": "股票分析首选最复杂档 k Carbon（Gemini 4 Argon），降级到 4 Argon、DeepSeek。",
     },
     {
         "task_type": "research_report",
-        "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_PRO_25",
+        "fallback_chain_json": ["GEMINI_CARBON", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "历史研报对比、结论复盘和报告生成路由。",
+        "description": "历史研报对比、结论复盘和报告生成，首选 Gemini 3.1 Pro（截图 3.1 Pro）。",
     },
     {
         "task_type": "risk_warning",
-        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
-        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_ARGON",
+        "fallback_chain_json": ["GEMINI_PRO_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "预警判断、负面公告识别、量价失效条件和风险提醒路由。",
+        "description": "预警判断、负面公告识别、量价失效条件和风险提醒，首选代码与分析档 Gemini 4 Argon。",
     },
 )
 
@@ -444,17 +599,19 @@ def _runtime_api_key(provider: ModelProvider) -> str | None:
 LEGACY_DEFAULT_ROUTE_OPTIONS = {
     # The first tuple is the previous built-in route.  Only this known
     # profile is upgraded; an operator-customized route is left untouched.
-    "data_governance": ("DEEPSEEK_V4_FLASH", ("GEMINI_FLASH", "MOCK_GENERAL")),
-    "deep_research": ("GEMINI_FLASH", ("OPENAI_CHATGPT", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
-    "general_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "knowledge_graph": ("GEMINI_FLASH", ("QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "meta_review": ("OPENAI_CHATGPT", ("DEEPSEEK_CHAT", "QWEN_PLUS", "MOCK_GENERAL")),
-    "model_lab_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "qa_query": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "research_report": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "risk_warning": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "stock_analysis": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
-    "stock_screening": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    # Updated to the Gemini five-tier preferred routes so the upgrade path
+    # stays idempotent with DEFAULT_MODEL_ROUTES.
+    "data_governance": ("GEMINI_FLASH_25", ("DEEPSEEK_V4_FLASH", "QWEN_PLUS", "GEMINI_PRO_25", "MOCK_GENERAL")),
+    "deep_research": ("GEMINI_PRO_25", ("GEMINI_CARBON", "DEEPSEEK_CHAT", "GEMINI_FLASH_25", "MOCK_GENERAL")),
+    "general_chat": ("GEMINI_FLASH_25", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH_LITE", "MOCK_GENERAL")),
+    "knowledge_graph": ("GEMINI_FLASH_25", ("GEMINI_PRO_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL")),
+    "meta_review": ("GEMINI_CARBON", ("GEMINI_PRO_25", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
+    "model_lab_chat": ("GEMINI_FLASH_25", ("GEMINI_FLASH_LITE", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL")),
+    "qa_query": ("GEMINI_FLASH_LITE", ("GEMINI_FLASH_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL")),
+    "research_report": ("GEMINI_PRO_25", ("GEMINI_CARBON", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
+    "risk_warning": ("GEMINI_ARGON", ("GEMINI_PRO_25", "DEEPSEEK_V4_FLASH", "MOCK_GENERAL")),
+    "stock_analysis": ("GEMINI_CARBON", ("GEMINI_ARGON", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
+    "stock_screening": ("GEMINI_ARGON", ("GEMINI_CARBON", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
 }
 
 LEGACY_DEFAULT_INSTANCE_FALLBACKS = {
@@ -477,6 +634,7 @@ def _repair_default_text(current: dict[str, Any], defaults: dict[str, Any]) -> d
 
 
 def seed_default_models(db: Session) -> None:
+    deleted_codes = set(db.scalars(select(ModelInstanceDeletion.instance_code)))
     provider_by_code: dict[str, ModelProvider] = {}
     for provider_config in DEFAULT_MODEL_PROVIDERS:
         provider = db.scalar(select(ModelProvider).where(ModelProvider.provider_code == provider_config["provider_code"]))
@@ -498,8 +656,14 @@ def seed_default_models(db: Session) -> None:
         if not provider.api_base_url:
             provider.api_base_url = (provider.config_json or {}).get("api_base_url")
 
+    sync_gemini_model_catalog(db, provider_by_code["GEMINI"], deleted_codes)
+
     for raw_config in DEFAULT_MODEL_INSTANCES:
         instance_config = dict(raw_config)
+        if instance_config["instance_code"] in deleted_codes:
+            continue
+        if instance_config.get("fallback_instance_code") in deleted_codes:
+            instance_config["fallback_instance_code"] = None
         provider_code = str(instance_config.pop("provider_code"))
         provider = provider_by_code[provider_code]
         instance = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == instance_config["instance_code"]))
@@ -540,7 +704,14 @@ def seed_default_models(db: Session) -> None:
                     if item.api_key == shared_key:
                         item.api_key = None
 
-    for route_config in DEFAULT_MODEL_ROUTES:
+    for raw_route in DEFAULT_MODEL_ROUTES:
+        allowed = [
+            code for code in [raw_route["preferred_instance_code"], *raw_route["fallback_chain_json"]]
+            if code not in deleted_codes
+        ]
+        if not allowed:
+            continue
+        route_config = dict(raw_route, preferred_instance_code=allowed[0], fallback_chain_json=allowed[1:])
         route = db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == route_config["task_type"]))
         if route is None:
             db.add(ModelRouteRule(**route_config))
@@ -761,6 +932,7 @@ RESEARCH_QUESTION_SKILLS = (
 
 DEFAULT_MODEL_SKILLS_V2 = (
     STOCK_ANALYST_SKILL,
+    STOCK_ANALYST_EVIDENCE_REVIEW_SKILL,
     STOCK_ANALYST_FOLLOWUP_SKILL,
     *RESEARCH_QUESTION_SKILLS,
     {

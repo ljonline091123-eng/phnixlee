@@ -118,7 +118,7 @@ class ModelInstanceRead(BaseModel):
 class ModelRouteRuleCreate(BaseModel):
     task_type: str = Field(min_length=1, max_length=64)
     preferred_instance_code: str = Field(min_length=1, max_length=64)
-    fallback_chain_json: list[str] = Field(min_length=1)
+    fallback_chain_json: list[str]
     route_policy: str = Field(default="PREFERRED_THEN_FALLBACK", max_length=32)
     enabled: bool = True
     description: str | None = None
@@ -126,7 +126,7 @@ class ModelRouteRuleCreate(BaseModel):
 
 class ModelRouteRuleUpdate(BaseModel):
     preferred_instance_code: str | None = Field(default=None, max_length=64)
-    fallback_chain_json: list[str] | None = Field(default=None, min_length=1)
+    fallback_chain_json: list[str] | None = None
     route_policy: str | None = Field(default=None, max_length=32)
     enabled: bool | None = None
     description: str | None = None

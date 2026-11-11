@@ -58,6 +58,29 @@ class AiStockAnalystOutput(BaseModel):
         return self
 
 
+class AiStockEvidenceEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    event_type: str = Field(min_length=2, max_length=100)
+    summary: str = Field(min_length=2, max_length=700)
+    impact_hypothesis: str = Field(default="", max_length=700)
+    direction: Literal["POSITIVE", "NEGATIVE", "MIXED", "NEUTRAL", "UNKNOWN"] = "UNKNOWN"
+    confidence: float = Field(ge=0, le=1)
+    evidence_ids: list[str] = Field(min_length=1, max_length=12)
+    next_validation: list[str] = Field(default_factory=list, max_length=5)
+
+
+class AiStockEvidenceReviewOutput(BaseModel):
+    """Auditable batch review contract; every supplied text segment must be covered."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    reviewed_segment_keys: list[str] = Field(min_length=1, max_length=100)
+    batch_summary: str = Field(min_length=2, max_length=900)
+    material_events: list[AiStockEvidenceEvent] = Field(default_factory=list, max_length=12)
+    cross_document_links: list[str] = Field(default_factory=list, max_length=8)
+    contradictions: list[str] = Field(default_factory=list, max_length=8)
+    limitations: list[str] = Field(default_factory=list, max_length=8)
+
+
 class AiStockContextPreview(BaseModel):
     market: str
     symbol: str

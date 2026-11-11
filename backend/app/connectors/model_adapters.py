@@ -283,9 +283,16 @@ class GeminiRestAdapter(ModelAdapter):
             "maxOutputTokens": max_tokens if max_tokens is not None else instance.max_tokens,
             "topP": instance.top_p,
         }
-        extra_body = dict(instance.config_json.get("extra_body_json", {}))
+        extra_body = dict((instance.config_json or {}).get("extra_body_json", {}))
         generation_config.update(extra_body.pop("generationConfig", {}))
         metadata = metadata_json or {}
+        preflight = metadata.get("purpose") == "SELECTION_MODEL_SWITCH_PREFLIGHT" or metadata.get("mode") == "connectivity"
+        modern = model_code.startswith(("gemini-3", "gemini-4"))
+        supports_thinking = modern or model_code.startswith("gemini-2.5")
+        if preflight and modern:
+            # Gemini 3+ expects a level, and 64 tokens can be exhausted before
+            # the probe emits any visible text. Keep a small, bounded budget.
+            generation_config["maxOutputTokens"] = 1024
         output_schema = metadata.get("json_schema_output")
         controlled_json = (
             metadata.get("purpose") in {
@@ -299,12 +306,35 @@ class GeminiRestAdapter(ModelAdapter):
             and metadata.get("require_real_model")
         )
         if controlled_json:
-            # JSON MIME prevents prose/fences, while a small thinking budget
-            # leaves enough output capacity for the complete evidence contract.
             generation_config.setdefault("responseMimeType", "application/json")
-            generation_config.setdefault("thinkingConfig", {"thinkingBudget": 1024})
-        elif metadata.get("purpose") == "SELECTION_MODEL_SWITCH_PREFLIGHT":
-            generation_config.setdefault("thinkingConfig", {"thinkingBudget": 0})
+        thinking = dict(generation_config.get("thinkingConfig") or {})
+        configured_level = (instance.config_json or {}).get("thinking_level")
+        if preflight and supports_thinking:
+            thinking.pop("thinkingBudget", None)
+            thinking.pop("thinkingLevel", None)
+            if modern:
+                thinking["thinkingLevel"] = "LOW"
+            else:
+                thinking["thinkingBudget"] = 128 if model_code.startswith("gemini-2.5-pro") else 0
+                if thinking["thinkingBudget"]:
+                    generation_config["maxOutputTokens"] = 1024
+        elif "thinkingLevel" not in thinking and "thinkingBudget" not in thinking:
+            if modern:
+                level = str(configured_level or ("low" if controlled_json else "")).lower()
+                if level in {"off", "none", "minimal", "low", "medium", "high"}:
+                    # LOW/HIGH also work on Pro models that do not expose
+                    # MINIMAL or MEDIUM. LOW does not mean reasoning is off.
+                    thinking["thinkingLevel"] = "HIGH" if level == "high" else "LOW"
+            else:
+                budgets = {"off": 0, "none": 0, "low": 1024, "medium": 4096, "high": 8192}
+                budget = budgets.get(str(configured_level).lower(), configured_level)
+                try:
+                    if budget is not None or controlled_json:
+                        thinking["thinkingBudget"] = int(budget if budget is not None else 1024)
+                except (ValueError, TypeError):
+                    pass
+        if thinking:
+            generation_config["thinkingConfig"] = thinking
         if output_schema and metadata.get("native_structured_output"):
             generation_config["responseMimeType"] = "application/json"
             generation_config["responseJsonSchema"] = output_schema
@@ -322,4 +352,11 @@ class GeminiRestAdapter(ModelAdapter):
             # Thinking parts are not the final answer and can invalidate an
             # otherwise correct JSON document when includeThoughts is enabled.
             text = "\n".join(part.get("text", "") for part in parts if part.get("text") and not part.get("thought"))
-        return ModelExecutionResult(response_text=text or str(response_json), response_json=response_json)
+        if not text.strip():
+            reason = (candidates[0].get("finishReason") if candidates else None) or (
+                response_json.get("promptFeedback") or {}
+            ).get("blockReason")
+            raise ValueError(f"Gemini 未返回可用正文（{reason or '无正文候选'}）")
+        if preflight and candidates[0].get("finishReason") == "MAX_TOKENS":
+            raise ValueError("Gemini 未返回可用正文：连通性测试输出被截断")
+        return ModelExecutionResult(response_text=text, response_json=response_json)

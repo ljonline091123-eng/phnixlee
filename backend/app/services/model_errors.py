@@ -36,6 +36,11 @@ def classify_model_error(error: Exception | str | None) -> dict[str, object]:
             "确认进度记录中的压缩后字符数低于 60,000，再使用当前模型重试。",
             "仍超限时减少单批候选数量，不需要因该错误更换模型。",
         ]
+    elif "google api 项目免费层配额" in lowered:
+        category, title = "MODEL_BILLING", "Gemini API 项目额度不足"
+        summary = "Google API 项目免费层配额不足或已用尽，本次调用未获可用额度。"
+        suggestion = "请在 Google AI Studio 检查此 API Key 对应项目的计费与配额；Gemini 网页 Pro 订阅不等于 API 项目额度。"
+        recovery_actions = ["为当前 API 项目检查计费与模型配额。", "开通后在模型管理中重新测试，或先选用已实测可用的 Flash 模型。"]
     elif any(token in lowered for token in ("余额不足", "欠费", "insufficient_quota", "quota", "billing", "payment required", "http 402")):
         category, title = "MODEL_BILLING", "模型额度或账单不可用"
         summary = "当前模型账户余额不足、额度耗尽或未开通调用权限。"
@@ -142,6 +147,16 @@ def describe_model_error(exc: Exception, api_key: str | None = None) -> str:
             payload = None
         if isinstance(payload, dict):
             error = payload.get("error")
+            if code == 429 and isinstance(error, dict):
+                violations = [
+                    item for detail in error.get("details", []) if isinstance(detail, dict)
+                    for item in detail.get("violations", []) if isinstance(item, dict)
+                ]
+                if any("freetier" in str(item.get("quotaId", "")).lower() for item in violations):
+                    message = (
+                        "HTTP 429：Google API 项目免费层配额不足或已用尽。"
+                        "Gemini 网页 Pro 订阅与 API 项目额度独立；请在 Google AI Studio 检查当前 API Key 所属项目的计费和配额，再重新测试。"
+                    )
             detail = error.get("message") if isinstance(error, dict) else error
             if isinstance(detail, str) and detail.strip():
                 if code == 404 and "no longer available to new users" in detail.lower():

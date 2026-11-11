@@ -206,11 +206,78 @@ class CoreModelRefactorTest(unittest.TestCase):
             self.assertNotIn("private-key", post.call_args.args[0])
             self.assertEqual(post.call_args.kwargs["json"]["contents"][1]["role"], "model")
 
-    def test_route_rejects_missing_or_duplicate_fallbacks(self) -> None:
+    def test_route_accepts_an_empty_chain_but_rejects_invalid_models(self) -> None:
         base = {"task_type": "test_route", "preferred_instance_code": "MOCK_GENERAL", "enabled": True}
-        for fallback in ([], ["MOCK_GENERAL"], ["UNKNOWN_INSTANCE"]):
+        for fallback in (["MOCK_GENERAL"], ["UNKNOWN_INSTANCE"]):
             response = self.client.post("/api/v1/model-hub/routes", json={**base, "fallback_chain_json": fallback})
             self.assertEqual(response.status_code, 422, response.text)
+        response = self.client.post("/api/v1/model-hub/routes", json={**base, "fallback_chain_json": []})
+        self.assertEqual(response.status_code, 201, response.text)
+
+    def test_delete_default_model_reassigns_routes_and_survives_reseed(self) -> None:
+        code = "GEMINI_FLASH_25"
+        instance = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == code))
+        provider_id = instance.provider_id
+        routes = "/api/v1/model-hub/routes"
+        instances = "/api/v1/model-hub/instances"
+        log = ModelCallLog(task_type="deletion_test", instance_code=code, status="SUCCESS")
+        self.db.add(log)
+        self.db.commit()
+        log_id = log.id
+        custom = self.client.post(routes, json={
+            "task_type": "deletion_test",
+            "preferred_instance_code": code,
+            "fallback_chain_json": ["QWEN_PLUS"],
+        })
+        self.assertEqual(custom.status_code, 201, custom.text)
+        route_id = custom.json()["id"]
+        url = f"{instances}/{instance.id}"
+        self.assertEqual(self.client.delete(url).status_code, 409)
+        response = self.client.delete(url, params={"reassign_routes": "true"})
+        self.assertEqual(response.status_code, 204, response.text)
+
+        with sessionmaker(bind=self.engine)() as fresh_db:
+            seed_default_models(fresh_db)
+            # Missing default routes may be seeded, but must also omit the deleted code.
+            fresh_db.delete(fresh_db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == "general_chat")))
+            fresh_db.commit()
+            seed_default_models(fresh_db)
+            self.assertEqual(fresh_db.get(ModelCallLog, log_id).instance_code, code)
+
+        result = self.client.get(instances)
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertNotIn(code, [item["instance_code"] for item in result.json()])
+        self.assertIn("GEMINI_PRO_25", [item["instance_code"] for item in result.json()])
+        self.assertNotIn(code, [item["fallback_instance_code"] for item in result.json()])
+        result = self.client.get(routes)
+        self.assertEqual(result.status_code, 200, result.text)
+        for route in result.json():
+            self.assertNotEqual(route["preferred_instance_code"], code)
+            self.assertNotIn(code, route["fallback_chain_json"])
+        custom_route = next(route for route in result.json() if route["id"] == route_id)
+        self.assertEqual(custom_route["preferred_instance_code"], "QWEN_PLUS")
+        self.assertEqual(custom_route["fallback_chain_json"], [])
+        self.assertEqual(ModelHubService(self.db).list_route_options("deletion_test")[0].instance.instance_code, "QWEN_PLUS")
+
+        restore = {"provider_id": provider_id, "instance_code": code, "model_code": "custom-model", "model_name": "Manual restore"}
+        response = self.client.post(instances, json=restore)
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(self.client.post(instances, json=restore).status_code, 409)
+
+    def test_delete_model_is_atomic_when_no_enabled_replacement_exists(self) -> None:
+        code = "GEMINI_FLASH_25"
+        target = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == code))
+        fallback = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "QWEN_PLUS"))
+        fallback.enabled = False
+        self.db.add(ModelRouteRule(task_type="no_enabled_fallback", preferred_instance_code=code, fallback_chain_json=["QWEN_PLUS"]))
+        self.db.commit()
+        routes_url = "/api/v1/model-hub/routes"
+        before = self.client.get(routes_url).json()
+        response = self.client.delete(f"/api/v1/model-hub/instances/{target.id}", params={"reassign_routes": "true"})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("no_enabled_fallback", response.json()["detail"]["message"])
+        self.assertEqual(self.client.get(routes_url).json(), before)
+        self.assertIsNotNone(self.db.get(ModelInstance, target.id))
 
     def test_legacy_schema_receives_new_columns(self) -> None:
         engine = create_engine(f"sqlite:///{Path(self.temp.name) / 'legacy.db'}")
@@ -258,6 +325,12 @@ class CoreModelRefactorTest(unittest.TestCase):
         self.assertEqual(len(failures), 5)
 
     def test_deepseek_rate_limit_uses_gemini_route_fallback(self) -> None:
+        # This case tests failover, independent of the default primary model.
+        route = self.db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == "general_chat"))
+        route.preferred_instance_code = "DEEPSEEK_V4_FLASH"
+        route.fallback_chain_json = ["GEMINI_FLASH"]
+        self.db.commit()
+
         class DeepSeekRateLimited:
             def chat(self, **_kwargs):
                 request = httpx.Request("POST", "https://api.deepseek.com/chat/completions")

@@ -105,6 +105,7 @@ def _action(fn, *args, **kwargs):
 def _dialogue_public(row):
     value = _public(row, omit=("context_snapshot_json",))
     snapshot = row.context_snapshot_json or {}
+    value["progress"] = snapshot.get("progress")
     value["references"] = snapshot.get("selected_evidence", [])
     value["images"] = [{key: image.get(key) for key in ("name", "evidence_id", "width", "height")}
                        | {"url": f"/api/v1/ai-stock-analyst/analyses/{row.analysis_id}/dialogues/{row.id}/images/{index}"}
@@ -152,7 +153,12 @@ def get_dialogue_evidence(analysis_id: int, dialogue_id: int, db: Session = Depe
     row = db.get(AiAnalystDialogue, dialogue_id)
     if row is None or row.analysis_id != analysis_id:
         raise HTTPException(404, detail="对话记录不存在")
-    return {key: value for key, value in row.context_snapshot_json.items() if key != "images"}
+    snapshot = dict(row.context_snapshot_json or {})
+    snapshot.pop("images", None)
+    review_state = snapshot.pop("full_local_review_state", None)
+    if review_state:
+        snapshot["full_local_review_coverage"] = review_state.get("coverage") or snapshot.get("full_local_review_coverage")
+    return snapshot
 
 
 @router.get("/analyses/{analysis_id}/dialogues/{dialogue_id}/images/{image_index}")

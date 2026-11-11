@@ -69,6 +69,15 @@ class ModelInstance(TimestampMixin, Base):
     provider: Mapped[ModelProvider] = relationship(back_populates="instances")
 
 
+class ModelInstanceDeletion(Base):
+    """Retain the operator's deletion when the default catalog is seeded again."""
+
+    __tablename__ = "model_instance_deletion"
+
+    instance_code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ModelRouteRule(TimestampMixin, Base):
     __tablename__ = "model_route_rule"
 
