@@ -171,11 +171,34 @@
 .analyst-modal textarea, .analyst-modal input:not([type=checkbox]), .analyst-modal select { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #d7e3f1; border-radius: 7px; padding: 10px; font: inherit; font-size: 13px; color: #38516f; background: white; }
 .analyst-modal textarea { resize: vertical; }
 .analyst-modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.analyst-start-confirm { width: min(620px, 100%); border-radius: 10px; }
+.analyst-start-confirm > header { border-bottom: 1px solid #edf1f6; padding-bottom: 12px; }
+.analyst-start-confirm > header h3 { display: flex; align-items: center; gap: 9px; margin: 0; color: #253b56; font-size: 17px; }
+.analyst-start-confirm > header h3 svg { color: #2563eb; }
+.analyst-start-lead { color: #465a72 !important; font-size: 13px !important; }
+.analyst-start-lead strong { color: #244c80; }
+.analyst-start-scope, .analyst-start-coverage { border: 1px solid #e3eaf2; border-radius: 7px; padding: 12px; margin: 12px 0; }
+.analyst-start-scope > strong, .analyst-start-coverage > strong { color: #425d7d; font-size: 12px; }
+.analyst-start-scope > div { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.analyst-start-scope span { padding: 5px 8px; border-radius: 5px; background: #f1f5f9; color: #51657c; font-size: 11px; }
+.analyst-start-coverage .analyst-coverage-pills { margin-top: 7px; }
+.analyst-start-coverage > small { display: block; margin-top: 9px; color: #8a6829; font-size: 11px; line-height: 1.7; }
+.analyst-start-note { border-left: 3px solid #7da4db; padding: 7px 10px; background: #f5f8fc; color: #64748b !important; }
+.analyst-start-progress { display: flex; align-items: center; gap: 11px; border: 1px solid #bfd2ef; border-radius: 7px; padding: 11px; background: #f2f7ff; color: #3569ad; }
+.analyst-start-progress > div { display: grid; gap: 3px; }
+.analyst-start-progress strong { font-size: 12px; }
+.analyst-start-progress span { font-size: 11px; color: #6580a4; line-height: 1.6; }
+.analyst-start-error { margin: 12px 0 0; padding: 11px; }
+.analyst-start-error p { margin: 5px 0 !important; color: #9b454c !important; }
+.analyst-start-error small { font-size: 11px; }
+.analyst-start-confirm footer { margin-top: 16px; }
+.analyst-start-confirm footer .analyst-primary { min-width: 190px; }
+.analyst-start-confirm-backdrop { z-index: 1450; }
 .analyst-monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 .analyst-event-rule { display: grid; grid-template-columns: 115px minmax(0, 1fr) 30px; gap: 8px; margin: 8px 0; }
 .analyst-event-rule button { border: 0; background: none; color: #8395ac; }
 .analyst-modal .analyst-checkbox { display: flex; align-items: center; gap: 8px; }
-@media (max-width: 600px) { .analyst-followup-header { display: grid; } .analyst-monitor-grid { grid-template-columns: 1fr; } .analyst-modal { padding: 16px; } .analyst-event-rule { grid-template-columns: 92px minmax(0, 1fr) 24px; gap: 4px; } .analyst-modal-backdrop { padding: 10px; } .analyst-user-bubble, .analyst-ai-bubble { max-width: 100%; } }
+@media (max-width: 600px) { .analyst-followup-header { display: grid; } .analyst-monitor-grid { grid-template-columns: 1fr; } .analyst-modal { padding: 16px; } .analyst-event-rule { grid-template-columns: 92px minmax(0, 1fr) 24px; gap: 4px; } .analyst-modal-backdrop { padding: 10px; } .analyst-user-bubble, .analyst-ai-bubble { max-width: 100%; } .analyst-start-confirm footer { display: grid; grid-template-columns: 1fr; } .analyst-start-confirm footer button { width: 100%; } }
 @media (max-width: 1250px) { .analyst-layout { grid-template-columns: minmax(0, 1fr) 235px; } .analyst-scenarios { grid-template-columns: 1fr; } }
 @media (max-width: 950px) { .analyst-layout { grid-template-columns: 1fr; } .analyst-history { max-height: 450px; overflow: auto; } .analyst-two-cols { grid-template-columns: 1fr; } .analyst-steps { flex-wrap: wrap; } .analyst-config-note { flex-wrap: wrap; } }
 @media (max-width: 600px) { .analyst-box { padding: 14px; } .analyst-coverage-grid { grid-template-columns: repeat(2, 1fr); } .analyst-process li { display: grid; gap: 3px; } .analyst-evidence-row summary > small { display: none; } }

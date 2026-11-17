@@ -46,6 +46,8 @@ export function AiStockAnalyst() {
   const [now, setNow] = useState(Date.now());
   const [dataOpened, setDataOpened] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showStartConfirmation, setShowStartConfirmation] = useState(false);
+  const [startError, setStartError] = useState("");
   const [configure, setConfigure] = useState(false);
   const [mobilePane, setMobilePane] = useState("reader");
   const [discussionContext, setDiscussionContext] = useState<AnalystDiscussionContext | null>(null);
@@ -142,6 +144,12 @@ export function AiStockAnalyst() {
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [showHistory]);
+  useEffect(() => {
+    if (!showStartConfirmation) return;
+    const close = (e: KeyboardEvent) => { if (e.key === "Escape" && !submitting) setShowStartConfirmation(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [showStartConfirmation, submitting]);
 
   function choose(row: StockSymbol) { setStock(row); setQuery(row.name); setMatches([]); setNotice(""); }
   function restoreRun(row: AnalystRun) {
@@ -157,15 +165,21 @@ export function AiStockAnalyst() {
   function discuss(text: string, evidenceId?: string) {
     setPartnerCollapsed(false); setDiscussionContext({ text, evidenceId, nonce: Date.now() }); setMobilePane("chat");
   }
-  async function start() {
+  function start() {
     if (!stock || !model || submitting || isRunning) return;
-    setSubmitting(true); setNotice("");
+    setStartError("");
+    setShowStartConfirmation(true);
+  }
+  async function confirmStart() {
+    if (!stock || !model || submitting || isRunning) return;
+    setSubmitting(true); setStartError(""); setNotice("");
     const payload: AnalystRequest = { market: stock.market, symbol: stock.symbol, period_months: months, model_instance_code: model };
     try {
       const record = await analystApi.create(payload);
-      setActive(record); remember("ai-analyst-active", String(record.id)); setTab("process");
+      setActive(record); remember("ai-analyst-active", String(record.id));
+      setTab("process"); setConfigure(false); setMobilePane("reader"); setShowStartConfirmation(false);
       await loadHistory();
-    } catch (e) { setNotice(e instanceof Error ? e.message : "提交分析失败"); }
+    } catch (e) { setStartError(e instanceof Error ? e.message : "补全任务创建失败"); }
     finally { setSubmitting(false); }
   }
   async function testModel() {
@@ -211,7 +225,7 @@ export function AiStockAnalyst() {
         <button type="button" className="analyst-secondary" disabled={!model || testing || isRunning} onClick={() => void testModel()}>{testing ? "测试中…" : "测试模型"}</button>
         <button type="button" className="analyst-primary" disabled={!stock || !model || previewing || submitting || isRunning} onClick={() => void start()}><BrainCircuit size={17} />{submitting ? "正在提交…" : isRunning ? "后台分析中" : active?.status === "FAILED" ? "重新分析" : "开始AI分析"}</button>
       </div>
-      <div className="analyst-config-note">{stock ? `${stock.name}（${stock.symbol}）` : "支持中文、代码、英文及拼音查找股票。"}<span>{selectedModel?.availability_reason || "基于本地已有数据；不会自动重复采集。"}</span></div>
+      <div className="analyst-config-note">{stock ? `${stock.name}（${stock.symbol}）` : "支持中文、代码、英文及拼音查找股票。"}<span>{selectedModel?.availability_reason || "分析前将尝试更新已登记数据源，再读取本地资料。"}</span></div>
       {previewing && <p role="status">正在读取本地资料覆盖情况…</p>}
       {coverage && <div className="analyst-preview"><div><strong>当前本地预览 {coverage.evidence_count} 条 · 开始后先同步更新</strong><span>正式分析会刷新登记数据源，再读取最新本地全量记录；预览只用于查看启动前覆盖情况。</span></div><div className="analyst-coverage-pills">{Object.entries(coverage.counts).map(([key, count]) => <span className={count ? "has-data" : "no-data"} key={key} title={`预览${count}条；本地范围内${coverage.total_counts[key] ?? count}条`}>{categories[key] || key} <b>{count}</b></span>)}</div></div>}
     </details>
@@ -246,6 +260,18 @@ export function AiStockAnalyst() {
       </main>
       {active?.status === "COMPLETED" ? <AnalystFollowup key={active.id} analysis={active} model={model} models={models} onModelChange={setModel} onRevision={setConfirmedRevision} onReview={setLatestReview} context={discussionContext} onClearContext={() => setDiscussionContext(null)} timelineTarget={timelineTarget} trackingTarget={trackingTarget} onNavigate={view => { setTab(view); setMobilePane("reader"); }} collapsed={partnerCollapsed} onCollapse={() => setPartnerCollapsed(value => !value)} /> : <aside className="analyst-chat-placeholder analyst-box"><MessageCircle size={28} /><h3>AI研究伙伴</h3><p>分析完成后，可在这里持续讨论。报告和股票资料将在左侧独立展示。</p></aside>}
     </div>
+    {showStartConfirmation && stock && <div className="analyst-modal-backdrop analyst-start-confirm-backdrop" onClick={() => { if (!submitting) setShowStartConfirmation(false); }}>
+      <section className="analyst-modal analyst-start-confirm" role="dialog" aria-modal="true" aria-labelledby="analyst-start-title" onClick={e => e.stopPropagation()}>
+        <header><h3 id="analyst-start-title"><RefreshCw size={18} className={submitting ? "analyst-spin" : ""} />{submitting ? "正在创建数据补全任务" : "先补全资料，再开始 AI 分析"}</h3><button type="button" aria-label="关闭确认弹窗" disabled={submitting} onClick={() => setShowStartConfirmation(false)}><X size={18} /></button></header>
+        <p className="analyst-start-lead">将为 <strong>{stock.name}（{stock.symbol}）</strong>尝试更新近{months}个月资料。确认后后台会先同步，再读取更新后的本地全量记录进行分析。</p>
+        <div className="analyst-start-scope"><strong>自动更新范围</strong><div>{["最新行情", "历史量价", "财务数据", "新闻", "公告", "F10、机构研究及问答"].map(item => <span key={item}>{item}</span>)}</div></div>
+        {coverage && <div className="analyst-start-coverage"><strong>当前本地预览 · {coverage.evidence_count} 条资料</strong><div className="analyst-coverage-pills">{Object.entries(coverage.counts).map(([key, count]) => <span className={count ? "has-data" : "no-data"} key={key}>{categories[key] || key} <b>{count}</b></span>)}</div>{coverage.missing_categories.length > 0 && <small>目前没有本地记录：{coverage.missing_categories.map(key => categories[key] || key).join("、")}。同步后会再次读取本地数据；仍无法获取的项目会作为数据限制保留。</small>}</div>}
+        <p className="analyst-start-note">仅使用系统已登记并启用的数据源。数据源无数据或网络失败时会如实记录，不会伪造数据；同步结束后仍会基于可用本地资料分析。</p>
+        {submitting && <div className="analyst-start-progress" role="status"><RefreshCw size={16} className="analyst-spin" /><div><strong>正在提交后台任务</strong><span>任务创建后将自动进入执行记录，从“同步登记数据源”开始显示实时进度。</span></div></div>}
+        {startError && <div className="analyst-error analyst-start-error" role="alert"><strong>补全任务未创建</strong><p>{startError}</p><small>请检查后端服务后重试；失败前不会调用模型。</small></div>}
+        <footer><button type="button" className="analyst-secondary" disabled={submitting} autoFocus onClick={() => setShowStartConfirmation(false)}>返回修改</button><button type="button" className="analyst-primary" disabled={submitting} onClick={() => void confirmStart()}>{submitting ? <RefreshCw size={16} className="analyst-spin" /> : <BrainCircuit size={16} />}{submitting ? "正在创建补全任务…" : startError ? "重新创建补全任务" : "确认补全并开始分析"}</button></footer>
+      </section>
+    </div>}
     {showHistory && <div className="analyst-modal-backdrop" onClick={() => setShowHistory(false)}><aside className="analyst-history analyst-modal" role="dialog" aria-modal="true" aria-label="分析历史" onClick={e => e.stopPropagation()}><header><h3><History size={17} />分析历史</h3><div className="analyst-actions"><button type="button" aria-label="刷新分析历史" onClick={() => void loadHistory().catch(e => setNotice(e.message))}><RefreshCw size={16} /></button><button type="button" aria-label="关闭分析历史" onClick={() => setShowHistory(false)}><X size={18} /></button></div></header><p className="analyst-muted">最近50次 · 每份报告与对话独立保存</p>{!history.length && <p className="analyst-muted">暂无历史记录</p>}{history.map(row => <button type="button" disabled={isRunning && row.id !== active?.id} className={`analyst-history-row ${active?.id === row.id ? "selected" : ""}`} key={row.id} onClick={() => { restoreRun(row); setTab("result"); }}><div><strong>{row.name}</strong><span className={`analyst-status ${row.status.toLowerCase()}`}>{statuses[row.status]}</span></div><small>{row.market} · {row.symbol} · {when(row.created_at)}</small><p>{row.result_json.executive_summary || row.progress_json.message || "等待分析"}</p></button>)}</aside></div>}
   </div>;
 }

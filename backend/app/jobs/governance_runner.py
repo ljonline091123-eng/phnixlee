@@ -11,6 +11,7 @@ class GovernanceRunner:
     def __init__(self, worker=None):
         self.worker = worker or JobWorker(task_types=(
             "stock_batch_governance", "document_specialist_skill_test",
+            "investor_qa_sync",
             "selection_analysis", "selection_retry_failed",
             "selection_data_backfill", "selection_hypothesis_research",
             "selection_ai_directed_research",

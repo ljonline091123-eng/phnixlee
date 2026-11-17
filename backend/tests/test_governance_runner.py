@@ -7,6 +7,7 @@ from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.jobs.governance_runner import GovernanceRunner
 from app.jobs.worker import JobWorker
 from app.models.pipeline import ScheduledJob
+from app.services.investor_qa import TASK_TYPE as INVESTOR_QA_TASK
 from tests.test_worker_scope import sessions
 
 
@@ -25,6 +26,28 @@ def test_managed_runner_executes_new_jobs_and_stops(sessions):
     finally:
         runner.stop()
     assert not runner.thread.is_alive()
+    with sessions() as db:
+        assert db.get(ScheduledJob, identity).status == "COMPLETED"
+
+
+def test_managed_runner_scope_consumes_investor_qa_jobs(sessions):
+    runner = GovernanceRunner()
+    assert INVESTOR_QA_TASK in runner.worker.task_types
+
+    executed = []
+    worker = JobWorker(
+        task_types=runner.worker.task_types,
+        session_factory=sessions,
+        task_executor=lambda task, payload: (executed.append(task) or {"status": "COMPLETE"}),
+    )
+    with sessions() as db:
+        job = DatabaseJobDispatcher(db).enqueue(
+            task_type=INVESTOR_QA_TASK, idempotency_key="managed-investor-qa",
+        )
+        identity = job.id
+
+    assert worker.run_once() is True
+    assert executed == [INVESTOR_QA_TASK]
     with sessions() as db:
         assert db.get(ScheduledJob, identity).status == "COMPLETED"
 

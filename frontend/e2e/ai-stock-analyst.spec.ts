@@ -14,11 +14,56 @@ test("独立分析入口、拼音搜索、数据预览与旧工作台分离", as
   const match = page.locator(".analyst-matches button").filter({ hasText: "02533" });
   await expect(match).toBeVisible({ timeout: 15000 });
   await match.click();
-  await expect(page.locator(".analyst-preview")).toContainText("条资料摘要");
+  await expect(page.locator(".analyst-preview")).toContainText("当前本地预览");
   await expect(page.getByRole("button", { name: "开始AI分析", exact: true })).toBeEnabled();
   await expect(page.locator(".ai-stock-analyst")).not.toContainText("雷达图");
   await page.screenshot({ path: "test-results/ai-stock-analyst-entry.png", fullPage: true });
   expect(await page.locator(".ai-stock-analyst").evaluate(el => el.scrollWidth > el.clientWidth + 1)).toBeFalsy();
+
+  let createRequests = 0;
+  let releaseCreate: () => void = () => undefined;
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  await page.route(`${api}/ai-stock-analyst/analyses`, async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    createRequests += 1;
+    const request = route.request().postDataJSON() as { market: string; symbol: string; period_months: number; model_instance_code?: string };
+    if (createRequests === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "模拟服务不可用" }) });
+      return;
+    }
+    await createGate;
+    await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({
+      id: 987654, ...request, name: "黑芝麻智能", status: "QUEUED", model_call_log_id: null,
+      skill_code: "SENIOR_STOCK_TREND_ANALYST", skill_version: "1.0.0", coverage_json: {}, result_json: {},
+      error_message: null, progress_json: { stage: "PREPARED", message: "分析已排队", events: [] },
+      created_at: "2026-11-17T06:00:00Z", completed_at: null,
+    }) });
+  });
+  await page.getByRole("button", { name: "开始AI分析", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "先补全资料，再开始 AI 分析" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText("自动更新范围");
+  await expect(confirmation).toContainText("公告");
+  await page.screenshot({ path: "test-results/ai-stock-analyst-data-confirmation.png" });
+  await confirmation.getByRole("button", { name: "返回修改" }).click();
+  await expect(confirmation).toHaveCount(0);
+  expect(createRequests).toBe(0);
+
+  await page.getByRole("button", { name: "开始AI分析", exact: true }).click();
+  await page.getByRole("dialog", { name: "先补全资料，再开始 AI 分析" }).getByRole("button", { name: "确认补全并开始分析" }).click();
+  await expect(page.getByRole("alert")).toContainText("模拟服务不可用");
+  await expect(page.getByRole("dialog", { name: "先补全资料，再开始 AI 分析" })).toBeVisible();
+  expect(createRequests).toBe(1);
+
+  await page.getByRole("dialog", { name: "先补全资料，再开始 AI 分析" }).getByRole("button", { name: "重新创建补全任务" }).click();
+  await expect(page.getByRole("dialog", { name: "正在创建数据补全任务" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "正在创建数据补全任务" }).getByRole("status")).toContainText("正在提交后台任务");
+  await page.screenshot({ path: "test-results/ai-stock-analyst-data-submit.png" });
+  expect(createRequests).toBe(2);
+  releaseCreate();
+  await expect(page.locator(".analyst-run-header")).toContainText("黑芝麻智能");
+  await expect(page.getByRole("tab", { name: "执行记录" })).toHaveAttribute("aria-selected", "true");
+  expect(createRequests).toBe(2);
 });
 
 test("真实历史可查询，证据快照与执行阶段可查看", async ({ page, request }) => {
@@ -37,9 +82,9 @@ test("真实历史可查询，证据快照与执行阶段可查看", async ({ pa
   await page.locator(".analyst-evidence-row > summary").first().click();
   await expect(page.locator(".analyst-evidence-row").first()).toContainText("证据编号");
   await page.getByRole("tab", { name: "执行记录" }).click();
-  await expect(page.locator(".analyst-steps")).toContainText("读取本地资料");
+  await expect(page.locator(".analyst-steps")).toContainText("读取本地全量数据");
   await expect(page.locator(".analyst-steps")).toContainText("AI综合研判");
-  await expect(page.locator(".analyst-steps")).toContainText("核验证据与保存");
+  await expect(page.locator(".analyst-steps")).toContainText("校验引用并保存");
   if (run.status === "COMPLETED") {
     await page.getByRole("tab", { name: "分析结论" }).click();
     await expect(page.locator(".analyst-scenario")).toHaveCount(3);
